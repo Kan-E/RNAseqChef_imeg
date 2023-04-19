@@ -159,8 +159,8 @@ gene_list_convert_for_enrichment <- function(data, Species){
         colnames(gene_IDs) <- c("GeneID","SYMBOL", "ENTREZID")
       }else{
         gene_IDs <- AnnotationDbi::select(org(Species), keys = my.symbols,
-                                          keytype = "SYMBOL",
-                                          columns = c("ENTREZID", "SYMBOL"))
+                                          keytype = "ALIAS",
+                                          columns = c("ENTREZID", "ALIAS"))
         colnames(gene_IDs) <- c("GeneID","ENTREZID")
       }
       gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
@@ -183,8 +183,8 @@ dorothea <- function(species, confidence = "recommend",type){
   if(type == "DoRothEA regulon (repressor)") net2 <- net2%>% filter(mor == -1)
   my.symbols <- gsub("\\..*","", net2$target)
   gene_IDs<-AnnotationDbi::select(org(spe),keys = my.symbols,
-                                  keytype = "SYMBOL",
-                                  columns = c("SYMBOL", "ENTREZID"))
+                                  keytype = "ALIAS",
+                                  columns = c("ALIAS", "ENTREZID"))
   colnames(gene_IDs) <- c("target", "ENTREZID")
   gene_IDs <- gene_IDs %>% distinct(target, .keep_all = T)
   gene_IDs <- na.omit(gene_IDs)
@@ -602,8 +602,8 @@ data_3degcount2 <- function(data3, Species, org){
         if(Species != "not selected"){
           my.symbols <- data4$Row.names
           gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
-                                          keytype = "SYMBOL",
-                                          columns = c("SYMBOL", "ENTREZID"))
+                                          keytype = "ALIAS",
+                                          columns = c("ALIAS", "ENTREZID"))
           colnames(gene_IDs) <- c("Row.names", "ENTREZID")
           gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
           data4 <- merge(data4, gene_IDs, by="Row.names")
@@ -1203,8 +1203,8 @@ enrich_viewer_forMulti1 <- function(df, Species, org){
       colnames(gene_IDs) <- c("GeneID","SYMBOL", "ENTREZID")
     }else{
       gene_IDs <- AnnotationDbi::select(org, keys = my.symbols,
-                                        keytype = "SYMBOL",
-                                        columns = c("ENTREZID", "SYMBOL"))
+                                        keytype = "ALIAS",
+                                        columns = c("ENTREZID", "ALIAS"))
       colnames(gene_IDs) <- c("GeneID","ENTREZID")
     }
     gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
@@ -1517,8 +1517,8 @@ MotifAnalysis <- function(data, Species, x){
       colnames(gene_IDs) <- c("gene_id","ENSEMBL")
     }else{
       gene_IDs <- AnnotationDbi::select(org(Species), keys = my.symbols,
-                                        keytype = "SYMBOL",
-                                        columns = c("SYMBOL","ENTREZID"))
+                                        keytype = "ALIAS",
+                                        columns = c("ALIAS","ENTREZID"))
       colnames(gene_IDs) <- c("SYMBOL","gene_id")
     }
     y <- subset(x, gene_id %in% gene_IDs$gene_id)
@@ -1565,8 +1565,8 @@ MotifRegion <- function(data, target_motif, Species, x){
     colnames(gene_IDs) <- c("gene_id","ENSEMBL")
   }else{
     gene_IDs <- AnnotationDbi::select(org(Species), keys = my.symbols,
-                                      keytype = "SYMBOL",
-                                      columns = c("SYMBOL","ENTREZID"))
+                                      keytype = "ALIAS",
+                                      columns = c("ALIAS","ENTREZID"))
     colnames(gene_IDs) <- c("SYMBOL","gene_id")
   }
   y <- subset(x, gene_id %in% gene_IDs$gene_id)
