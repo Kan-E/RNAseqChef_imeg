@@ -1593,6 +1593,17 @@ shinyUI(
   binding site analysis. Bioinformatics 32, 1555-1556.",br(),
                                    )
                           )
+                 ),
+                 tabPanel("Change log",
+                          fluidRow(
+                            column(12,
+                                   h2("Log:"),
+                                   h4("v1.0.5 (2023.4.24)"),
+                                   strong("・Add 'download summary' buttons"),br(),
+                                   "Add download summary buttons in the setting panels of the 'Pair-wise DEG', '3 conditions DEG', and 'Multi DEG'.",br(),
+                                   "You can download all of the result files in a zip file format.",br()
+                            )
+                          )
                  )
       )
     )

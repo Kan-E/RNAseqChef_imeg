@@ -53,6 +53,7 @@ library(org.Mmu.eg.db)
 library(org.Pt.eg.db)
 library(org.Sc.sgd.db)
 library(org.Ss.eg.db)
+library(org.At.tair.db)
 library(limma)
 options(repos = BiocManager::repositories())
 
@@ -65,7 +66,7 @@ gene_set_list <- c("MSigDB Hallmark", "KEGG", "Reactome", "PID (Pathway Interact
 species_list <- c("not selected", "Homo sapiens", "Mus musculus", "Rattus norvegicus", "Xenopus tropicalis",
                   "Drosophila melanogaster", "Caenorhabditis elegans", "Anolis carolinensis","Bos taurus","Canis lupus familiaris",
                   "Danio rerio","Equus caballus","Felis catus","Gallus gallus","Macaca mulatta","Monodelphis domestica","Ornithorhynchus anatinus",
-                  "Pan troglodytes","Saccharomyces cerevisiae","Sus scrofa","Xenopus laevis")
+                  "Pan troglodytes","Saccharomyces cerevisiae","Sus scrofa","Xenopus laevis","Arabidopsis thaliana")
 read_df <- function(tmp, Species=NULL){
   if(is.null(tmp)) {
     return(NULL)
@@ -151,20 +152,25 @@ gene_list_convert_for_enrichment <- function(data, Species){
       return(NULL)
     }else{
       df <- data.frame(GeneID = data[,1], Group = data[,2])
+      df$GeneID <- gsub("\\..*","", df$GeneID)
       my.symbols <- df$GeneID
-      if(str_detect(df$GeneID[1], "ENS") || str_detect(df$GeneID[1], "FBgn")){
+      if(str_detect(df$GeneID[1], "ENS") || str_detect(df$GeneID[1], "FBgn") ||
+         str_detect(df$GeneID[1], "AT.G")){
+        if(str_detect(my.symbols[1], "AT.G")) key = "TAIR" else key = "ENSEMBL"
         gene_IDs<-AnnotationDbi::select(org(Species),keys = my.symbols,
-                                        keytype = "ENSEMBL",
-                                        columns = c("ENSEMBL","SYMBOL", "ENTREZID"))
+                                        keytype = key,
+                                        columns = c(key,"SYMBOL", "ENTREZID"))
         colnames(gene_IDs) <- c("GeneID","SYMBOL", "ENTREZID")
       }else{
         gene_IDs <- AnnotationDbi::select(org(Species), keys = my.symbols,
-                                          keytype = "ALIAS",
-                                          columns = c("ENTREZID", "ALIAS"))
+                                          keytype = "SYMBOL",
+                                          columns = c("ENTREZID", "SYMBOL"))
         colnames(gene_IDs) <- c("GeneID","ENTREZID")
       }
+      print(gene_IDs)
       gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
       data <- merge(df, gene_IDs, by="GeneID")
+      head(print(data))
       return(data)
     }
 }
@@ -183,8 +189,8 @@ dorothea <- function(species, confidence = "recommend",type){
   if(type == "DoRothEA regulon (repressor)") net2 <- net2%>% filter(mor == -1)
   my.symbols <- gsub("\\..*","", net2$target)
   gene_IDs<-AnnotationDbi::select(org(spe),keys = my.symbols,
-                                  keytype = "ALIAS",
-                                  columns = c("ALIAS", "ENTREZID"))
+                                  keytype = "SYMBOL",
+                                  columns = c("SYMBOL", "ENTREZID"))
   colnames(gene_IDs) <- c("target", "ENTREZID")
   gene_IDs <- gene_IDs %>% distinct(target, .keep_all = T)
   gene_IDs <- na.omit(gene_IDs)
@@ -291,7 +297,8 @@ org <- function(Species){
             "Macaca mulatta" = org <- org.Mmu.eg.db,
             "Pan troglodytes" = org <- org.Pt.eg.db,
             "Saccharomyces cerevisiae" = org <- org.Sc.sgd.db,
-            "Sus scrofa" = org <- org.Ss.eg.db)
+            "Sus scrofa" = org <- org.Ss.eg.db,
+            "Arabidopsis thaliana" = org <- org.At.tair.db)
     return(org)
   }
 }
@@ -317,7 +324,8 @@ org_code <- function(Species){
             "Ornithorhynchus anatinus" = org_code <- "oaa",
             "Pan troglodytes" = org_code <- "ptr",
             "Saccharomyces cerevisiae" = org_code <- "sce",
-            "Sus scrofa" = org_code <- "ssc")
+            "Sus scrofa" = org_code <- "ssc",
+            "Arabidopsis thaliana" = org_code <- "ath")
     return(org_code)
   }
 }
@@ -484,7 +492,8 @@ data_3degcount1 <- function(data,result_Condm, result_FDR, specific, fc, fdr, ba
     Cond_2 <- vec[2]
     Cond_3 <- vec[3]
     collist <- unique(collist)
-    if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn")){
+    if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||
+       str_detect(rownames(data)[1], "AT.G")){
       if(length(grep("SYMBOL", colnames(data))) != 0){
         data <- data[, - which(colnames(data) == "SYMBOL")]
       }
@@ -588,12 +597,14 @@ data_3degcount2 <- function(data3, Species, org){
       return(data4)
     } else {
       data4 <- dplyr::filter(data3, sig != "NS")
-      if(str_detect(data4$Row.names[1], "ENS") || str_detect(data4$Row.names[1], "FBgn")){
+      if(str_detect(data4$Row.names[1], "ENS") || str_detect(data4$Row.names[1], "FBgn") || 
+         str_detect(data4$Row.names[1], "AT.G")){
         if(Species != "not selected"){
           my.symbols <- data4$Row.names
+          if(str_detect(my.symbols[1], "AT.G")) key = "TAIR" else key = "ENSEMBL"
           gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
-                                          keytype = "ENSEMBL",
-                                          columns = c("ENSEMBL","SYMBOL", "ENTREZID"))
+                                          keytype = key,
+                                          columns = c(key,"SYMBOL", "ENTREZID"))
           colnames(gene_IDs) <- c("Row.names","SYMBOL", "ENTREZID")
           gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
           data4 <- merge(data4, gene_IDs, by="Row.names")
@@ -602,8 +613,8 @@ data_3degcount2 <- function(data3, Species, org){
         if(Species != "not selected"){
           my.symbols <- data4$Row.names
           gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
-                                          keytype = "ALIAS",
-                                          columns = c("ALIAS", "ENTREZID"))
+                                          keytype = "SYMBOL",
+                                          columns = c("SYMBOL", "ENTREZID"))
           colnames(gene_IDs) <- c("Row.names", "ENTREZID")
           gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
           data4 <- merge(data4, gene_IDs, by="Row.names")
@@ -629,7 +640,8 @@ cond3_scatter_plot <- function(data, data4, result_Condm, result_FDR, specific,
     Cond_2 <- vec[2]
     Cond_3 <- vec[3]
     collist <- unique(collist)
-    if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn")){
+    if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||
+       str_detect(rownames(data)[1], "AT.G")){
       if(length(grep("SYMBOL", colnames(data))) != 0){
         data <- data[, - which(colnames(data) == "SYMBOL")]
       }
@@ -684,7 +696,8 @@ cond3_scatter_plot <- function(data, data4, result_Condm, result_FDR, specific,
       new.levels <- c("NS")
       col = "darkgray"}
     data3$sig <- factor(data3$sig, labels = new.levels)
-    if(str_detect(data3$Row.names[1], "ENS") || str_detect(data3$Row.names[1], "FBgn")){
+    if(str_detect(data3$Row.names[1], "ENS") || str_detect(data3$Row.names[1], "FBgn") ||
+       str_detect(data3$Row.names[1], "AT.G")){
       if(Species != "not selected"){
         data3 <- merge(data3, data, by="Row.names")
       }
@@ -721,7 +734,8 @@ cond3_scatter_plot <- function(data, data4, result_Condm, result_FDR, specific,
     }
     if (heatmap==TRUE) {
       if(!is.null(labs_data)) {
-        if(str_detect(data3$Row.names[1], "ENS") || str_detect(data3$Row.names[1], "FBgn")){
+        if(str_detect(data3$Row.names[1], "ENS") || str_detect(data3$Row.names[1], "FBgn") ||
+           str_detect(data3$Row.names[1], "AT.G")){
           if(Species != "not selected"){
             p <- p + ggrepel::geom_text_repel(data = labs_data2, mapping = aes(label = Unique_ID),
                                               box.padding = unit(0.35, "lines"), point.padding = unit(0.3,"lines"), 
@@ -746,7 +760,8 @@ cond3_scatter_plot <- function(data, data4, result_Condm, result_FDR, specific,
     }
     if(!is.null(GOI)) {
       for(name in GOI){
-        if(str_detect(data3$Row.names[1], "ENS") || str_detect(data3$Row.names[1], "FBgn")){
+        if(str_detect(data3$Row.names[1], "ENS") || str_detect(data3$Row.names[1], "FBgn") ||
+           str_detect(data3$Row.names[1], "AT.G")){
           if(Species != "not selected"){
             data3$color[data3$Unique_ID == name] <- "GOI"
           }else{
@@ -756,7 +771,8 @@ cond3_scatter_plot <- function(data, data4, result_Condm, result_FDR, specific,
           data3$color[data3$Row.names == name] <- "GOI"
         }
       }
-      if(str_detect(data3$Row.names[1], "ENS") || str_detect(data3$Row.names[1], "FBgn")){
+      if(str_detect(data3$Row.names[1], "ENS") || str_detect(data3$Row.names[1], "FBgn") ||
+         str_detect(data3$Row.names[1], "AT.G")){
         if(Species != "not selected"){
           p <- p + geom_point(data=dplyr::filter(data3, color == "GOI"),color="green", size=1)
           p <- p + ggrepel::geom_text_repel(data = dplyr::filter(data3, color == "GOI"), mapping = aes(label = Unique_ID),
@@ -807,7 +823,8 @@ cond3_scatter_range <- function(data, data4, result_Condm, result_FDR, specific,
     Cond_2 <- vec[2]
     Cond_3 <- vec[3]
     collist <- unique(collist)
-    if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn")){
+    if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||
+       str_detect(rownames(data)[1], "AT.G")){
       if(length(grep("SYMBOL", colnames(data))) != 0){
         data <- data[, - which(colnames(data) == "SYMBOL")]
       }
@@ -1196,15 +1213,17 @@ enrich_viewer_forMulti1 <- function(df, Species, org){
     return(NULL)
   }else{
     my.symbols <- df$GeneID
-    if(str_detect(df$GeneID[1], "ENS") || str_detect(df$GeneID[1], "FBgn")){
+    if(str_detect(df$GeneID[1], "ENS") || str_detect(df$GeneID[1], "FBgn") ||
+       str_detect(df$GeneID[1], "AT.G")){
+      if(str_detect(my.symbols[1], "AT.G")) key = "TAIR" else key = "ENSEMBL"
       gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
-                                      keytype = "ENSEMBL",
-                                      columns = c("ENSEMBL","SYMBOL", "ENTREZID"))
+                                      keytype = key,
+                                      columns = c(key,"SYMBOL", "ENTREZID"))
       colnames(gene_IDs) <- c("GeneID","SYMBOL", "ENTREZID")
     }else{
       gene_IDs <- AnnotationDbi::select(org, keys = my.symbols,
-                                        keytype = "ALIAS",
-                                        columns = c("ENTREZID", "ALIAS"))
+                                        keytype = "SYMBOL",
+                                        columns = c("ENTREZID", "SYMBOL"))
       colnames(gene_IDs) <- c("GeneID","ENTREZID")
     }
     gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
@@ -1510,15 +1529,17 @@ MotifAnalysis <- function(data, Species, x){
     data <- dplyr::filter(df, Group == name)
     my.symbols <- data$GeneID
     group.name <- paste(name, "\n(", length(my.symbols),")",sep = "")
-    if(str_detect(my.symbols[1], "ENS") || str_detect(my.symbols[1], "FBgn")){
+    if(str_detect(my.symbols[1], "ENS") || str_detect(my.symbols[1], "FBgn") ||
+       str_detect(my.symbols[1], "AT.G")){
+      if(str_detect(my.symbols[1], "AT.G")) key = "TAIR" else key = "ENSEMBL"
       gene_IDs<-AnnotationDbi::select(org(Species),keys = my.symbols,
-                                      keytype = "ENSEMBL",
-                                      columns = c("ENTREZID","ENSEMBL"))
+                                      keytype = key,
+                                      columns = c("ENTREZID",key))
       colnames(gene_IDs) <- c("gene_id","ENSEMBL")
     }else{
       gene_IDs <- AnnotationDbi::select(org(Species), keys = my.symbols,
-                                        keytype = "ALIAS",
-                                        columns = c("ALIAS","ENTREZID"))
+                                        keytype = "SYMBOL",
+                                        columns = c("SYMBOL","ENTREZID"))
       colnames(gene_IDs) <- c("SYMBOL","gene_id")
     }
     y <- subset(x, gene_id %in% gene_IDs$gene_id)
@@ -1558,15 +1579,17 @@ MotifRegion <- function(data, target_motif, Species, x){
   name <- gsub("\\\n.+$", "", target_motif$Group)
   data <- dplyr::filter(df, Group %in% name)
   my.symbols <- data$GeneID
-  if(str_detect(my.symbols[1], "ENS") || str_detect(my.symbols[1], "FBgn")){
+  if(str_detect(my.symbols[1], "ENS") || str_detect(my.symbols[1], "FBgn") ||
+     str_detect(my.symbols[1], "AT.G")){
+    if(str_detect(my.symbols[1], "AT.G")) key = "TAIR" else key = "ENSEMBL"
     gene_IDs<-AnnotationDbi::select(org(Species),keys = my.symbols,
-                                    keytype = "ENSEMBL",
-                                    columns = c("ENTREZID","ENSEMBL"))
+                                    keytype = key,
+                                    columns = c("ENTREZID",key))
     colnames(gene_IDs) <- c("gene_id","ENSEMBL")
   }else{
     gene_IDs <- AnnotationDbi::select(org(Species), keys = my.symbols,
-                                      keytype = "ALIAS",
-                                      columns = c("ALIAS","ENTREZID"))
+                                      keytype = "SYMBOL",
+                                      columns = c("SYMBOL","ENTREZID"))
     colnames(gene_IDs) <- c("SYMBOL","gene_id")
   }
   y <- subset(x, gene_id %in% gene_IDs$gene_id)
