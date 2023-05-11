@@ -176,18 +176,18 @@ shinyUI(
           }"
                              )),
                    conditionalPanel(condition="input.data_file_type!='Row11'",
-                   fluidRow(column(7),
-                            column(5, downloadButton("download_pair_report", "Download summary"),
-                                   tags$head(tags$style("#download_pair_report{color: red;
+                                    fluidRow(column(7),
+                                             column(5, downloadButton("download_pair_report", "Download summary"),
+                                                    tags$head(tags$style("#download_pair_report{color: red;
                                  font-size: 12px;
                                  font-style: italic;
                                  }"),
-                                             tags$style("
+                                                              tags$style("
           body {
             padding: 0 !important;
           }"
-                                             )),)
-                   )
+                                                              )),)
+                                    )
                    ),
                    conditionalPanel(condition="input.data_file_type=='Row11'",
                                     fluidRow(column(7),
@@ -221,7 +221,12 @@ shinyUI(
                      ),
                      tabPanel("Result overview",
                               fluidRow(
-                                column(4, downloadButton("download_pair_PCA", "Download clustering analysis"))
+                                column(12, downloadButton("download_pair_PCA", "Download clustering analysis"),
+                                       textOutput("not_cond2"),
+                                       tags$head(tags$style("#not_cond2{color: red;
+                                 font-size: 20px;
+            font-style: bold;
+            }")))
                               ),
                               plotOutput("PCA"),
                               fluidRow(
@@ -418,7 +423,7 @@ shinyUI(
             padding: 0 !important;
           }"
                                              )))
-                   ),
+                   )
                  ), #sidebarPanel
                  
                  # Main Panel -------------------------------------
@@ -446,7 +451,12 @@ shinyUI(
                      ),
                      tabPanel("Result overview",
                               fluidRow(
-                                column(4, downloadButton("download_3cond_PCA", "Download clustering analysis"))
+                                column(12, downloadButton("download_3cond_PCA", "Download clustering analysis"),
+                                       textOutput("not_cond3"),
+                                       tags$head(tags$style("#not_cond3{color: red;
+                                 font-size: 20px;
+            font-style: bold;
+            }")))
                               ),
                               plotOutput("PCA2"),
                               fluidRow(
@@ -956,7 +966,7 @@ shinyUI(
                    ),
                    bsPopover("venn_pdf_icon", "Output plot size setting for pdf (default: 0): ", 
                              content=paste("You can adjust the plot size by using", strong('pdf_height'), "and", strong('pdf_width'), "parameters.<br>", 
-                                           "Default size: <br>",strong("Venn diagram:"), "height = 3.5, width = 9<br>", strong("Integrated heatmap:"), "height = 8, width = 8 <br>",
+                                           "Default size: <br>",strong("Venn diagram:"), "height = 3, width = 3<br>", strong("Integrated heatmap:"), "height = 8, width = 8 <br>",
                                            strong("Enrichment analysis:"), "height = 6, width = 8 <br>",strong("cnet plot:"), "height = 6, width = 6 <br>"),trigger = "click"), 
                    actionButton("goButton_venn", "example data"),
                    tags$head(tags$style("#goButton{color: black;
@@ -1256,7 +1266,8 @@ shinyUI(
                                            "You can use result files of venn diagram analysis and k-means clustering as input.<br><br>",
                                            strong("Multiple files upload:"),
                                            "<br>The first column is", strong("gene name"), ".<br>", 
-                                           "The second and subsequent columns do not affect the analysis.<br><br>", 
+                                           "The second and subsequent columns do not affect the analysis.<br>", 
+                                           "File names are used as", strong("group names"),".<br><br>",
                                            img(src="input_format_enrich.png", width = 250,height = 400)), 
                              placement = "right",options = list(container = "body")),
                    fluidRow(
@@ -1598,10 +1609,13 @@ shinyUI(
                           fluidRow(
                             column(12,
                                    h2("Log:"),
-                                   h4("v1.0.5 (2023.4.24)"),
-                                   strong("・Add 'download summary' buttons"),br(),
-                                   "Add download summary buttons in the setting panels of the 'Pair-wise DEG', '3 conditions DEG', and 'Multi DEG'.",br(),
-                                   "You can download all of the result files in a zip file format.",br()
+                                   h4("v1.0.5 (2023/4/24)"),
+                                   strong("・Add 'download summary' buttons in the setting panel for 'Pair-wise DEG', '3 conditions DEG', and 'Multi conditions DEG'."),br(),
+                                   strong("・Add new species (Xenopus laevis and Arabidopsis thaliana) for KEGG and GO analysis."),br(),
+                                   strong("・Improve the 'start button' for motif analysis in Enrichment viewer."),br(),
+                                   strong("・Improve the 'condition' color of the integrated heatmap in Venn diagram."),br(),
+                                   strong("・Fix the issue of column name shifting in the output table data.(2023/5/10)"),br(),
+                                   strong("・Display a warning message when inappropriate data is uploaded in Pair-wise DEG and 3 conditions DEG.(2023/5/11)"),br()
                             )
                           )
                  )
