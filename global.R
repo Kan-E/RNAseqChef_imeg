@@ -930,7 +930,7 @@ keggEnrichment1_xenopus <- function(data3, data4, Species, Gene_set, org, org_co
       for (name in unique(data3$sig)) {
         if (name != "NS"){
             if(Gene_set == "KEGG"){
-              em <- enrichKEGG(data4$ENTREZID[data4$sig == name], organism = org_code, pvalueCutoff = 0.05)
+              em <- enrichKEGG(data4$ENTREZID[data4$sig == name], organism = org_code, pvalueCutoff = 0.05,keyType = "ncbi-geneid")
             }
             if(Gene_set == "GO biological process"){
               em <- enrichGO(data4$ENTREZID[data4$sig == name], OrgDb = org, ont = "BP",pvalueCutoff = 0.05)
@@ -1278,7 +1278,7 @@ enrich_viewer_forMulti2_xenopus <- function(df, Species, Gene_set, org, org_code
           for (name in unique(data3$Group)) {
             sum <- length(data3$ENTREZID[data3$Group == name])
             if(Gene_set == "KEGG"){
-              em <- enrichKEGG(data3$ENTREZID[data3$Group == name], organism = org_code, pvalueCutoff = 0.05)
+              em <- enrichKEGG(data3$ENTREZID[data3$Group == name], organism = org_code, pvalueCutoff = 0.05,keyType = "ncbi-geneid")
             }
             if(Gene_set == "GO biological process"){
               em <- enrichGO(data3$ENTREZID[data3$Group == name], OrgDb = org, ont = "BP",pvalueCutoff = 0.05)
@@ -1354,7 +1354,7 @@ enrich_gene_list_xenopus <- function(data, Gene_set, org,org_code=NULL){
         for (name in unique(data$Group)) {
           sum <- length(data$ENTREZID[data$Group == name])
           if(Gene_set == "KEGG"){
-            em <- enrichKEGG(data$ENTREZID[data$Group == name], organism = org_code, pvalueCutoff = 0.05)
+            em <- enrichKEGG(data$ENTREZID[data$Group == name], organism = org_code, pvalueCutoff = 0.05,keyType = "ncbi-geneid")
           }
           if(Gene_set == "GO biological process"){
             em <- enrichGO(data$ENTREZID[data$Group == name], OrgDb = org, ont = "BP",pvalueCutoff = 0.05)

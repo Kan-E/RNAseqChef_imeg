@@ -493,8 +493,6 @@ shinyServer(function(input, output, session) {
       up_all <- dplyr::filter(data2, log2FoldChange > 0)
       rownames(up_all) <- up_all$Row.names
       up_all <- up_all[,8:(7 + Cond_1 + Cond_2)]
-      print(up_all)
-      print(gene_ID_pair())
       if(input$Species != "not selected"){
         if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
            str_detect(rownames(count)[1], "AT.G")){
@@ -1163,7 +1161,7 @@ shinyServer(function(input, output, session) {
   enrichment_enricher <- reactive({
     if((input$Species == "Xenopus laevis" || input$Species == "Arabidopsis thaliana") && 
        (input$Gene_set != "KEGG" && 
-        input$Gene_set != "GO biological process" &&
+        input$Gene_set != "GO biological process" && 
         input$Gene_set != "GO cellular component" && 
         input$Gene_set != "GO molecular function")){
       return(NULL)
@@ -2044,7 +2042,8 @@ shinyServer(function(input, output, session) {
   
   output$downloadData <- downloadHandler(
     filename = function() {
-      paste("pair-wise_batch", "zip", sep=".")
+      paste0(format(Sys.time(), "%Y%m%d_"),"pair-wise_batch_",
+             input$DEG_method,"_fc",input$fc,"_fdr",input$fdr,"_basemean",input$basemean,".zip")
     },
     content = function(fname) {
       withProgress(message = "Preparing download, please wait",{
@@ -6270,7 +6269,7 @@ shinyServer(function(input, output, session) {
                 em <- enricher(data3$ENTREZID[data3$Group == name], TERM2GENE=H_t2g2, qvalueCutoff = 0.05)
               }else{
                 if(input$Gene_set3 == "KEGG"){
-                  em <- enrichKEGG(data3$ENTREZID[data3$Group == name], organism = org_code(input$Species4), pvalueCutoff = 0.05)
+                  em <- enrichKEGG(data3$ENTREZID[data3$Group == name], organism = org_code(input$Species4), pvalueCutoff = 0.05,keyType = "ncbi-geneid")
                 }
                 if(input$Gene_set3 == "GO biological process"){
                   em <- enrichGO(data3$ENTREZID[data3$Group == name], OrgDb = org(input$Species4), ont = "BP",pvalueCutoff = 0.05)
