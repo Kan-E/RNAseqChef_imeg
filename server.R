@@ -690,7 +690,7 @@ shinyServer(function(input, output, session) {
     withProgress(message = "Preparing GOI list (about 10 sec)",{
       updateSelectizeInput(session, "GOI", choices = c(GOI_list()), 
                            selected = character(0),
-                           options = list(create=TRUE, 'plugins' = list('remove_button'), persist = FALSE))
+                           options = list(delimiter = " ", create=TRUE, 'plugins' = list('remove_button'), persist = FALSE))
     })
   })
   
@@ -1144,6 +1144,22 @@ shinyServer(function(input, output, session) {
           write.table(pair_enrich_table(), enrich_table, row.names = F, sep = "\t", quote = F)
           write.table(pair_gsea_table(), enrich_gseatable, row.names = F, sep = "\t", quote = F)
         }
+        report <- paste0(format(Sys.time(), "%Y%m%d_"),"pairwise_report",".docx")
+        fs <- c(fs,report)
+        rmarkdown::render("pair_report.Rmd", output_format = "word_document", output_file = report,
+                          params = list(raw_count = d_row_count_matrix(),
+                                        norm_count = norm_count_matrix(),
+                                        input = input,
+                                        deg_norm_count = deg_norm_count(),
+                                        data_degcount = data_degcount(),
+                                        data_degcount2 = data_degcount2(),
+                                        enrichment_enricher = enrichment_enricher(),
+                                        enrichment_1_gsea = enrichment_1_gsea(),
+                                        pair_enrich_table = pair_enrich_table(),
+                                        pair_gsea_table = pair_gsea_table(),
+                                        metadata = metadata()), 
+                          envir = new.env(parent = globalenv()),intermediates_dir = tempdir(),encoding="utf-8"
+        )
         zip(zipfile=fname, files=fs)
       })
     },
@@ -1415,9 +1431,11 @@ shinyServer(function(input, output, session) {
   
   
   pair_enrich_table <- reactive({
+    if(!is.null(input$Gene_set) && input$Species != "not selected"){
     if(input$Species != "Xenopus laevis" && input$Species != "Arabidopsis thaliana"){
       return(enrich_for_table(data = as.data.frame(enrichment_1_1()), H_t2g = Hallmark_set(), Gene_set = input$Gene_set))
     }else return(as.data.frame(enrichment_1_1()))
+    }
   })
   
   output$pair_enrichment_result <- DT::renderDataTable({
@@ -1425,6 +1443,7 @@ shinyServer(function(input, output, session) {
   })
   
   pair_gsea_table <- reactive({
+    if(!is.null(input$Gene_set) && input$Species != "not selected"){
     data <- as.data.frame(enrichment_1_gsea())
     if(input$Species != "Xenopus laevis" && input$Species != "Arabidopsis thaliana"){
       H_t2g <- Hallmark_set()
@@ -1455,6 +1474,7 @@ shinyServer(function(input, output, session) {
         }
       }
     }else return(data)
+    }
   })
   
   
@@ -2107,6 +2127,16 @@ shinyServer(function(input, output, session) {
           print(pca_r[[name]])
           dev.off()
         }
+        report <- paste0(format(Sys.time(), "%Y%m%d_"),"pairwise_report",".docx")
+        fs <- c(fs,report)
+        rmarkdown::render("pair_batch_report.Rmd", output_format = "word_document", output_file = report,
+                          params = list(batch_files = batch_files(),
+                                        deg_norm_count_batch = deg_norm_count_batch(),
+                                        input = input,
+                                        norm_count_matrix = norm_count_matrix()), 
+                          envir = new.env(parent = globalenv()),intermediates_dir = tempdir(),encoding="utf-8"
+        )
+        
         zip(zipfile=fname, files=fs)
       })
     },
@@ -2832,7 +2862,7 @@ shinyServer(function(input, output, session) {
                       column_order = colnames(data.z),
                       clustering_method_columns = 'ward.D2',
                       row_km= input$multi_kmeans_number, cluster_row_slices = F, row_km_repeats = 100,
-                      show_row_names = F,column_names_side = "top")
+                      show_row_names = F,column_names_side = "top",use_raster = TRUE)
         ht <- draw(ht)
         return(ht)
       })
@@ -3267,6 +3297,9 @@ shinyServer(function(input, output, session) {
   })
   
   multi_GSEA_table <- reactive({
+    if(is.null(dds) || length(input$selectEnrich_pair) != 2){
+      return(NULL)
+    }else{
     if((input$Species6 == "Xenopus laevis" || input$Species6 == "Arabidopsis thaliana") && 
        (input$Gene_set6 != "KEGG" && 
         input$Gene_set6 != "GO biological process" && 
@@ -3304,7 +3337,7 @@ shinyServer(function(input, output, session) {
           }
         }
       }else return(data)
-    }
+    }}
   })
   
   output$multi_GSEA_result <- DT::renderDataTable({
@@ -3647,7 +3680,9 @@ shinyServer(function(input, output, session) {
           print(multi_umap_plot())
           dev.off()
         }
-        if(!is.null(multi_boxplot_reactive) && length(input$selectFC) == 2){
+        print("finish pca")
+        if(length(input$selectFC) == 2){
+          if(!is.null(multi_boxplot_reactive())){
           dir.create(paste0("Divisive clustering_",as.character(input$selectFC[1]),"_vs_",as.character(input$selectFC[2]),"/"),showWarnings = FALSE)
           DEG_pattern <- paste0("Divisive clustering_",as.character(input$selectFC[1]),"_vs_",as.character(input$selectFC[2]),"/DEG_pattern.txt")
           DEG_pattern_count <- paste0("Divisive clustering_",as.character(input$selectFC[1]),"_vs_",as.character(input$selectFC[2]),"/DEG_pattern_norm_count_",input$multi_selectfile1,".txt")
@@ -3679,7 +3714,7 @@ shinyServer(function(input, output, session) {
             print(GOIboxplot(data = data))
             dev.off()
           }
-          if(!is.null(input$Gene_set7) && !is.null(input$multi_whichGroup1_2)){
+          if(!is.null(input$Gene_set7) && !is.null(input$multi_whichGroup1_1)){
             enrich1 <- paste0("Divisive clustering_",as.character(input$selectFC[1]),"_vs_",as.character(input$selectFC[2]),"/dotplot_",input$Gene_set7,".pdf")
             enrichtxt <- paste0("Divisive clustering_",as.character(input$selectFC[1]),"_vs_",as.character(input$selectFC[2]),"/enrichment_",input$Gene_set7,".txt")
             if(!is.null(input$multi_whichGroup1_1)){
@@ -3700,8 +3735,10 @@ shinyServer(function(input, output, session) {
             }
           }
         }
-        
-        if(!is.null(multi_kmeans_box()) && length(input$selectFC2) == 2){
+        }
+        print("finish divisive clustering")
+        if(length(input$selectFC2) == 2){
+          if(!is.null(multi_kmeans_box())){
           dir.create(paste0("kmeans clustering_",as.character(input$selectFC2[1]),"_vs_",as.character(input$selectFC2[2]),"/"),showWarnings = FALSE)
           kmeans_pattern <- paste0("kmeans clustering_",as.character(input$selectFC2[1]),"_vs_",as.character(input$selectFC2[2]),"/kmeans_pattern.txt")
           kmeans_pattern_count <- paste0("kmeans clustering_",as.character(input$selectFC2[1]),"_vs_",as.character(input$selectFC2[2]),"/kmeans_pattern_norm_count_",input$multi_selectfile2,".txt")
@@ -3734,7 +3771,7 @@ shinyServer(function(input, output, session) {
             print(GOIboxplot(data = data))
             dev.off()
           }
-          if(!is.null(input$Gene_set8) && !is.null(input$multi_whichGroup2_2)){
+          if(!is.null(input$Gene_set8) && !is.null(input$multi_whichGroup2_1)){
             enrich2 <- paste0("kmeans clustering_",as.character(input$selectFC2[1]),"_vs_",as.character(input$selectFC2[2]),"/dotplot_",input$Gene_set8,".pdf")
             enrichtxt2 <- paste0("kmeans clustering_",as.character(input$selectFC2[1]),"_vs_",as.character(input$selectFC2[2]),"/enrichment_",input$Gene_set8,".txt")
             if(!is.null(input$multi_whichGroup2_1)){
@@ -3755,7 +3792,11 @@ shinyServer(function(input, output, session) {
             }
           }
         }
-        if(!is.null(dds) && length(input$selectEnrich_pair) == 2 && input$Species6 != "not selected"){
+        }
+        print("finish kmeans clustering")
+        if(!is.null(input$selectEnrich_pair)){
+        if(length(input$selectEnrich_pair) == 2 && input$Species6 != "not selected"){
+          if(!is.null(multi_enrich1_H())){
           dir.create("GSEA/",showWarnings = FALSE)
           multiEnrich_table <- paste0("GSEA/GSEA_",input$Gene_set6,".txt")
           multiEnrich <- paste0("GSEA/GSEA_",input$Gene_set6,".pdf")
@@ -3765,7 +3806,25 @@ shinyServer(function(input, output, session) {
           pdf(multiEnrich, height = 5, width = 7)
           print(p1)
           dev.off()
-        }
+          }}}
+        print("GSEA")
+        report <- paste0(format(Sys.time(), "%Y%m%d_"),"MultiDEG_report",".docx")
+        fs <- c(fs,report)
+        rmarkdown::render("multi_report.Rmd", output_format = "word_document", output_file = report,
+                          params = list(raw_count = multi_d_row_count_matrix(),
+                                        multi_norm_count_matrix = multi_norm_count_matrix(),
+                                        input = input,
+                                        multi_metadata = multi_metadata(),
+                                        multi_umap_plot = multi_umap_plot(),
+                                        multi_boxplot_reactive = multi_boxplot_reactive(),
+                                        multi_enrich_div_table = multi_enrich_div_table(),
+                                        multi_kmeans_box = multi_kmeans_box(),
+                                        multi_enrich_k_table = multi_enrich_k_table(),
+                                        multi_GSEA_table = multi_GSEA_table(),
+                                        multi_pattern1 = multi_pattern1(),
+                                        multi_deg_count1 = multi_deg_count1()), 
+                          envir = new.env(parent = globalenv()),intermediates_dir = tempdir(),encoding="utf-8"
+        )
         zip(zipfile=fname, files=fs)
       })
     },
@@ -4536,7 +4595,7 @@ shinyServer(function(input, output, session) {
     withProgress(message = "Preparing GOI list (about 10 sec)",{
       updateSelectizeInput(session, "GOI2", choices = c(GOI_list2()), 
                            selected = character(0),
-                           options = list(create=TRUE, 'plugins' = list('remove_button'), persist = FALSE))
+                           options = list(delimiter = " ", create=TRUE, 'plugins' = list('remove_button'), persist = FALSE))
     })
   })
   
@@ -4960,6 +5019,19 @@ shinyServer(function(input, output, session) {
           write.table(cond3_enrich_table2(), enrich_table2, row.names = F, sep = "\t", quote = F)
           write.table(cond3_enrich_table3(), enrich_table3, row.names = F, sep = "\t", quote = F)
         }
+        report <- paste0(format(Sys.time(), "%Y%m%d_"),"3conditions_report",".docx")
+        fs <- c(fs,report)
+        rmarkdown::render("3conditions_report.Rmd", output_format = "word_document", output_file = report,
+                          params = list(raw_count = d_row_count_matrix2(),
+                                        input = input,
+                                        metadata2 = metadata2(),
+                                        norm_count_matrix2 = norm_count_matrix2(),
+                                        deg_norm_count2 = deg_norm_count2(),
+                                        cond3_enrich_table1 = cond3_enrich_table1(),
+                                        cond3_enrich_table2 = cond3_enrich_table2(),
+                                        cond3_enrich_table3 = cond3_enrich_table3()), 
+                          envir = new.env(parent = globalenv()),intermediates_dir = tempdir(),encoding="utf-8"
+        )
         zip(zipfile=fname, files=fs)
       })
     },
@@ -5333,7 +5405,7 @@ shinyServer(function(input, output, session) {
     withProgress(message = "Preparing GOI list (about 10 sec)",{
       updateSelectizeInput(session, "GOI3", choices = c(GOI_list3()), 
                            selected = character(0),
-                           options = list(create=TRUE, 'plugins' = list('remove_button'), persist = FALSE))
+                           options = list(delimiter = " ", create=TRUE, 'plugins' = list('remove_button'), persist = FALSE))
     })
   })
   
@@ -5509,7 +5581,7 @@ shinyServer(function(input, output, session) {
                       column_order = colnames(data.z),
                       clustering_method_columns = 'ward.D2',
                       row_km= input$norm_kmeans_number, cluster_row_slices = F, row_km_repeats = 100,
-                      show_row_names = F,column_names_side = "top")
+                      show_row_names = F,column_names_side = "top",use_raster = TRUE)
         ht <- draw(ht)
         return(ht)
       })
@@ -6749,7 +6821,7 @@ shinyServer(function(input, output, session) {
     withProgress(message = "Preparing GOI list (about 10 sec)",{
       updateSelectizeInput(session, "degGOI", choices = c(GOI_DEG()), 
                            selected = character(0),
-                           options = list(create=TRUE, 'plugins' = list('remove_button'), persist = FALSE))
+                           options = list(delimiter = " ", create=TRUE, 'plugins' = list('remove_button'), persist = FALSE))
     })
   })
   

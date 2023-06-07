@@ -56,8 +56,13 @@ library(org.Ss.eg.db)
 library(org.At.tair.db)
 library(limma)
 library(colorspace)
+library(pdftools)
+library(magick)
 options(repos = BiocManager::repositories())
-
+file.copy("Rmd/pair_report.Rmd",file.path(tempdir(),"pair_report.Rmd"), overwrite = TRUE)
+file.copy("Rmd/pair_batch_report.Rmd",file.path(tempdir(),"pair_batch_report.Rmd"), overwrite = TRUE)
+file.copy("Rmd/3conditions_report.Rmd",file.path(tempdir(),"3conditions_report.Rmd"), overwrite = TRUE)
+file.copy("Rmd/multi_report.Rmd",file.path(tempdir(),"multi_report.Rmd"), overwrite = TRUE)
 msigdbr_species <- msigdbr_species()$species_name
 gene_set_list <- c("MSigDB Hallmark", "KEGG", "Reactome", "PID (Pathway Interaction Database)",
                    "BioCarta","WikiPathways", "GO biological process", 
@@ -72,9 +77,19 @@ read_df <- function(tmp, Species=NULL){
   if(is.null(tmp)) {
     return(NULL)
   }else{
-    if(tools::file_ext(tmp) == "xlsx") df <- read.xls(tmp, header=TRUE, row.names = 1)
-    if(tools::file_ext(tmp) == "csv") df <- read.csv(tmp, header=TRUE, sep = ",", row.names = 1,quote = "")
-    if(tools::file_ext(tmp) == "txt" || tools::file_ext(tmp) == "tsv") df <- read.table(tmp, header=TRUE, sep = "\t", row.names = 1,quote = "")
+    if(tools::file_ext(tmp) == "xlsx") df <- try(read.xls(tmp, header=TRUE, row.names = 1))
+    if(tools::file_ext(tmp) == "csv") df <- try(read.csv(tmp, header=TRUE, sep = ",", row.names = 1,quote = ""))
+    if(tools::file_ext(tmp) == "txt" || tools::file_ext(tmp) == "tsv") df <- try(read.table(tmp, header=TRUE, sep = "\t", row.names = 1,quote = ""))
+    if(class(df) == "try-error") {
+      if(tools::file_ext(tmp) == "xlsx") df <- try(read.xls(tmp, header=TRUE))
+      if(tools::file_ext(tmp) == "csv") df <- try(read.csv(tmp, header=TRUE, sep = ",",quote = ""))
+      if(tools::file_ext(tmp) == "txt" || tools::file_ext(tmp) == "tsv") df <- try(read.table(tmp, header=TRUE, sep = "\t",quote = ""))
+      if(class(df) != "try-error") {
+        validate("Error: There are duplicated genes in the uploaded data. Please fix them.")
+      }else{
+        validate(paste0("Error: the uploaded data is in an unexpected format. The original error message is as follows:\n",print(df)))
+      }
+    }else{
     rownames(df) = gsub("\"", "", rownames(df))
     rownames(df) = gsub(":", ".", rownames(df))
     rownames(df) = gsub("\\\\", ".", rownames(df))
@@ -86,6 +101,7 @@ read_df <- function(tmp, Species=NULL){
     colnames(df) = str_sub(colnames(df), start = 3, end = -2) 
     }
     }
+    df[is.na(df)] <- 0
     if(dim(df)[2] != 0){
     if(colnames(df)[1] == "Protein.Ids"){
       df <- df %>% distinct(Genes, .keep_all = T)
@@ -96,6 +112,7 @@ read_df <- function(tmp, Species=NULL){
     }
     }
     return(df)
+    }
   }
 }
 read_gene_list <- function(tmp){
@@ -537,7 +554,7 @@ data_3degcount1 <- function(data,result_Condm, result_FDR, specific, fc, fdr, ba
       data3 <- data3[,- which(colnames(data3) == "C2")]
       data3 <- data3[,- which(colnames(data3) == "C3")]
       data3 <- data3[,- which(colnames(data3) == "PPDE")]
-      Pattern <- rep(3, nrow(data3))
+      Pattern <- rep("cannot_be_classified", nrow(data3))
       Pattern[which(data3$MAP == "Pattern1")] = paste(collist[1], "=", collist[2], "=", collist[3])
       Pattern[which(data3$MAP == "Pattern2" & data3$FC_y > 0)] = paste(collist[1], "=", collist[2], ">", collist[3])
       Pattern[which(data3$MAP == "Pattern2" & data3$FC_y < 0)] = paste(collist[1], "=", collist[2], "<", collist[3])
