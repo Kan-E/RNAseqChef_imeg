@@ -43,10 +43,12 @@ shinyUI(
                  ),
                  column(12,
                         br(),
-                        h4("Current version (v1.0.6, 2023/6/7)"),
+                        h4("Current version (v1.0.7, 2023/7/10)"),
+                        "Add new functions for non-model organisms.",br(),
+                        "Add new functions to the '3 conditions DEG' and 'Normalized count analysis'.",br(),
                         "See the details from 'More -> Change log'",
                         h4("Publication"),
-                        "Etoh K. & Nakao M. A web-based integrative transcriptome analysis, RNAseqChef, uncovers cell/tissue type-dependent action of sulforaphane. JBC, 2023, in press.", 
+                        "Etoh K. & Nakao M. A web-based integrative transcriptome analysis, RNAseqChef, uncovers cell/tissue type-dependent action of sulforaphane. JBC, (2023), 299(6), 104810.", 
                         a("https://doi.org/10.1016/j.jbc.2023.104810",href = "https://doi.org/10.1016/j.jbc.2023.104810"),),
                  column(12,br(),
                         column(6,br(),
@@ -151,7 +153,29 @@ shinyUI(
                                     radioButtons("cutoff_limma", "parameter for cut-off (fdr or pval)", c('fdr'="fdr",'pval'="pval"), selected = "fdr")
                    ),
                    fluidRow(
-                     column(6, selectInput("Species", "Species", species_list, selected = "not selected"))),
+                     column(6, selectInput("Species", "Species", species_list, selected = "not selected")),
+                     conditionalPanel(condition=c("input.Species != 'not selected' && input.Species != 'Homo sapiens' &&
+                   input.Species != 'Mus musculus' && input.Species != 'Rattus norvegicus' &&
+                   input.Species != 'Drosophila melanogaster' && input.Species != 'Caenorhabditis elegans' &&
+                   input.Species != 'Bos taurus' && input.Species != 'Canis lupus familiaris' &&
+                   input.Species != 'Danio rerio' && input.Species != 'Gallus gallus' &&
+                   input.Species != 'Macaca mulatta' && input.Species != 'Pan troglodytes' &&
+                   input.Species != 'Saccharomyces cerevisiae' && input.Species != 'Sus scrofa' &&
+                   input.Species != 'Xenopus laevis' && input.Species != 'Arabidopsis thaliana'"),
+                                      column(6, selectInput("Ortholog", 
+                                                            strong(
+                                                              span("Ortholog"),
+                                                              span(icon("info-circle"), id = "Ortholog_pair", 
+                                                                   options = list(template = popoverTempate))
+                                                            ),
+                                                            orgDb_list, selected = "Mus musculus"),
+                                             bsPopover("Ortholog_pair", "Ortholog for the pathway analysis of non-model organisms", 
+                                                       content=paste(img(src="non-model organism.png", width = 500,height = 800)), 
+                                                       placement = "right",options = list(container = "body"))
+                                             ),
+                                      column(12, selectInput("Biomart_archive", "Biomart host", ensembl_archive))
+                     )
+                   ),
                    h4("Cut-off conditions:"),
                    fluidRow(
                      column(4, numericInput("fc", "Fold Change", min   = 1, max   = NA, value = 2)),
@@ -348,7 +372,8 @@ shinyUI(
                  sidebarPanel(
                    radioButtons('data_file_type2','Input:',
                                 c('Raw_count_matrix'="Row3",
-                                  'Option: Raw_count_matrix + Metadata'="Row4"
+                                  'Option: Raw_count_matrix + Metadata'="Row4",
+                                  'Option: Recode.Rdata'="RowRecode_cond3"
                                 ),selected = "Row3"),
                    # Conditional panels appear based on input.data_file_type selection
                    conditionalPanel(condition="input.data_file_type2=='Row3'",
@@ -387,8 +412,44 @@ shinyUI(
                                                             img(src="input_format2.png", width = 400,height = 400)),
                                               placement = "right",options = list(container = "body")),
                    ),
+                   conditionalPanel(condition="input.data_file_type2=='RowRecode_cond3'",
+                                    fileInput("file_recode_cond3",
+                                              strong(
+                                                span("Select a Recode.Rdata"),
+                                                span(icon("info-circle"), id = "icon_recode", 
+                                                     options = list(template = popoverTempate))
+                                              ),
+                                              accept = c("Rdata"),
+                                              multiple = FALSE,
+                                              width = "80%"),
+                                    bsPopover("icon_recode", "Recode.Rdata:", 
+                                              content=paste("Using this mode, you can save time to EBSeq analysis.<br>",
+                                                            "The recode.Rdata file from the previous analysis using '3 conditions DEG' is needed.<br>", 
+                                                            "You can obtain a recode.Rdata file by clicking 'Download summary' buttom after the analysis with 3 conditions DEG"
+                                                            ), 
+                                              placement = "right",options = list(container = "body")),
+                   ),
                    fluidRow(
-                     column(6, selectInput("Species2", "Species", species_list, selected = "not selected"))),
+                     column(6, selectInput("Species2", "Species", species_list, selected = "not selected")),
+                     conditionalPanel(condition=c("input.Species2 != 'not selected' && input.Species2 != 'Homo sapiens' &&
+                   input.Species2 != 'Mus musculus' && input.Species2 != 'Rattus norvegicus' &&
+                   input.Species2 != 'Drosophila melanogaster' && input.Species2 != 'Caenorhabditis elegans' &&
+                   input.Species2 != 'Bos taurus' && input.Species2 != 'Canis lupus familiaris' &&
+                   input.Species2 != 'Danio rerio' && input.Species2 != 'Gallus gallus' &&
+                   input.Species2 != 'Macaca mulatta' && input.Species2 != 'Pan troglodytes' &&
+                   input.Species2 != 'Saccharomyces cerevisiae' && input.Species2 != 'Sus scrofa' &&
+                   input.Species2 != 'Xenopus laevis' && input.Species2 != 'Arabidopsis thaliana'"),
+                                      column(6, selectInput("Ortholog2", strong(
+                                        span("Ortholog"),
+                                        span(icon("info-circle"), id = "Ortholog_cond3", 
+                                             options = list(template = popoverTempate))
+                                      ), orgDb_list, selected = "Mus musculus"),
+                                      bsPopover("Ortholog_cond3", "Ortholog for the pathway analysis of non-model organisms", 
+                                                content=paste(img(src="non-model organism.png", width = 500,height = 800)), 
+                                                placement = "right",options = list(container = "body"))
+                                      ),
+                                      column(12, selectInput("Biomart_archive2", "Biomart host", ensembl_archive)))
+                     ),
                    h4("Cut-off conditions:"),
                    fluidRow(
                      column(4, numericInput("fc2", "Fold Change", min   = 1, max   = NA, value = 2)),
@@ -631,8 +692,29 @@ shinyUI(
                                                             img(src="input_format_multi.png", width = 400,height = 400)),
                                               placement = "right",options = list(container = "body")),
                    ),
-                   fluidRow(column(6,  selectInput("FDR_method6", "FDR method", c("BH", "Qvalue", "IHW"), selected = "BH")),
-                            column(6, selectInput("Species6", "Species", species_list, selected = "not selected"))),
+                   fluidRow(
+                            column(6, selectInput("Species6", "Species", species_list, selected = "not selected")),
+                            conditionalPanel(condition=c("input.Species6 != 'not selected' && input.Species6 != 'Homo sapiens' &&
+                   input.Species6 != 'Mus musculus' && input.Species6 != 'Rattus norvegicus' &&
+                   input.Species6 != 'Drosophila melanogaster' && input.Species6 != 'Caenorhabditis elegans' &&
+                   input.Species6 != 'Bos taurus' && input.Species6 != 'Canis lupus familiaris' &&
+                   input.Species6 != 'Danio rerio' && input.Species6 != 'Gallus gallus' &&
+                   input.Species6 != 'Macaca mulatta' && input.Species6 != 'Pan troglodytes' &&
+                   input.Species6 != 'Saccharomyces cerevisiae' && input.Species6 != 'Sus scrofa' &&
+                   input.Species6 != 'Xenopus laevis' && input.Species6 != 'Arabidopsis thaliana'"),
+                                             column(6, selectInput("Ortholog6", strong(
+                                               span("Ortholog"),
+                                               span(icon("info-circle"), id = "Ortholog_multi", 
+                                                    options = list(template = popoverTempate))
+                                             ), orgDb_list, selected = "Mus musculus"),
+                                             bsPopover("Ortholog_multi", "Ortholog for the pathway analysis of non-model organisms", 
+                                                       content=paste(img(src="non-model organism.png", width = 500,height = 800)), 
+                                                       placement = "right",options = list(container = "body"))),
+                                             column(12, selectInput("Biomart_archive6", "Biomart host", ensembl_archive)))
+                            ),
+                   fluidRow(
+                     column(6,  selectInput("FDR_method6", "FDR method", c("BH", "Qvalue", "IHW"), selected = "BH"))
+                   ),
                    h4("Cut-off conditions:"),
                    fluidRow(
                      column(4, numericInput("fc6", "Fold Change", min   = 0, max   = NA, value = 1.5)),
@@ -960,15 +1042,33 @@ shinyUI(
                              placement = "right",options = list(container = "body")),
                    fluidRow(
                      column(6, selectInput("Species7", "Species", species_list, selected = "not selected")),
-                     column(6, selectInput(
-                       inputId = "pre_zscoring",
-                       strong(
-                         span("Option: Pre-zscoring"),
-                         span(icon("info-circle"), id = "icon_venn3", 
-                              options = list(template = popoverTempate))
-                       ),
-                       multiple = FALSE,choices = c("TRUE", "FALSE"), selected = "TRUE"))
+                     conditionalPanel(condition=c("input.Species7 != 'not selected' && input.Species6 != 'Homo sapiens' &&
+                   input.Species7 != 'Mus musculus' && input.Species7 != 'Rattus norvegicus' &&
+                   input.Species7 != 'Drosophila melanogaster' && input.Species7 != 'Caenorhabditis elegans' &&
+                   input.Species7 != 'Bos taurus' && input.Species7 != 'Canis lupus familiaris' &&
+                   input.Species7 != 'Danio rerio' && input.Species7 != 'Gallus gallus' &&
+                   input.Species7 != 'Macaca mulatta' && input.Species7 != 'Pan troglodytes' &&
+                   input.Species7 != 'Saccharomyces cerevisiae' && input.Species7 != 'Sus scrofa' &&
+                   input.Species7 != 'Xenopus laevis' && input.Species7 != 'Arabidopsis thaliana'"),
+                     column(6, selectInput("Ortholog7", strong(
+                       span("Ortholog"),
+                       span(icon("info-circle"), id = "Ortholog_venn", 
+                            options = list(template = popoverTempate))
+                     ), orgDb_list, selected = "Mus musculus"),
+                     bsPopover("Ortholog_venn", "Ortholog for the pathway analysis of non-model organisms", 
+                               content=paste(img(src="non-model organism.png", width = 500,height = 800)), 
+                               placement = "right",options = list(container = "body"))),
+                     column(12, selectInput("Biomart_archive7", "Biomart host", ensembl_archive)))
                    ),
+                   fluidRow(
+                   column(6, selectInput(
+                     inputId = "pre_zscoring",
+                     strong(
+                       span("Option: Pre-zscoring"),
+                       span(icon("info-circle"), id = "icon_venn3", 
+                            options = list(template = popoverTempate))
+                     ),
+                     multiple = FALSE,choices = c("TRUE", "FALSE"), selected = "TRUE"))),
                    bsPopover("icon_venn3", "Option: Pre-zscoring:", 
                              content=paste("If True, each count data is z-scored before integrating multiple count data.<br><br>",
                                            img(src="pre-zscoring.png", width = 450,height = 200)), 
@@ -1114,7 +1214,25 @@ shinyUI(
                                               placement = "right",options = list(container = "body")),
                    ),
                    fluidRow(
-                     column(6, selectInput("Species3", "Species", species_list, selected = "not selected"))),
+                     column(6, selectInput("Species3", "Species", species_list, selected = "not selected")),
+                     conditionalPanel(condition=c("input.Species3 != 'not selected' && input.Species3 != 'Homo sapiens' &&
+                   input.Species3 != 'Mus musculus' && input.Species3 != 'Rattus norvegicus' &&
+                   input.Species3 != 'Drosophila melanogaster' && input.Species3 != 'Caenorhabditis elegans' &&
+                   input.Species3 != 'Bos taurus' && input.Species3 != 'Canis lupus familiaris' &&
+                   input.Species3 != 'Danio rerio' && input.Species3 != 'Gallus gallus' &&
+                   input.Species3 != 'Macaca mulatta' && input.Species3 != 'Pan troglodytes' &&
+                   input.Species3 != 'Saccharomyces cerevisiae' && input.Species3 != 'Sus scrofa' &&
+                   input.Species3 != 'Xenopus laevis' && input.Species3 != 'Arabidopsis thaliana'"),
+                     column(6, selectInput("Ortholog3", strong(
+                       span("Ortholog"),
+                       span(icon("info-circle"), id = "Ortholog_norm", 
+                            options = list(template = popoverTempate))
+                     ), orgDb_list, selected = "Mus musculus"),
+                     bsPopover("Ortholog_norm", "Ortholog for the pathway analysis of non-model organisms", 
+                               content=paste(img(src="non-model organism.png", width = 500,height = 800)), 
+                               placement = "right",options = list(container = "body"))),
+                     column(12, selectInput("Biomart_archive3", "Biomart host", ensembl_archive)))
+                     ),
                    h4("Filter option 1:"),
                    fileInput("file10",
                              label = "Select a gene list file for gene extraction",
@@ -1123,6 +1241,7 @@ shinyUI(
                              width = "80%"),
                    h4("Filter option 2:"),
                    fluidRow(
+                     column(4, numericInput("fc3", "Fold Change", min   = 1, max   = NA, value = 2)),
                      column(4, numericInput("basemean3", "Basemean", min   = 0, max   = NA, value = 0),
                      )
                    ),
@@ -1214,23 +1333,54 @@ shinyUI(
                                 column(4, downloadButton("download_norm_GOIheat", "Download heatmap"))
                               ),
                               fluidRow(
-                                column(4, htmlOutput("GOI3"), htmlOutput("GOIreset_norm")),
+                                column(4, 
+                                       htmlOutput("selectFC_normGOI"),
+                                       textOutput("filtered_regionGOI"),
+                                       tags$head(tags$style("#filtered_regionGOI{color: red;
+                                 font-size: 20px;
+                                 font-style: bold;
+                                 }")),
+                                       radioButtons('GOI3_type','Genes:',
+                                                    c('Select all genes'="ALL",
+                                                      'Custom'="custom"
+                                                    ),selected = "custom"),
+                                       htmlOutput("GOI3"), htmlOutput("GOIreset_norm")),
                                 column(8, plotOutput("norm_GOIheatmap"))
+                              ),
+                              fluidRow(
+                                column(4, htmlOutput("statistics")),
+                                column(4, htmlOutput("PlotType")),
+                                column(4, downloadButton("download_norm_GOIbox", "Download boxplot"))
                               ),
                               div(
                                 plotOutput("norm_GOIboxplot", height = "100%"),
                                 style = "height: calc(100vh  - 100px)"
                               ),
-                              fluidRow(
-                                column(4, downloadButton("download_norm_GOIbox", "Download boxplot"))
-                              )
+                              column(4, downloadButton("download_statisics", "Download table")),
+                              dataTableOutput("statistical_table")
                      ),
                      tabPanel("k-means clustering",
                               fluidRow(
-                                column(4, htmlOutput("norm_kmeans_num"),
+                                column(4, htmlOutput("selectFC_norm"),
+                                       textOutput("filtered_region"),
+                                       tags$head(tags$style("#filtered_region{color: red;
+                                 font-size: 20px;
+                                 font-style: bold;
+                                 }")),
+                                       htmlOutput("norm_kmeans_num"),
                                        htmlOutput("kmeans_cv"),
-                                       downloadButton("download_norm_kmeans_heatmap", "Download heatmap")),
-                                column(8, plotOutput("norm_kmeans_heatmap"))
+                                       actionButton("kmeans_start", "Start"),
+                                       tags$head(tags$style("#kmeans_start{color: red;
+                                 font-size: 20px;
+                                 font-style: bold;
+                                 }"),
+                                                 tags$style("
+          body {
+            padding: 0 !important;
+          }"
+                                                 ))),
+                                column(8, downloadButton("download_norm_kmeans_heatmap", "Download heatmap"),
+                                       plotOutput("norm_kmeans_heatmap"))
                               ),
                               bsCollapse(id="norm_kmeans_collapse_panel",open="norm_kmeans_count",multiple = TRUE,
                               bsCollapsePanel(title="k-means clustering result:",
@@ -1287,7 +1437,25 @@ shinyUI(
                                            img(src="input_format_enrich.png", width = 250,height = 400)), 
                              placement = "right",options = list(container = "body")),
                    fluidRow(
-                     column(6, selectInput("Species4", "Species", species_list, selected = "not selected"))),
+                     column(6, selectInput("Species4", "Species", species_list, selected = "not selected")),
+                     conditionalPanel(condition=c("input.Species4 != 'not selected' && input.Species4 != 'Homo sapiens' &&
+                   input.Species4 != 'Mus musculus' && input.Species4 != 'Rattus norvegicus' &&
+                   input.Species4 != 'Drosophila melanogaster' && input.Species4 != 'Caenorhabditis elegans' &&
+                   input.Species4 != 'Bos taurus' && input.Species4 != 'Canis lupus familiaris' &&
+                   input.Species4 != 'Danio rerio' && input.Species4 != 'Gallus gallus' &&
+                   input.Species4 != 'Macaca mulatta' && input.Species4 != 'Pan troglodytes' &&
+                   input.Species4 != 'Saccharomyces cerevisiae' && input.Species4 != 'Sus scrofa' &&
+                   input.Species4 != 'Xenopus laevis' && input.Species4 != 'Arabidopsis thaliana'"),
+                     column(6, selectInput("Ortholog4", strong(
+                       span("Ortholog"),
+                       span(icon("info-circle"), id = "Ortholog_enrich", 
+                            options = list(template = popoverTempate))
+                     ), orgDb_list, selected = "Mus musculus"),
+                     bsPopover("Ortholog_enrich", "Ortholog for the pathway analysis of non-model organisms", 
+                               content=paste(img(src="non-model organism.png", width = 500,height = 800)), 
+                               placement = "right",options = list(container = "body"))),
+                     column(12, selectInput("Biomart_archive4", "Biomart host", ensembl_archive)))
+                     ),
                    sliderInput("enrich_showCategory", "Most significant pathways",
                               min = 1, max = 20, value = 5,step = 1),
                    strong(span("Output plot size setting for pdf (0: default)"),
@@ -1427,7 +1595,24 @@ shinyUI(
                                         multiple = FALSE,
                                         width = "80%"),
                               fluidRow(
-                                column(6, selectInput("Species5", "Species", c("not selected", "human", "mouse", "rat", "fly", "worm"), selected = "not selected"))
+                                column(6, selectInput("Species5", "Species", species_list, selected = "not selected")),
+                                conditionalPanel(condition=c("input.Species5 != 'not selected' && input.Species5 != 'Homo sapiens' &&
+                   input.Species5 != 'Mus musculus' && input.Species5 != 'Rattus norvegicus' &&
+                   input.Species5 != 'Drosophila melanogaster' && input.Species5 != 'Caenorhabditis elegans' &&
+                   input.Species5 != 'Bos taurus' && input.Species5 != 'Canis lupus familiaris' &&
+                   input.Species5 != 'Danio rerio' && input.Species5 != 'Gallus gallus' &&
+                   input.Species5 != 'Macaca mulatta' && input.Species5 != 'Pan troglodytes' &&
+                   input.Species5 != 'Saccharomyces cerevisiae' && input.Species5 != 'Sus scrofa' &&
+                   input.Species5 != 'Xenopus laevis' && input.Species5 != 'Arabidopsis thaliana'"),
+                                                 column(6, selectInput("Ortholog5", strong(
+                                                   span("Ortholog"),
+                                                   span(icon("info-circle"), id = "Ortholog_volcano", 
+                                                        options = list(template = popoverTempate))
+                                                 ), orgDb_list, selected = "Mus musculus"),
+                                                 bsPopover("Ortholog_volcano", "Ortholog for the pathway analysis of non-model organisms", 
+                                                           content=paste(img(src="non-model organism.png", width = 500,height = 800)), 
+                                                           placement = "right",options = list(container = "body"))),
+                                column(12, selectInput("Biomart_archive5", "Biomart host", ensembl_archive)))
                               ),
                               fluidRow(
                                 column(4, numericInput("fc4", "Fold Change", min   = 1, max   = NA, value = 2)),
@@ -1635,7 +1820,14 @@ shinyUI(
                                    strong("・Display an error message when inappropriate data is uploaded in Pair-wise DEG, 3 conditions DEG, and Multi DEG.(2023/5/18)"),br(),
                                    h4("v1.0.6 (2023/6/7)"),
                                    strong("・Add new function: generating report (.docx) when 'download summary' button is pressed in the setting panel of 'Pair-wise DEG', '3 conditions DEG', and 'Multi conditions DEG'.(2023/6/7)"),br(),
-                                   strong("・Fix 'GOI reset' button in the 'Pair-wise DEG', '3 conditions DEG', 'Normalized data count analysis',and 'Volcano navi'.(2023/6/7)"),br()
+                                   strong("・Fix 'GOI reset' button in the 'Pair-wise DEG', '3 conditions DEG', 'Normalized data count analysis',and 'Volcano navi'.(2023/6/7)"),br(),
+                                   h4("v1.0.7 (2023/7/10)"),
+                                   strong("・Add approximately 200 non-model organisms."),br(),
+                                   strong("・Add new function for the non-model organisms. Related species (Ortholog) can be selected for pathway analysis."),br(),
+                                   strong("・Add the function to export and import a Recode.Rdata file in the '3 conditions DEG'. 
+                                          Recode.Rdata can be obtained by clicking the 'Download summary' button and be imported using 'Option: Recode.Rdata' mode. You can skip the time-consuming EBSeq analysis."),br(),
+                                   strong("・Add the functions for log2FoldChange cut-off and statistical analysis in the 'Normalized count analysis'."),br(),
+                                   strong("・Bug fix. Pathway analysis of non-model organism."),br(),
                             )
                           )
                  )

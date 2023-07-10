@@ -4,12 +4,17 @@ shinyServer(function(input, output, session) {
   options(shiny.maxRequestSize=3000*1024^2)
   # pair-wise ------------------------------------------------------------------------------
   org1 <- reactive({
-    return(org(Species = input$Species))
+    return(org(Species = input$Species,Ortholog = input$Ortholog))
+  })
+  ortholog1 <- reactive({
+    return(no_org_ID(count = row_count_matrix(),Species = input$Species,Ortholog = input$Ortholog,Biomart_archive=input$Biomart_archive))
   })
   org_code1 <- reactive({
     return(org_code(Species = input$Species))
   })
-  
+  gene_type1 <- reactive({
+    return(gene_type(my.symbols=rownames(row_count_matrix()),org=org1(),Species=input$Species))
+  })
   
   row_count_matrix <- reactive({
     withProgress(message = "Importing row count matrix, please wait",{
@@ -203,22 +208,8 @@ shinyServer(function(input, output, session) {
         })
       }
       res <- as.data.frame(res)
-      if(input$Species != "not selected"){
-        if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-           str_detect(rownames(count)[1], "^AT.G")){
-          my.symbols <- gsub("\\..*","", rownames(res))
-          if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-          gene_IDs<-AnnotationDbi::select(org1(),keys = my.symbols,
-                                          keytype = key,
-                                          columns = c(key,"SYMBOL"))
-          colnames(gene_IDs) <- c("Row.names","SYMBOL")
-          res$Row.names <- gsub("\\..*","", rownames(res))
-          gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
-          data2 <- merge(res, gene_IDs, by="Row.names")
-          rownames(data2) <- data2$Row.names
-          res <- data2[,-1]
-        }
-      }
+      print(gene_type1())
+      if(input$Species != "not selected") res <- ensembl2symbol(gene_type=gene_type1(),data = res, input$Species,Ortholog=ortholog1(),org = org1())
       return(res)
       }
     }
@@ -260,23 +251,8 @@ shinyServer(function(input, output, session) {
           Sizes <- MedianNorm(count)
           normalized_counts <- GetNormalizedMat(count, Sizes)
         }
-        if(input$Species != "not selected"){
-          if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-             str_detect(rownames(count)[1], "^AT.G")){
-            normalized_counts <- as.data.frame(normalized_counts)
-            my.symbols <- gsub("\\..*","", rownames(normalized_counts))
-            if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-            gene_IDs<-AnnotationDbi::select(org1(),keys = my.symbols,
-                                            keytype = key,
-                                            columns = c(key,"SYMBOL"))
-            colnames(gene_IDs) <- c("Row.names","SYMBOL")
-            normalized_counts$Row.names <- gsub("\\..*","", rownames(normalized_counts))
-            gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
-            data2 <- merge(normalized_counts, gene_IDs, by="Row.names")
-            rownames(data2) <- data2$Row.names
-            normalized_counts <- data2[,-1]
-          }
-        }
+        if(input$Species != "not selected") normalized_counts <- ensembl2symbol(gene_type=gene_type1(),data = normalized_counts, 
+                                                                                Species=input$Species,Ortholog=ortholog1(),org = org1())
         return(normalized_counts)
       }
       }
@@ -367,18 +343,11 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       if(input$Species != "not selected"){
-        if(str_detect(rownames(res)[1], "ENS") || str_detect(rownames(res)[1], "FBgn") ||
-           str_detect(rownames(res)[1], "^AT.G")){
-          my.symbols <- gsub("\\..*","", rownames(res))
-          if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-          gene_IDs<-AnnotationDbi::select(org1(),keys = my.symbols,
-                                          keytype = key,
-                                          columns = c(key,"SYMBOL"))
-          colnames(gene_IDs) <- c("Row.names","SYMBOL")
-          gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
-          rownames(gene_IDs) <- gene_IDs$Row.names
-          return(gene_IDs)
-        }
+        if(gene_type1() != "SYMBOL"){
+        gene_IDs <- ensembl2symbol(gene_type=gene_type1(),Species=input$Species,
+                                   Ortholog=ortholog1(),data = res, org = org1(),merge=FALSE)
+        return(gene_IDs)
+      }
       }else{ return(NULL) }
     }
   })
@@ -390,8 +359,7 @@ shinyServer(function(input, output, session) {
     if(is.null(count) || is.null(data)){
       return(NULL)
     }else{
-      if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||
-         str_detect(rownames(data)[1], "^AT.G")){
+      if(gene_type1() != "SYMBOL"){
         if(length(grep("SYMBOL", colnames(data))) != 0){
           data <- data[, - which(colnames(data) == "SYMBOL")]
           count <- count[, - which(colnames(count) == "SYMBOL")]
@@ -432,14 +400,17 @@ shinyServer(function(input, output, session) {
       if (Type == "limma"){
         data$log2FoldChange <- -1 * data$log2FoldChange
       }
-      if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-         str_detect(rownames(count)[1], "^AT.G")){
+      if(gene_type1() != "SYMBOL"){
         if(input$Species != "not selected"){
+          if(sum(is.element(no_orgDb, input$Species))==1){
+            gene_IDs <- ortholog1()
+          }else{
           my.symbols <- data$Row.names
           if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
           gene_IDs<-AnnotationDbi::select(org1(),keys = my.symbols,
                                           keytype = key,
                                           columns = c(key,"SYMBOL", "ENTREZID"))
+          }
           colnames(gene_IDs) <- c("Row.names","SYMBOL", "ENTREZID")
           gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
           data <- merge(data, gene_IDs, by="Row.names")
@@ -450,10 +421,14 @@ shinyServer(function(input, output, session) {
         }
       }else{
         if(input$Species != "not selected"){
+          if(sum(is.element(no_orgDb, input$Species))==1){
+            gene_IDs <- ortholog1()[,-1]
+          }else{
           my.symbols <- data$Row.names
           gene_IDs<-AnnotationDbi::select(org1(),keys = my.symbols,
                                           keytype = "SYMBOL",
                                           columns = c("SYMBOL", "ENTREZID"))
+          }
           colnames(gene_IDs) <- c("Row.names", "ENTREZID")
           gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
           data <- merge(data, gene_IDs, by="Row.names")
@@ -507,8 +482,7 @@ shinyServer(function(input, output, session) {
       rownames(up_all) <- up_all$Row.names
       up_all <- up_all[,8:(7 + Cond_1 + Cond_2)]
       if(input$Species != "not selected"){
-        if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-           str_detect(rownames(count)[1], "^AT.G")){
+        if(gene_type1() != "SYMBOL"){
           up_all <- merge(up_all, gene_ID_pair(), by=0)
           rownames(up_all) <- up_all$Row.names
           up_all <- up_all[,-1]
@@ -538,8 +512,7 @@ shinyServer(function(input, output, session) {
       rownames(down_all) <- down_all$Row.names
       down_all <- down_all[,8:(7 + Cond_1 + Cond_2)]
       if(input$Species != "not selected"){
-        if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") || 
-           str_detect(rownames(count)[1], "^AT.G")){
+        if(gene_type1() != "SYMBOL"){
           down_all <- merge(down_all, gene_ID_pair(), by=0)
           rownames(down_all) <- down_all$Row.names
           down_all <- down_all[,-1]
@@ -583,8 +556,7 @@ shinyServer(function(input, output, session) {
     data <- data_degcount()
     count <- deg_norm_count()
     if(!is.null(count)){
-    if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||
-       str_detect(rownames(data)[1], "^AT.G")){
+      if(gene_type1() != "SYMBOL"){
       if(length(grep("SYMBOL", colnames(data))) != 0){
         count <- count[, - which(colnames(count) == "SYMBOL")]
       }
@@ -597,8 +569,7 @@ shinyServer(function(input, output, session) {
     }
     Cond_1 <- vec[1]
     Cond_2 <- vec[2]
-    if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-       str_detect(rownames(count)[1], "^AT.G")){
+    if(gene_type1() != "SYMBOL"){
       if(input$Species != "not selected"){
         genenames <- as.vector(data$SYMBOL)
       }else{ genenames=NULL }
@@ -659,8 +630,7 @@ shinyServer(function(input, output, session) {
     if(is.null(d_row_count_matrix())){
       return(NULL)
     }else{
-      if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-         str_detect(rownames(count)[1], "^AT.G")){
+      if(gene_type1() != "SYMBOL"){
         if(input$Species != "not selected"){
           GOI <- data$Unique_ID
         }else GOI <- data$Row.names
@@ -732,8 +702,7 @@ shinyServer(function(input, output, session) {
       if(!is.null(label_data)) {
         Color <- c("blue","green","darkgray","red")
         for(name in label_data){
-          if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-             str_detect(rownames(count)[1], "^AT.G")){
+          if(gene_type1() != "SYMBOL"){
             if(input$Species != "not selected"){
               data$color[data$Unique_ID == name] <- "GOI"
             }else{
@@ -766,8 +735,7 @@ shinyServer(function(input, output, session) {
         xlim(input$xrange)+
         ylim(c(0, input$yrange))
       if(!is.null(label_data)) {
-        if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") || 
-           str_detect(rownames(count)[1], "^AT.G")){
+        if(gene_type1() != "SYMBOL"){
           if(input$Species != "not selected"){
             v <- v + geom_point(data=dplyr::filter(data, color == "GOI"),color="green", size=1)
             v <- v + ggrepel::geom_label_repel(data = dplyr::filter(data, color == "GOI"), mapping = aes(label = Unique_ID),label.padding=.1,alpha = 0.6,label.size = NA, 
@@ -823,8 +791,7 @@ shinyServer(function(input, output, session) {
   pair_GOIheatmap <- reactive({
     data <- data_degcount()
     count <- deg_norm_count()
-    if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||
-       str_detect(rownames(data)[1], "^AT.G")){
+    if(gene_type1() != "SYMBOL"){
       if(length(grep("SYMBOL", colnames(data))) != 0){
         count <- count[, - which(colnames(count) == "SYMBOL")]
       }
@@ -837,8 +804,7 @@ shinyServer(function(input, output, session) {
     }
     Cond_1 <- vec[1]
     Cond_2 <- vec[2]
-    if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") || 
-       str_detect(rownames(count)[1], "^AT.G")){
+    if(gene_type1() != "SYMBOL"){
       if(input$Species != "not selected"){
         Unique_ID <- input$GOI
         label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
@@ -904,8 +870,7 @@ shinyServer(function(input, output, session) {
   pair_GOIbox <- reactive({
     data <- data_degcount()
     count <- deg_norm_count()
-    if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||
-       str_detect(rownames(data)[1], "^AT.G")){
+    if(gene_type1() != "SYMBOL"){
       if(length(grep("SYMBOL", colnames(data))) != 0){
         count <- count[, - which(colnames(count) == "SYMBOL")]
       }
@@ -918,8 +883,7 @@ shinyServer(function(input, output, session) {
     }
     Cond_1 <- vec[1]
     Cond_2 <- vec[2]
-    if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") || 
-       str_detect(rownames(count)[1], "^AT.G")){
+    if(gene_type1() != "SYMBOL"){
       if(input$Species != "not selected"){
         Unique_ID <- input$GOI
         label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
@@ -967,14 +931,12 @@ shinyServer(function(input, output, session) {
       withProgress(message = "Preparing download",{
         data <- data_degcount()
         count <- deg_norm_count()
-        if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||
-           str_detect(rownames(data)[1], "^AT.G")){
+        if(gene_type1() != "SYMBOL"){
           if(length(grep("SYMBOL", colnames(data))) != 0){
             count <- count[, - which(colnames(count) == "SYMBOL")]
           }
         }
-        if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") || 
-           str_detect(rownames(count)[1], "^AT.G")){
+        if(gene_type1() != "SYMBOL"){
           if(input$Species != "not selected"){
             Unique_ID <- input$GOI
             label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
@@ -1032,11 +994,7 @@ shinyServer(function(input, output, session) {
     if(is.null(d_row_count_matrix())){
       return(NULL)
     }else{
-      count <- deg_norm_count()
-      collist <- factor(gsub("\\_.+$", "", colnames(count)))
-      if(length(unique(collist)) == 2){
       print(PCAplot(data = deg_norm_count()))
-      }
     }
   })
   
@@ -1094,14 +1052,12 @@ shinyServer(function(input, output, session) {
             fs <- c(fs,boxplot,heat)
             data <- data_degcount()
             count <- deg_norm_count()
-            if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") || 
-               str_detect(rownames(data)[1], "^AT.G")){
+            if(gene_type1() != "SYMBOL"){
               if(length(grep("SYMBOL", colnames(data))) != 0){
                 count <- count[, - which(colnames(count) == "SYMBOL")]
               }
             }
-            if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") || 
-               str_detect(rownames(count)[1], "^AT.G")){
+            if(gene_type1() != "SYMBOL"){
               if(input$Species != "not selected"){
                 Unique_ID <- input$GOI
                 label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
@@ -1170,7 +1126,7 @@ shinyServer(function(input, output, session) {
     if(input$Species == "not selected") print("Please select 'Species'")
   })
   Hallmark_set <- reactive({
-    return(GeneList_for_enrichment(Species = input$Species, Gene_set = input$Gene_set, org = org1()))
+    return(GeneList_for_enrichment(Species = input$Species, Ortholog=input$Ortholog,Biomart_archive=input$Biomart_archive,Gene_set = input$Gene_set, org = org1()))
   })
   
   enrichment_1_1 <- reactive({
@@ -1231,10 +1187,14 @@ shinyServer(function(input, output, session) {
             if (length(as.data.frame(df[[name]])$ID) == 0) {
               df[[name]] <- NULL
             } else{
-              df[[name]] <- setReadable(df[[name]], org1(), 'ENTREZID')
-            }
+              df[[name]] <- try(setReadable(df[[name]], org1(), 'ENTREZID'))
+              if(length(class(df[[name]])) == 1){
+                if(class(df[[name]]) == "try-error") df[[name]] <- NULL
+              }
+              }
           }
           incProgress(1)
+          print(df)
           return(df)
         })
       }else{return(NULL)}
@@ -1262,25 +1222,28 @@ shinyServer(function(input, output, session) {
           if(input$Species != "Xenopus laevis" && input$Species != "Arabidopsis thaliana"){
             H_t2g <- Hallmark_set()
             H_t2g2 <- H_t2g %>% dplyr::select(gs_name, entrez_gene)
-            em3 <- GSEA(geneList, TERM2GENE = H_t2g2,pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
-                        minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F)
+            em3 <- try(GSEA(geneList, TERM2GENE = H_t2g2,pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+                        minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F))
           }else{
             if(input$Gene_set == "KEGG"){
-              em3 <- gseKEGG(geneList, organism = org_code(input$Species),pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
-                             minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F,keyType = "ncbi-geneid")
+              em3 <- try(gseKEGG(geneList, organism = org_code(input$Species),pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+                             minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F,keyType = "ncbi-geneid"))
             }
             if(input$Gene_set == "GO biological process"){
-              em3 <- gseGO(geneList, OrgDb = org(input$Species),ont = "BP",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
-                           minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F)
+              em3 <- try(gseGO(geneList, OrgDb = org(input$Species),ont = "BP",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+                           minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F))
             }
             if(input$Gene_set == "GO cellular component"){
-              em3 <- gseGO(geneList, OrgDb = org(input$Species),ont = "CC",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
-                           minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F)
+              em3 <- try(gseGO(geneList, OrgDb = org(input$Species),ont = "CC",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+                           minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F))
             }
             if(input$Gene_set == "GO molecular function"){
-              em3 <- gseGO(geneList, OrgDb = org(input$Species),ont = "MF",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
-                           minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F)
+              em3 <- try(gseGO(geneList, OrgDb = org(input$Species),ont = "MF",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+                           minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F))
             }
+          }
+          if(length(class(em3)) == 1){
+            if(class(em3) == "try-error") validate(em3)
           }
           if (length(as.data.frame(em3)$ID) == 0) {
             em4 <- NA
@@ -1308,6 +1271,7 @@ shinyServer(function(input, output, session) {
         colnames(data) <- c("ID", "Description", "GeneRatio", "BgRatio", "pvalue", "p.adjust", " qvalue", "geneID", "Count", "Group")
         for(name in names(df)){
           if(!is.null(df[[name]])) {
+            print(df[[name]])
             group1 <- as.data.frame(df[[name]])
             group1$Group <- paste(name, "\n(",length(dplyr::filter(data3, group == name)$ENTREZID),")",sep = "")
             if (length(group1$pvalue) > 5){
@@ -1589,69 +1553,55 @@ shinyServer(function(input, output, session) {
           if(input$FDR_method == "Qvalue"){label <- c("log2FoldChange", "log2CPM", "PValue","BH_FDR", "padj", "IHW_FDR")}
           if(input$FDR_method == "IHW"){label <- c("log2FoldChange", "log2CPM", "PValue","BH_FDR", "Qvalue", "padj")}
           colnames(res) <- label
-        }
+      }
         if(input$DEG_method == "limma"){
-          withProgress(message = "limma",{
-            group <- factor(collist)
-            count <- log(count + 1,2)
-            eset = new("ExpressionSet", exprs=as.matrix(count))
-            design <- model.matrix(~0+collist)
-            colnames(design) <- unique(collist)
-            fit <- lmFit(eset, design)
-            comparisons <-  paste(unique(collist)[1],"-",unique(collist)[2],sep="")
-            cont.matrix <- makeContrasts(contrasts=comparisons, levels=design)
-            fit <- contrasts.fit(fit, cont.matrix)
-            fit2 <- eBayes(fit,trend = TRUE)
-            res =topTable(fit2, number = 1e12)
-            if(input$cutoff_limma == "fdr"){
-              colnames(res) <- c("log2FoldChange","baseMean","t","pval","padj","B")
-            }else{
-              colnames(res) <- c("log2FoldChange","baseMean","t","padj","padj2","B")
-            }
-            res$baseMean <- 2^res$baseMean
-          })
+            withProgress(message = "limma",{
+                group <- factor(collist)
+                count <- log(count + 1,2)
+                eset = new("ExpressionSet", exprs=as.matrix(count))
+                design <- model.matrix(~0+collist)
+                colnames(design) <- unique(collist)
+                fit <- lmFit(eset, design)
+                comparisons <-  paste(unique(collist)[1],"-",unique(collist)[2],sep="")
+                cont.matrix <- makeContrasts(contrasts=comparisons, levels=design)
+                fit <- contrasts.fit(fit, cont.matrix)
+                fit2 <- eBayes(fit,trend = TRUE)
+                res =topTable(fit2, number = 1e12)
+                if(input$cutoff_limma == "fdr"){
+                    colnames(res) <- c("log2FoldChange","baseMean","t","pval","padj","B")
+                }else{
+                    colnames(res) <- c("log2FoldChange","baseMean","t","padj","padj2","B")
+                }
+                res$baseMean <- 2^res$baseMean
+            })
         }
-        if(input$DEG_method == "EBSeq"){
-          withProgress(message = paste("DEG analysis of", name),{
-            count <- data.matrix(count)
-            vec <- c()
-            for (i in 1:length(unique(collist))) {
-              num <- length(collist[collist == unique(collist)[i]])
-              vec <- c(vec, num)
-            }
-            ngvector <- NULL
-            conditions <- as.factor(rep(paste("C", 1:length(unique(collist)), sep=""), times = vec))
-            Sizes <- MedianNorm(count)
-            NormMat <- GetNormalizedMat(count, Sizes)
-            EBOut <- NULL
-            EBOut <- EBTest(Data = count, NgVector = ngvector, Conditions = conditions, sizeFactors = Sizes, maxround = 5)
-            stopifnot(!is.null(EBOut))
-            PP <- as.data.frame(GetPPMat(EBOut))
-            fc_res <- PostFC(EBOut)
-            results <- cbind(PP, fc_res$PostFC, fc_res$RealFC,unlist(EBOut$C1Mean)[rownames(PP)], unlist(EBOut$C2Mean)[rownames(PP)])
-            colnames(results) <- c("PPEE", "PPDE", "PostFC", "RealFC","C1Mean","C2Mean")
-            res <- results[order(results[,"PPDE"], decreasing = TRUE),]
-            incProgress(1)
-          })
-        }
-        res <- as.data.frame(res)
-        if(input$Species != "not selected"){
-          if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") || 
-             str_detect(rownames(count)[1], "AT.G")){
-            my.symbols <- gsub("\\..*","", rownames(res))
-            if(str_detect(my.symbols[1], "AT.G")) key = "TAIR" else key = "ENSEMBL"
-            gene_IDs<-AnnotationDbi::select(org1(),keys = my.symbols,
-                                            keytype = key,
-                                            columns = c(key,"SYMBOL"))
-            colnames(gene_IDs) <- c("Row.names","SYMBOL")
-            res$Row.names <- gsub("\\..*","", rownames(res))
-            gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
-            data2 <- merge(res, gene_IDs, by="Row.names")
-            rownames(data2) <- data2$Row.names
-            res <- data2[,-1]
+      if(input$DEG_method == "EBSeq"){
+        withProgress(message = paste("DEG analysis of", name),{
+          count <- data.matrix(count)
+          vec <- c()
+          for (i in 1:length(unique(collist))) {
+            num <- length(collist[collist == unique(collist)[i]])
+            vec <- c(vec, num)
           }
-        }
-        count_list[name] <- list(res)
+          ngvector <- NULL
+          conditions <- as.factor(rep(paste("C", 1:length(unique(collist)), sep=""), times = vec))
+          Sizes <- MedianNorm(count)
+          NormMat <- GetNormalizedMat(count, Sizes)
+          EBOut <- NULL
+          EBOut <- EBTest(Data = count, NgVector = ngvector, Conditions = conditions, sizeFactors = Sizes, maxround = 5)
+          stopifnot(!is.null(EBOut))
+          PP <- as.data.frame(GetPPMat(EBOut))
+          fc_res <- PostFC(EBOut)
+          results <- cbind(PP, fc_res$PostFC, fc_res$RealFC,unlist(EBOut$C1Mean)[rownames(PP)], unlist(EBOut$C2Mean)[rownames(PP)])
+          colnames(results) <- c("PPEE", "PPDE", "PostFC", "RealFC","C1Mean","C2Mean")
+          res <- results[order(results[,"PPDE"], decreasing = TRUE),]
+          incProgress(1)
+        })
+      }
+      res <- as.data.frame(res)
+      if(input$Species != "not selected") res <- ensembl2symbol(gene_type=gene_type1(),Species=input$Species,
+                                                                Ortholog=ortholog1(),data = res, org = org1())
+      count_list[name] <- list(res)
       }
     }
     return(count_list)
@@ -1719,23 +1669,8 @@ shinyServer(function(input, output, session) {
           Sizes <- MedianNorm(count)
           normalized_counts <- GetNormalizedMat(count, Sizes)
         }
-        if(input$Species != "not selected"){
-          if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-             str_detect(rownames(count)[1], "^AT.G")){
-            normalized_counts <- as.data.frame(normalized_counts)
-            my.symbols <- gsub("\\..*","", rownames(normalized_counts))
-            if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-            gene_IDs<-AnnotationDbi::select(org1(),keys = my.symbols,
-                                            keytype = key,
-                                            columns = c(key,"SYMBOL"))
-            colnames(gene_IDs) <- c("Row.names","SYMBOL")
-            normalized_counts$Row.names <- gsub("\\..*","", rownames(normalized_counts))
-            gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
-            data2 <- merge(normalized_counts, gene_IDs, by="Row.names")
-            rownames(data2) <- data2$Row.names
-            normalized_counts <- data2[,-1]
-          }
-        }
+        if(input$Species != "not selected") normalized_counts <- ensembl2symbol(gene_type=gene_type1(),Species=input$Species,
+                                                                                Ortholog=ortholog1(),data = normalized_counts, org = org1())
         count_list[name] <- list(normalized_counts)
       }
       return(count_list)
@@ -1782,16 +1717,9 @@ shinyServer(function(input, output, session) {
       if(input$Species != "not selected"){
         for (name in names(res1)) {
           res <- res1[[name]]
-          if(str_detect(rownames(res)[1], "ENS") || str_detect(rownames(res)[1], "FBgn") || 
-             str_detect(rownames(res)[1], "^AT.G")){
-            my.symbols <- gsub("\\..*","", rownames(res))
-            if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-            gene_IDs<-AnnotationDbi::select(org1(),keys = my.symbols,
-                                            keytype = key,
-                                            columns = c(key,"SYMBOL"))
-            colnames(gene_IDs) <- c("Row.names","SYMBOL")
-            gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
-            rownames(gene_IDs) <- gene_IDs$Row.names
+          if(gene_type1() != "SYMBOL"){
+            gene_IDs <- ensembl2symbol(gene_type=gene_type1(),Species=input$Species,
+                                       Ortholog=ortholog1(),data = res, org = org1(),merge=FALSE)
             reslist[name] <- list(gene_IDs)
           }else{ reslist[name] <- list(NULL) }
         }
@@ -1812,8 +1740,7 @@ shinyServer(function(input, output, session) {
         if(name != "combined"){
           data <- data1[[name]]
           count <- count1[[name]]
-          if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||
-             str_detect(rownames(data)[1], "^AT.G")){
+          if(gene_type1() != "SYMBOL"){
             if(length(grep("SYMBOL", colnames(data))) != 0){
               data <- data[, - which(colnames(data) == "SYMBOL")]
               count <- count[, - which(colnames(count) == "SYMBOL")]
@@ -1854,14 +1781,17 @@ shinyServer(function(input, output, session) {
           if (Type == "limma"){
             data$log2FoldChange <- -1 * data$log2FoldChange
           }
-          if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") || 
-             str_detect(rownames(count)[1], "^AT.G")){
+          if(gene_type1() != "SYMBOL"){
             if(input$Species != "not selected"){
+              if(sum(is.element(no_orgDb, input$Species))==1){
+                gene_IDs <- ortholog1()
+              }else{
               my.symbols <- data$Row.names
               if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
               gene_IDs<-AnnotationDbi::select(org1(),keys = my.symbols,
                                               keytype = key,
                                               columns = c(key,"SYMBOL", "ENTREZID"))
+              }
               colnames(gene_IDs) <- c("Row.names","SYMBOL", "ENTREZID")
               gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
               data <- merge(data, gene_IDs, by="Row.names")
@@ -1872,10 +1802,14 @@ shinyServer(function(input, output, session) {
             }
           }else{
             if(input$Species != "not selected"){
+              if(sum(is.element(no_orgDb, input$Species))==1){
+                gene_IDs <- ortholog1()[,-1]
+              }else{
               my.symbols <- data$Row.names
               gene_IDs<-AnnotationDbi::select(org1(),keys = my.symbols,
                                               keytype = "SYMBOL",
                                               columns = c("SYMBOL", "ENTREZID"))
+              }
               colnames(gene_IDs) <- c("Row.names", "ENTREZID")
               gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
               data <- merge(data, gene_IDs, by="Row.names")
@@ -1948,8 +1882,7 @@ shinyServer(function(input, output, session) {
           rownames(up_all) <- up_all$Row.names
           up_all <- up_all[,8:(7 + Cond_1 + Cond_2)]
           if(input$Species != "not selected"){
-            if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") || 
-               str_detect(rownames(count)[1], "^AT.G")){
+            if(gene_type1() != "SYMBOL"){
               up_all <- merge(up_all, gene_ID_pair_batch(), by=0)
               rownames(up_all) <- up_all$Row.names
               up_all <- up_all[,2:(1 + Cond_1 + Cond_2)]
@@ -1987,8 +1920,7 @@ shinyServer(function(input, output, session) {
           rownames(down_all) <- down_all$Row.names
           down_all <- down_all[,8:(7 + Cond_1 + Cond_2)]
           if(input$Species != "not selected"){
-            if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") || 
-               str_detect(rownames(count)[1], "^AT.G")){
+            if(gene_type1() != "SYMBOL"){
               down_all <- merge(down_all, gene_ID_pair_batch(), by=0)
               rownames(down_all) <- down_all$Row.names
               down_all <- down_all[,2:(1 + Cond_1 + Cond_2)]
@@ -2012,8 +1944,7 @@ shinyServer(function(input, output, session) {
         if(name != "combined"){
           data <- data1[[name]]
           count <- count1[[name]]
-          if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||   
-             str_detect(rownames(data)[1], "^AT.G")){
+          if(gene_type1() != "SYMBOL"){
             if(length(grep("SYMBOL", colnames(data))) != 0){
               count <- count[, - which(colnames(count) == "SYMBOL")]
             }
@@ -2026,8 +1957,7 @@ shinyServer(function(input, output, session) {
           }
           Cond_1 <- vec[1]
           Cond_2 <- vec[2]
-          if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-             str_detect(rownames(count)[1], "^AT.G")){
+          if(gene_type1() != "SYMBOL"){
             if(input$Species != "not selected"){
               genenames <- as.vector(data$SYMBOL)
             }else{ genenames=NULL }
@@ -2145,7 +2075,13 @@ shinyServer(function(input, output, session) {
   
   #multi DEG--------------------------
   org6 <- reactive({
-    return(org(Species = input$Species6))
+    return(org(Species = input$Species6,Ortholog = input$Ortholog6))
+  })
+  ortholog6 <- reactive({
+    return(no_org_ID(count = multi_row_count_matrix(),Species = input$Species6,Ortholog = input$Ortholog6,Biomart_archive=input$Biomart_archive6))
+  })
+  gene_type6 <- reactive({
+    return(gene_type(my.symbols=rownames(multi_row_count_matrix()),org=org6(),Species=input$Species6))
   })
   org_code6 <- reactive({
     return(org_code(Species = input$Species6))
@@ -2204,8 +2140,7 @@ shinyServer(function(input, output, session) {
         data3 <- apply(data2_t, 2, as.numeric)
         rownames(data3) <- rownames(data2_t)
         if(input$Species6 != "not selected"){
-          if(str_detect(rownames(data3)[1], "ENS") || str_detect(rownames(data3)[1], "FBgn") ||   
-             str_detect(rownames(data3)[1], "^AT.G")){
+          if(gene_type6() != "SYMBOL"){
             rownames(data3) < gsub("\\..*","", rownames(data3))
           }
         }
@@ -2292,22 +2227,8 @@ shinyServer(function(input, output, session) {
         fc_matrix <- fc_matrix[,-1]
         
         res <- fc_matrix
-        if(input$Species6 != "not selected"){
-          if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-             str_detect(rownames(count)[1], "^AT.G")){
-            my.symbols <- gsub("\\..*","", rownames(res))
-            if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-            gene_IDs<-AnnotationDbi::select(org6(),keys = my.symbols,
-                                            keytype = key,
-                                            columns = c(key,"SYMBOL"))
-            colnames(gene_IDs) <- c("Row.names","SYMBOL")
-            res$Row.names <- gsub("\\..*","", rownames(res))
-            gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
-            data2 <- merge(res, gene_IDs, by="Row.names")
-            rownames(data2) <- data2$Row.names
-            res <- data2[,-1]
-          }
-        }
+        if(input$Species6 != "not selected") res <- ensembl2symbol(gene_type=gene_type6(),Species=input$Species6,
+                                                                   Ortholog=ortholog6(),data = res, org = org6())
         return(res)
       })
     }
@@ -2324,23 +2245,8 @@ shinyServer(function(input, output, session) {
         dds <- multi_dds()
         normalized_counts <- counts(dds, normalized=TRUE)
         
-        if(input$Species6 != "not selected"){
-          if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") || 
-             str_detect(rownames(count)[1], "^AT.G")){
-            normalized_counts <- as.data.frame(normalized_counts)
-            my.symbols <- gsub("\\..*","", rownames(normalized_counts))
-            if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-            gene_IDs<-AnnotationDbi::select(org6(),keys = my.symbols,
-                                            keytype = key,
-                                            columns = c(key,"SYMBOL"))
-            colnames(gene_IDs) <- c("Row.names","SYMBOL")
-            normalized_counts$Row.names <- gsub("\\..*","", rownames(normalized_counts))
-            gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
-            data2 <- merge(normalized_counts, gene_IDs, by="Row.names")
-            rownames(data2) <- data2$Row.names
-            normalized_counts <- data2[,-1]
-          }
-        }
+        if(input$Species6 != "not selected") normalized_counts <- ensembl2symbol(gene_type=gene_type6(),data = normalized_counts, 
+                                                                   Species=input$Species6,Ortholog=ortholog6(),org = org6())
         return(normalized_counts)
       }
     }
@@ -2418,16 +2324,9 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       if(input$Species6 != "not selected"){
-        if(str_detect(rownames(res)[1], "ENS") || str_detect(rownames(res)[1], "FBgn") ||  
-           str_detect(rownames(res)[1], "^AT.G")){
-          my.symbols <- gsub("\\..*","", rownames(res))
-          if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-          gene_IDs<-AnnotationDbi::select(org6(),keys = my.symbols,
-                                          keytype = key,
-                                          columns = c(key,"SYMBOL"))
-          colnames(gene_IDs) <- c("Row.names","SYMBOL")
-          gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
-          rownames(gene_IDs) <- gene_IDs$Row.names
+        if(gene_type6() != "SYMBOL"){
+          gene_IDs <- ensembl2symbol(gene_type=gene_type6(),Species=input$Species6,
+                                     Ortholog=ortholog6(),data = res, org = org6(),merge=FALSE)
           return(gene_IDs)
         }
       }else{ return(NULL) }
@@ -2475,8 +2374,7 @@ shinyServer(function(input, output, session) {
         data <- as.data.frame(multi_deg_norm_count())
         collist <- gsub("\\_.+$", "", colnames(data))
         if(input$Species6 != "not selected"){
-          if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") || 
-             str_detect(rownames(data)[1], "^AT.G")) data <- data[, - which(colnames(data) == "SYMBOL")]
+          if(gene_type6() != "SYMBOL") data <- data[, - which(colnames(data) == "SYMBOL")]
         }
         data <- dplyr::filter(data, apply(data,1,mean) > input$basemean6)
         res <- as.data.frame(res)
@@ -2629,8 +2527,7 @@ shinyServer(function(input, output, session) {
       clusters$cluster <- paste0("Group",clusters$cluster)
       data <- as.data.frame(multi_deg_norm_count())
       if(input$Species6 != "not selected"){
-        if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||
-           str_detect(rownames(data)[1], "^AT.G")){
+        if(gene_type6() != "SYMBOL"){
           collist <- gsub("\\_.+$", "", colnames(data))
           data2 <-merge(clusters,data, by=0)
           data2 <- data2[,-1]
@@ -2665,8 +2562,7 @@ shinyServer(function(input, output, session) {
     if(!is.null(input$multi_pattern1_count_rows_selected)){
       data <- multi_pattern_extract()[input$multi_pattern1_count_rows_selected,]
       if(input$Species6 != "not selected"){
-        if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||
-           str_detect(rownames(data)[1], "^AT.G")){
+        if(gene_type6() != "SYMBOL"){
           rownames(data) <- paste(data$SYMBOL,rownames(data), sep = "\n- ")
           data <- data[, - which(colnames(data) == "SYMBOL")]
         }
@@ -2795,8 +2691,7 @@ shinyServer(function(input, output, session) {
       
       collist <- gsub("\\_.+$", "", colnames(data))
       if(input$Species6 != "not selected"){
-        if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") || 
-           str_detect(rownames(data)[1], "^AT.G")) data <- data[, - which(colnames(data) == "SYMBOL")]
+        if(gene_type6() != "SYMBOL") data <- data[, - which(colnames(data) == "SYMBOL")]
       }
       data <- dplyr::filter(data, apply(data,1,mean) > input$basemean6)
       res <- as.data.frame(res)
@@ -2828,8 +2723,7 @@ shinyServer(function(input, output, session) {
       sig_res_LRT <- sig_res_LRT[,-1]
       
       if(input$Species6 != "not selected"){
-        if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||
-           str_detect(rownames(data)[1], "^AT.G")) data <- data[, - which(colnames(data) == "SYMBOL")]
+        if(gene_type6() != "SYMBOL") data <- data[, - which(colnames(data) == "SYMBOL")]
       }
       collist <- gsub("\\_.+$", "", colnames(data))
       data <- dplyr::filter(data, apply(data,1,mean) > input$basemean6)
@@ -2994,8 +2888,7 @@ shinyServer(function(input, output, session) {
     clusters <- multi_kmeans_cluster()
     data <- as.data.frame(multi_deg_norm_count())
     if(input$Species6 != "not selected"){
-      if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") || 
-         str_detect(rownames(data)[1], "^AT.G")){
+      if(gene_type6() != "SYMBOL"){
         data <- data.frame(SYMBOL=data$SYMBOL, row.names = rownames(data))
         clusters <-merge(clusters,data, by=0)
         colnames(clusters)[1] <- "genes"
@@ -3063,8 +2956,7 @@ shinyServer(function(input, output, session) {
       clusters <- multi_kmeans_pattern_extract()
       data <- as.data.frame(multi_deg_norm_count())
       if(input$Species6 != "not selected"){
-        if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") || 
-           str_detect(rownames(data)[1], "^AT.G")){
+        if(gene_type6() != "SYMBOL"){
           data <- data.frame(SYMBOL=data$SYMBOL, row.names = rownames(data))
           clusters <- merge(clusters,data, by=0)
           rownames(clusters) <- clusters$Row.names
@@ -3082,8 +2974,7 @@ shinyServer(function(input, output, session) {
       clusters <- multi_kmeans_pattern_extract()
       data <- as.data.frame(multi_deg_norm_count())
       if(input$Species6 != "not selected"){
-        if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") || 
-           str_detect(rownames(data)[1], "^AT.G")){
+        if(gene_type6() != "SYMBOL"){
           data <- data.frame(SYMBOL=data$SYMBOL, row.names = rownames(data))
           clusters <- merge(clusters,data, by=0)
           colnames(clusters)[1] <- "genes"
@@ -3098,8 +2989,7 @@ shinyServer(function(input, output, session) {
     if(!is.null(input$multi_pattern2_count_rows_selected)){
       data <- multi_kmeans_extract()[input$multi_pattern2_count_rows_selected,]
       if(input$Species6 != "not selected"){
-        if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||
-           str_detect(rownames(data)[1], "^AT.G")){
+        if(gene_type6() != "SYMBOL"){
           rownames(data) <- paste(data$SYMBOL,rownames(data), sep = "\n- ")
           data <- data[, - which(colnames(data) == "SYMBOL")]
         }
@@ -3156,7 +3046,7 @@ shinyServer(function(input, output, session) {
     if(input$Species6 == "not selected") print("Please select 'Species'")
   })
   multi_Hallmark_set <- reactive({
-    return(GeneList_for_enrichment(Species = input$Species6, Gene_set = input$Gene_set6, org = org6()))
+    return(GeneList_for_enrichment(Species = input$Species6, Ortholog=input$Ortholog6,Biomart_archive=input$Biomart_archive6, Gene_set = input$Gene_set6, org = org6()))
   })
   
   output$selectEnrich_pair <- renderUI({
@@ -3186,14 +3076,17 @@ shinyServer(function(input, output, session) {
         rownames_to_column(var="Row.names")
       sig_res_LRT$log2FoldChange <- -1 * sig_res_LRT$log2FoldChange 
       
-      if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-         str_detect(rownames(count)[1], "^AT.G")){
+      if(gene_type6() != "SYMBOL"){
         if(input$Species6 != "not selected"){
+          if(sum(is.element(no_orgDb, input$Species6))==1){
+            gene_IDs <- ortholog6()
+          }else{
           my.symbols <- sig_res_LRT$Row.names
           if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
           gene_IDs<-AnnotationDbi::select(org6(),keys = my.symbols,
                                           keytype = key,
                                           columns = c(key,"SYMBOL", "ENTREZID"))
+          }
           colnames(gene_IDs) <- c("Row.names","SYMBOL", "ENTREZID")
           gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
           data <- merge(sig_res_LRT, gene_IDs, by="Row.names")
@@ -3201,10 +3094,14 @@ shinyServer(function(input, output, session) {
         }
       }else{
         if(input$Species6 != "not selected"){
+          if(sum(is.element(no_orgDb, input$Species6))==1){
+            gene_IDs <- ortholog6()[,-1]
+          }else{
           my.symbols <- sig_res_LRT$Row.names
           gene_IDs<-AnnotationDbi::select(org6(),keys = my.symbols,
                                           keytype = "SYMBOL",
                                           columns = c("SYMBOL", "ENTREZID"))
+          }
           colnames(gene_IDs) <- c("Row.names", "ENTREZID")
           gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
           data <- merge(sig_res_LRT, gene_IDs, by="Row.names")
@@ -3233,25 +3130,28 @@ shinyServer(function(input, output, session) {
           if(input$Species6 != "Xenopus laevis" && input$Species6 != "Arabidopsis thaliana"){
             H_t2g <- multi_Hallmark_set()
             H_t2g2 <- H_t2g %>% dplyr::select(gs_name, entrez_gene)
-            em3 <- GSEA(geneList, TERM2GENE = H_t2g2,pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
-                        minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F)
+            em3 <- try(GSEA(geneList, TERM2GENE = H_t2g2,pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+                        minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F))
           }else{
             if(input$Gene_set6 == "KEGG"){
-              em3 <- gseKEGG(geneList, organism = org_code(input$Species6),pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
-                             minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F,keyType = "ncbi-geneid")
+              em3 <- try(gseKEGG(geneList, organism = org_code(input$Species6),pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+                             minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F,keyType = "ncbi-geneid"))
             }
             if(input$Gene_set6 == "GO biological process"){
-              em3 <- gseGO(geneList, OrgDb = org(input$Species6),ont = "BP",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
-                           minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F)
+              em3 <- try(gseGO(geneList, OrgDb = org(input$Species6),ont = "BP",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+                           minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F))
             }
             if(input$Gene_set6 == "GO cellular component"){
-              em3 <- gseGO(geneList, OrgDb = org(input$Species6),ont = "CC",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
-                           minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F)
+              em3 <- try(gseGO(geneList, OrgDb = org(input$Species6),ont = "CC",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+                           minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F))
             }
             if(input$Gene_set6 == "GO molecular function"){
-              em3 <- gseGO(geneList, OrgDb = org(input$Species6),ont = "MF",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
-                           minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F)
+              em3 <- try(gseGO(geneList, OrgDb = org(input$Species6),ont = "MF",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+                           minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F))
             }
+          }
+          if(length(class(em3)) == 1){
+            if(class(em3) == "try-error") validate(em3)
           }
           if (length(as.data.frame(em3)$ID) == 0) {
             em4 <- NA
@@ -3378,11 +3278,11 @@ shinyServer(function(input, output, session) {
   
   #multi DEG enrichment 2--------
   multi_Hallmark_set2 <- reactive({
-    return(GeneList_for_enrichment(Species = input$Species6, Gene_set = input$Gene_set7, org = org6()))
+    return(GeneList_for_enrichment(Species = input$Species6, Ortholog=input$Ortholog6,Biomart_archive=input$Biomart_archive6, Gene_set = input$Gene_set7, org = org6()))
   })
   
   multi_Hallmark_set3 <- reactive({
-    return(GeneList_for_enrichment(Species = input$Species6, Gene_set = input$Gene_set8, org = org6()))
+    return(GeneList_for_enrichment(Species = input$Species6, Ortholog=input$Ortholog6,Biomart_archive=input$Biomart_archive6, Gene_set = input$Gene_set8, org = org6()))
   })
   
   
@@ -3482,39 +3382,39 @@ shinyServer(function(input, output, session) {
   
   multi_enrich_viewer2 <- reactive({
     if(input$Species6 != "Xenopus laevis" && input$Species6 != "Arabidopsis thaliana"){
-      return(enrich_viewer_forMulti2(df = multi_enrich_input1(), Species = input$Species6, org = org6(),
+      return(enrich_viewer_forMulti2(gene_type=gene_type6(),df = multi_enrich_input1(), Species = input$Species6,Ortholog = ortholog6(), org = org6(),
                                      org_code = org_code6(),H_t2g = multi_Hallmark_set2(),Gene_set = input$Gene_set7))
-    }else return(enrich_viewer_forMulti2_xenopus(df = multi_enrich_input1(), Species = input$Species6, org = org6(),
-                                                 org_code = org_code6(),Gene_set = input$Gene_set7))
+    }else return(enrich_viewer_forMulti2_xenopus(gene_type=gene_type6(),df = multi_enrich_input1(), Species = input$Species6, org = org6(),
+                                                 org_code = org_code6(),Ortholog = ortholog6(),Gene_set = input$Gene_set7))
   })
   
   multi_enrich_viewer12 <- reactive({
     if(input$Species6 != "Xenopus laevis" && input$Species6 != "Arabidopsis thaliana"){
-      return(enrich_viewer_forMulti2(df = multi_enrich_input2(), Species = input$Species6, org = org6(),
+      return(enrich_viewer_forMulti2(gene_type=gene_type6(),df = multi_enrich_input2(), Species = input$Species6,Ortholog = ortholog6(), org = org6(),
                                      org_code = org_code6(),H_t2g = multi_Hallmark_set3(),Gene_set = input$Gene_set8))
-    }else return(enrich_viewer_forMulti2_xenopus(df = multi_enrich_input2(), Species = input$Species6, org = org6(),
-                                                 org_code = org_code6(),Gene_set = input$Gene_set8))
+    }else return(enrich_viewer_forMulti2_xenopus(gene_type=gene_type6(),df = multi_enrich_input2(), Species = input$Species6, org = org6(),
+                                                 org_code = org_code6(),Ortholog = ortholog6(),Gene_set = input$Gene_set8))
   })
   multi_enrich_h <- reactive({
     if(input$Species6 != "Xenopus laevis" && input$Species6 != "Arabidopsis thaliana"){
-      return(enrich_gene_list(data = enrich_viewer_forMulti1(df = multi_enrich_input1(), Species = input$Species6, org = org6()),
+      return(enrich_gene_list(data = enrich_viewer_forMulti1(gene_type=gene_type6(),df = multi_enrich_input1(), Species = input$Species6,Ortholog=ortholog6(), org = org6()),
                               Gene_set = input$Gene_set7, org = org6(), H_t2g = multi_Hallmark_set2()))
-    }else return(enrich_gene_list_xenopus(data = enrich_viewer_forMulti1(df = multi_enrich_input1(), Species = input$Species6, org = org6()),
+    }else return(enrich_gene_list_xenopus(data = enrich_viewer_forMulti1(gene_type=gene_type6(),df = multi_enrich_input1(), Species = input$Species6,Ortholog=ortholog6(), org = org6()),
                                           Gene_set = input$Gene_set7, org = org6(), org_code = org_code6()))
   })
   multi_enrich_H <- reactive({
-    return(enrich_genelist(data = enrich_viewer_forMulti1(df = multi_enrich_input1(), Species = input$Species6, org = org6()),
+    return(enrich_genelist(data = enrich_viewer_forMulti1(gene_type=gene_type6(),df = multi_enrich_input1(), Species = input$Species6,Ortholog=ortholog6(), org = org6()),
                            enrich_gene_list = multi_enrich_h()))
   })
   multi_enrich_h2 <- reactive({
     if(input$Species6 != "Xenopus laevis" && input$Species6 != "Arabidopsis thaliana"){
-      return(enrich_gene_list(data = enrich_viewer_forMulti1(df = multi_enrich_input2(), Species = input$Species6, org = org6()),
+      return(enrich_gene_list(data = enrich_viewer_forMulti1(gene_type=gene_type6(),df = multi_enrich_input2(), Species = input$Species6,Ortholog=ortholog6(), org = org6()),
                               Gene_set = input$Gene_set8, org = org6(), H_t2g = multi_Hallmark_set3()))
-    }else return(enrich_gene_list_xenopus(data = enrich_viewer_forMulti1(df = multi_enrich_input2(), Species = input$Species6, org = org6()),
+    }else return(enrich_gene_list_xenopus(data = enrich_viewer_forMulti1(gene_type=gene_type6(),df = multi_enrich_input2(), Species = input$Species6,Ortholog=ortholog6(), org = org6()),
                                           Gene_set = input$Gene_set8, org = org6(),org_code = org_code6()))
   })
   multi_enrich_H2 <- reactive({
-    return(enrich_genelist(data = enrich_viewer_forMulti1(df = multi_enrich_input2(), Species = input$Species6, org = org6()),
+    return(enrich_genelist(data = enrich_viewer_forMulti1(gene_type=gene_type6(),df = multi_enrich_input2(), Species = input$Species6,Ortholog=ortholog6(), org = org6()),
                            enrich_gene_list = multi_enrich_h2()))
   })
   
@@ -3566,12 +3466,12 @@ shinyServer(function(input, output, session) {
   })
   
   multi_enrich2 <- reactive({
-    cnet_global(data = enrich_viewer_forMulti1(df = multi_enrich_input3(), Species = input$Species6, org = org6()), 
+    cnet_global(data = enrich_viewer_forMulti1(gene_type=gene_type6(),df = multi_enrich_input3(), Species = input$Species6,Ortholog=ortholog6(), org = org6()), 
                 group = input$multi_whichGroup1_2, enrich_gene_list = multi_enrich_h())
   })
   
   multi_enrich12 <- reactive({
-    cnet_global(data = enrich_viewer_forMulti1(df = multi_enrich_input4(), Species = input$Species6, org = org6()), 
+    cnet_global(data = enrich_viewer_forMulti1(gene_type=gene_type6(),df = multi_enrich_input4(), Species = input$Species6,Ortholog=ortholog6(), org = org6()), 
                 group = input$multi_whichGroup2_2, enrich_gene_list = multi_enrich_h2())
   })
   
@@ -3997,7 +3897,13 @@ shinyServer(function(input, output, session) {
   
   # 3 conditions ------------------------------------------------------------------------------
   org2 <- reactive({
-    return(org(Species = input$Species2))
+    return(org(Species = input$Species2,Ortholog = input$Ortholog2))
+  })
+  ortholog2 <- reactive({
+    return(no_org_ID(count = row_count_matrix2(),Species = input$Species2,Ortholog = input$Ortholog2,Biomart_archive=input$Biomart_archive2))
+  })
+  gene_type2 <- reactive({
+    return(gene_type(my.symbols=rownames(row_count_matrix2()),org=org2(),Species=input$Species2))
   })
   org_code2 <- reactive({
     return(org_code(Species = input$Species2))
@@ -4008,30 +3914,56 @@ shinyServer(function(input, output, session) {
       tmp <- input$file4$datapath
       if(is.null(input$file4) && input$goButton2 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/example4.txt"
       return(read_df(tmp = tmp))
-    }else{
+    }
+    if (input$data_file_type2 == "Row4"){
       tmp <- input$file5$datapath
       if(is.null(input$file5) && input$goButton2 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/example2.csv"
       return(read_df(tmp = tmp))
+    }
+    if (input$data_file_type2 == "RowRecode_cond3"){
+      tmp <- input$file_recode_cond3$datapath
+      if(is.null(input$file_recode_cond3) && input$goButton2 > 0 )  tmp = "data/recode.Rdata"
+      if(!is.null(tmp)){
+        load(tmp)
+        return(rawcount)
+      }
     }
   })
   metadata2 <- reactive({
     if (input$data_file_type2 == "Row3"){
       return(NULL)
-    }else{
+    }
+    if (input$data_file_type2 == "Row4"){
       tmp <- input$file6$datapath
       if(is.null(input$file6) && input$goButton2 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/example6.csv"
       df <- read_df(tmp = tmp)
       if(!is.null(df)) rownames(df) <- gsub("-",".",rownames(df))
       return(df)
     }
+    if (input$data_file_type2 == "RowRecode_cond3"){
+      tmp <- input$file_recode_cond3$datapath
+      if(is.null(input$file_recode_cond3) && input$goButton2 > 0 )  tmp = "data/recode.Rdata"
+      if(!is.null(tmp)){
+      load(tmp)
+      if(!is.null(metadata)) return(metadata) else return(NULL)
+      }
+    }
   })
   norm_count_matrix2 <- reactive({
     tmp <- input$norm_file2$datapath
+    if (input$data_file_type2 == "RowRecode_cond3" && !is.null(tmp)){
+      recode <- input$file_recode_cond3$datapath
+      if(is.null(recode) && input$goButton2 > 0 )  recode = "data/recode.Rdata"
+      if(!is.null(recode)){
+        load(recode)
+        return(norm_count_matrix) 
+      }
+    }
     df <- read_df(tmp = tmp)
     if(!is.null(df)){
       df <- anno_rep(df)
       if(input$Species2 != "not selected"){
-        if(str_detect(rownames(df)[1], "ENS") || str_detect(rownames(df)[1], "FBgn") || str_detect(rownames(df)[1], "^AT.G")){
+        if(gene_type2() != "SYMBOL"){
           rownames(df) < gsub("\\..*","", rownames(df))
         }
       }
@@ -4047,7 +3979,8 @@ shinyServer(function(input, output, session) {
       }else{
         return(anno_rep(row))
       }
-    }else{
+    }
+    if (input$data_file_type2 == "Row4"){
       meta <- anno_rep_meta(metadata2())
       if (is.null(row) || is.null(meta)){
         return(NULL)
@@ -4062,12 +3995,19 @@ shinyServer(function(input, output, session) {
         data3 <- apply(data2_t, 2, as.numeric)
         rownames(data3) <- rownames(data2_t)
         if(input$Species2 != "not selected"){
-          if(str_detect(rownames(data3)[1], "ENS") || str_detect(rownames(data3)[1], "FBgn") ||
-             str_detect(rownames(data3)[1], "^AT.G")){
+          if(gene_type2() != "SYMBOL"){
             rownames(data3) < gsub("\\..*","", rownames(data3))
           }
         }
         return(data3)
+      }
+    }
+    if (input$data_file_type2 == "RowRecode_cond3"){
+      tmp <- input$file_recode_cond3$datapath
+      if(is.null(input$file_recode_cond3) && input$goButton2 > 0 )  tmp = "data/recode.Rdata"
+      if(!is.null(tmp)){
+        load(tmp)
+       return(d_rawcount) 
       }
     }
   })
@@ -4108,17 +4048,10 @@ shinyServer(function(input, output, session) {
     if(is.null(res)){
       return(NULL)
     }else{
-      if(input$Species2 != "not selected"){
-        if(str_detect(rownames(res)[1], "ENS") || str_detect(rownames(res)[1], "FBgn") ||
-           str_detect(rownames(res)[1], "^AT.G")){
-          my.symbols <- gsub("\\..*","", rownames(res))
-          if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-          gene_IDs<-AnnotationDbi::select(org2(),keys = my.symbols,
-                                          keytype = key,
-                                          columns = c(key,"SYMBOL"))
-          colnames(gene_IDs) <- c("Row.names","SYMBOL")
-          res$Row.names <- gsub("\\..*","", rownames(res))
-          gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
+      if(input$Species2 != "not selected") {
+        if(gene_type2() != "SYMBOL"){
+          gene_IDs <- ensembl2symbol(gene_type=gene_type2(),data = res,Species=input$Species2,
+                                     Ortholog=ortholog2(),org = org2(),merge=FALSE,rowname=FALSE)
           return(gene_IDs)
         }
       }else{ return(NULL) }
@@ -4129,6 +4062,14 @@ shinyServer(function(input, output, session) {
   
   # 3 conditions DEG ------------------------------------------------------------------------------
   MultiOut <- reactive({
+    if (input$data_file_type2 == "RowRecode_cond3"){
+      tmp <- input$file_recode_cond3$datapath
+      if(is.null(tmp) && input$goButton2 > 0 )  tmp = "data/recode.Rdata"
+      if(!is.null(tmp)){
+        load(tmp)
+        return(dds) 
+      }
+    }else{
     withProgress(message = "EBSeq multiple comparison test takes 5 - 10 minutes",{
       count <- d_row_count_matrix2()
       collist <- gsub("\\_.+$", "", colnames(count))
@@ -4153,6 +4094,7 @@ shinyServer(function(input, output, session) {
       }
       incProgress(1)
     })
+    }
   })
   
   deg_result2 <- reactive({
@@ -4186,8 +4128,7 @@ shinyServer(function(input, output, session) {
       res <- as.data.frame(results)
       
       if(input$Species2 != "not selected"){
-        if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-           str_detect(rownames(count)[1], "^AT.G")){
+        if(gene_type2() != "SYMBOL"){
           gene_IDs  <- gene_ID()
           res$Row.names <- rownames(res)
           data2 <- merge(res, gene_IDs, by="Row.names")
@@ -4289,8 +4230,7 @@ shinyServer(function(input, output, session) {
         normalized_counts <- norm_count_matrix2()
       }
       if(input$Species2 != "not selected"){
-        if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-           str_detect(rownames(count)[1], "^AT.G")){
+        if(gene_type2() != "SYMBOL"){
           gene_IDs  <- gene_ID()
           normalized_counts$Row.names <- rownames(normalized_counts)
           data2 <- merge(normalized_counts, gene_IDs, by="Row.names")
@@ -4348,12 +4288,12 @@ shinyServer(function(input, output, session) {
   )
   
   output$cond3_result <- DT::renderDataTable({
-    data_3degcount1(data = deg_norm_count2(),result_Condm = deg_result2_condmean(),
+    data_3degcount1(gene_type=gene_type2(),data = deg_norm_count2(),result_Condm = deg_result2_condmean(),
                     result_FDR = deg_result2(), specific = 1,result_list=TRUE) %>% as.data.frame()
   })
   output$download_cond3_result = downloadHandler(
     filename = function() {paste(download_cond3_dir(),"DEG_result_ALL.txt", sep = "-")},
-    content = function(file){write.table(data_3degcount1(data = deg_norm_count2(),result_Condm = deg_result2_condmean(),
+    content = function(file){write.table(data_3degcount1(gene_type=gene_type2(),data = deg_norm_count2(),result_Condm = deg_result2_condmean(),
                                                          result_FDR = deg_result2(), specific = 1,result_list=TRUE), 
                                          file, row.names = T, col.names=NA, sep = "\t", quote = F)}
   )
@@ -4369,20 +4309,20 @@ shinyServer(function(input, output, session) {
   })
   #3conditions DEG_1------------------------
   data_3degcount1_1 <- reactive({
-    data3 <- data_3degcount1(data = deg_norm_count2(),result_Condm = deg_result2_condmean(),
+    data3 <- data_3degcount1(gene_type=gene_type2(),data = deg_norm_count2(),result_Condm = deg_result2_condmean(),
                              result_FDR = deg_result2(), specific = 1,fc = input$fc2, 
                              fdr = input$fdr2, basemean = input$basemean2)
     return(data3)
   })
   
   data_3degcount2_1 <- reactive({
-    return(data_3degcount2(data3 = data_3degcount1_1(), Species = input$Species2, org = org2()))
+    return(data_3degcount2(gene_type=gene_type2(),data3 = data_3degcount1_1(), Species = input$Species2, Ortholog = ortholog2(),org = org2()))
   })
   
   #3conditions scatter + heatmap_1
   
   cond3_scatter1_plot <- reactive({
-    p <- cond3_scatter_plot(data = deg_norm_count2(), data4 = data_3degcount2_1(),
+    p <- cond3_scatter_plot(gene_type=gene_type2(),data = deg_norm_count2(), data4 = data_3degcount2_1(),
                             result_Condm = deg_result2_condmean(), result_FDR = deg_result2(), specific = 1,
                             fc = input$fc2, fdr = input$fdr2, basemean = input$basemean2, Species = input$Species2)
     return(p)
@@ -4420,19 +4360,19 @@ shinyServer(function(input, output, session) {
   )
   #3conditions DEG_2------------------------
   data_3degcount1_2 <- reactive({
-    data3 <- data_3degcount1(data = deg_norm_count2(),result_Condm = deg_result2_condmean(),
+    data3 <- data_3degcount1(gene_type=gene_type2(),data = deg_norm_count2(),result_Condm = deg_result2_condmean(),
                              result_FDR = deg_result2(), specific = 2,fc = input$fc2, 
                              fdr = input$fdr2, basemean = input$basemean2)
     return(data3)
   })
   
   data_3degcount2_2 <- reactive({
-    return(data_3degcount2(data3 = data_3degcount1_2(), Species = input$Species2, org = org2()))
+    return(data_3degcount2(gene_type=gene_type2(),data3 = data_3degcount1_2(), Species = input$Species2, Ortholog = ortholog2(), org = org2()))
   })
   
   #3conditions scatter + heatmap_2
   cond3_scatter2_plot <- reactive({
-    p <- cond3_scatter_plot(data = deg_norm_count2(), data4 = data_3degcount2_2(),
+    p <- cond3_scatter_plot(gene_type=gene_type2(),data = deg_norm_count2(), data4 = data_3degcount2_2(),
                             result_Condm = deg_result2_condmean(), result_FDR = deg_result2(), specific = 2,
                             fc = input$fc2, fdr = input$fdr2, basemean = input$basemean2, Species = input$Species2)
     return(p)
@@ -4449,19 +4389,19 @@ shinyServer(function(input, output, session) {
   
   #3conditions DEG_3------------------------
   data_3degcount1_3 <- reactive({
-    data3 <- data_3degcount1(data = deg_norm_count2(),result_Condm = deg_result2_condmean(),
+    data3 <- data_3degcount1(gene_type=gene_type2(),data = deg_norm_count2(),result_Condm = deg_result2_condmean(),
                              result_FDR = deg_result2(), specific = 3,fc = input$fc2, 
                              fdr = input$fdr2, basemean = input$basemean2)
     return(data3)
   })
   
   data_3degcount2_3 <- reactive({
-    return(data_3degcount2(data3 = data_3degcount1_3(), Species = input$Species2, org = org2()))
+    return(data_3degcount2(gene_type=gene_type2(),data3 = data_3degcount1_3(), Species = input$Species2, Ortholog = ortholog2(), org = org2()))
   })
   
   #3conditions scatter + heatmap_3
   cond3_scatter3_plot <- reactive({
-    p <- cond3_scatter_plot(data = deg_norm_count2(), data4 = data_3degcount2_3(),
+    p <- cond3_scatter_plot(gene_type=gene_type2(),data = deg_norm_count2(), data4 = data_3degcount2_3(),
                             result_Condm = deg_result2_condmean(), result_FDR = deg_result2(), specific = 3,
                             fc = input$fc2, fdr = input$fdr2, basemean = input$basemean2, Species = input$Species2)
     return(p)
@@ -4489,7 +4429,7 @@ shinyServer(function(input, output, session) {
           pdf_width <- 10
         }else pdf_width <- input$cond3_pdf_width
         pdf(file, height = pdf_height, width = pdf_width)
-        print(cond3_scatter_plot(data = deg_norm_count2(), data4 = data_3degcount2_1(),
+        print(cond3_scatter_plot(gene_type=gene_type2(),data = deg_norm_count2(), data4 = data_3degcount2_1(),
                                  result_Condm = deg_result2_condmean(), result_FDR = deg_result2(), 
                                  fc = input$fc2, fdr = input$fdr2, basemean = input$basemean2,
                                  y_axis = input$cond3_scatter_yrange,x_axis = input$cond3_scatter_xrange,heatmap = FALSE,
@@ -4547,8 +4487,7 @@ shinyServer(function(input, output, session) {
     if(is.null(d_row_count_matrix2())){
       return(NULL)
     }else{
-      if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") || 
-         str_detect(rownames(count)[1], "^AT.G")){
+      if(gene_type2() != "SYMBOL"){
         if(input$Species2 != "not selected"){
           GOI <- count$Unique_ID
         }else GOI <- rownames(count)
@@ -4627,14 +4566,14 @@ shinyServer(function(input, output, session) {
   })
   range_for_GOIscatter <- reactive({
     if(!is.null(cond3_specific_group2())){
-      return(cond3_scatter_range(data = deg_norm_count2(), data4 = data_3degcount2_1(),
+      return(cond3_scatter_range(gene_type=gene_type2(),data = deg_norm_count2(), data4 = data_3degcount2_1(),
                                  result_Condm = deg_result2_condmean(), result_FDR = deg_result2(), 
                                  fc = input$fc2, fdr = input$fdr2, basemean = input$basemean2,specific = cond3_specific_group2()))
     }
   })
   output$cond3_GOIscatter <- renderPlot({
     if(!is.null(input$cond3_GOIpair) && !is.null(input$cond3_scatter_yrange) && !is.null(input$cond3_scatter_xrange)){
-      cond3_scatter_plot(data = deg_norm_count2(), data4 = data_3degcount2_1(),
+      cond3_scatter_plot(gene_type=gene_type2(),data = deg_norm_count2(), data4 = data_3degcount2_1(),
                          result_Condm = deg_result2_condmean(), result_FDR = deg_result2(), 
                          fc = input$fc2, fdr = input$fdr2, basemean = input$basemean2,
                          y_axis = input$cond3_scatter_yrange,x_axis = input$cond3_scatter_xrange,heatmap = FALSE,
@@ -4645,8 +4584,7 @@ shinyServer(function(input, output, session) {
   
   cond3_GOIcount <- reactive({
     count <- deg_norm_count2()
-    if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") || 
-       str_detect(rownames(count)[1], "^AT.G")){
+    if(gene_type2() != "SYMBOL"){
       if(input$Species2 != "not selected"){
         Unique_ID <- input$GOI2
         label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
@@ -4805,7 +4743,7 @@ shinyServer(function(input, output, session) {
   
   #3conditions enrichment_2 ------------------------------------------------------------------------------
   Hallmark_cond3 <- reactive({
-    return(GeneList_for_enrichment(Species = input$Species2, Gene_set = input$Gene_set2, org = org2()))
+    return(GeneList_for_enrichment(Species = input$Species2, Ortholog=input$Ortholog2,Biomart_archive=input$Biomart_archive2, Gene_set = input$Gene_set2, org = org2()))
   })
   
   enrich3_2 <- reactive({
@@ -4959,7 +4897,7 @@ shinyServer(function(input, output, session) {
         PCA_table <- "Clustering/pca.txt"
         scatter <- "DEG_result/scatter_plot.pdf"
         fs <- c(DEG, result1,result2,result3,count,PCA,PCA_table,scatter)
-        write.table(data_3degcount1(data = deg_norm_count2(),result_Condm = deg_result2_condmean(),
+        write.table(data_3degcount1(gene_type=gene_type2(),data = deg_norm_count2(),result_Condm = deg_result2_condmean(),
                                     result_FDR = deg_result2(), specific = 1,result_list=TRUE), 
                     DEG, row.names = T, col.names=NA, sep = "\t", quote = F)
         write.table(deg_norm_count2(), count, row.names = T, col.names=NA, sep = "\t", quote = F)
@@ -4980,7 +4918,7 @@ shinyServer(function(input, output, session) {
           goiscatter <- "GOI_profiling/scatter_plot.pdf"
           fs <- c(fs,goiscatter)
           pdf(goiscatter, height = 6, width = 10)
-          print(cond3_scatter_plot(data = deg_norm_count2(), data4 = data_3degcount2_1(),
+          print(cond3_scatter_plot(gene_type=gene_type2(),data = deg_norm_count2(), data4 = data_3degcount2_1(),
                                    result_Condm = deg_result2_condmean(), result_FDR = deg_result2(), 
                                    fc = input$fc2, fdr = input$fdr2, basemean = input$basemean2,
                                    y_axis = input$cond3_scatter_yrange,x_axis = input$cond3_scatter_xrange,heatmap = FALSE,
@@ -5019,6 +4957,14 @@ shinyServer(function(input, output, session) {
           write.table(cond3_enrich_table2(), enrich_table2, row.names = F, sep = "\t", quote = F)
           write.table(cond3_enrich_table3(), enrich_table3, row.names = F, sep = "\t", quote = F)
         }
+        recode <- "Recode.Rdata"
+        rawcount <- row_count_matrix2()
+        metadata <- metadata2()
+        d_rawcount <- d_row_count_matrix2()
+        norm_count_matrix = norm_count_matrix2()
+        dds <- MultiOut()
+        fs <- c(fs,recode)
+        save(rawcount,metadata,d_rawcount,dds,norm_count_matrix,file=recode)
         report <- paste0(format(Sys.time(), "%Y%m%d_"),"3conditions_report",".docx")
         fs <- c(fs,report)
         rmarkdown::render("3conditions_report.Rmd", output_format = "word_document", output_file = report,
@@ -5040,7 +4986,13 @@ shinyServer(function(input, output, session) {
   #normalized count analysis
   #norm_count_input-------------------
   org3 <- reactive({
-    return(org(Species = input$Species3))
+    return(org(Species = input$Species3,Ortholog = input$Ortholog3))
+  })
+  ortholog3 <- reactive({
+    return(no_org_ID(count = norm_count_input(),Species = input$Species3,Ortholog = input$Ortholog3,Biomart_archive=input$Biomart_archive3))
+  })
+  gene_type3 <- reactive({
+    return(gene_type(my.symbols=rownames(norm_count_input()),org=org3(),Species=input$Species3))
   })
   org_code3 <- reactive({
     return(org_code(Species = input$Species3))
@@ -5145,8 +5097,7 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       if(input$Species3 != "not selected"){
-        if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||
-           str_detect(rownames(data)[1], "^AT.G")){
+        if(gene_type3() != "SYMBOL"){
           gene_IDs <- gene_ID_norm()
           data <- merge(data, gene_IDs, by=0)
           data <- data[, - which(colnames(data) == "Row.names.y")]
@@ -5164,16 +5115,9 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       if(input$Species3 != "not selected"){
-        if(str_detect(rownames(res)[1], "ENS") || str_detect(rownames(res)[1], "FBgn") ||               
-           str_detect(rownames(res)[1], "^AT.G")){
-          my.symbols <- rownames(res)
-          if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-          gene_IDs<-AnnotationDbi::select(org3(),keys = my.symbols,
-                                          keytype = key,
-                                          columns = c(key,"SYMBOL"))
-          colnames(gene_IDs) <- c("Row.names","SYMBOL")
-          gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
-          rownames(gene_IDs) <- gene_IDs$Row.names
+        if(gene_type3() != "SYMBOL"){
+          gene_IDs <- ensembl2symbol(gene_type=gene_type3(),data = res,Species=input$Species3,
+                                     Ortholog=ortholog3(),org = org3(),merge=FALSE)
           return(gene_IDs)
         }
       }else{ return(NULL) }
@@ -5335,11 +5279,27 @@ shinyServer(function(input, output, session) {
   )
   
   #norm GOI------------------------------------------------------
+  output$filtered_regionGOI <- renderText({
+    if(is.null(GOI_list3())){
+      return(NULL)
+    }else{ 
+      print(paste0("The number of genes after the filtration: ", length(GOI_list3())))
+    }
+  })
+  output$selectFC_normGOI <- renderUI({
+    if(is.null(d_norm_count_matrix_cutofff())){
+      return(NULL)
+    }else{
+      selectizeInput("selectFC_normGOI", "Select a pair for fold change cut-off", c(unique(unique(gsub("\\_.*","", colnames(d_norm_count_matrix_cutofff()))))),
+                     selected = "", multiple = TRUE, 
+                     options = list(maxItems = 2))
+    }
+  })
+  
   d_norm_count_cutoff_uniqueID <- reactive({
     count <- d_norm_count_matrix_cutofff()
     if(input$Species3 != "not selected"){
-      if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-         str_detect(rownames(count)[1], "^AT.G")){
+      if(gene_type3() != "SYMBOL"){
         gene_IDs  <- gene_ID_norm()
         data2 <- merge(count, gene_IDs, by= 0)
         rownames(data2) <- data2[,1]
@@ -5350,14 +5310,16 @@ shinyServer(function(input, output, session) {
     }
     return(count)
   })
-  
   GOI_list3 <- reactive({
-    count <- d_norm_count_cutoff_uniqueID()
+    count <- preGOI_list3()
     if(is.null(count)){
       return(NULL)
     }else{
-      if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") || 
-         str_detect(rownames(count)[1], "^AT.G")){
+      if(dim(count)[1] == 0){
+        validate(paste0("The number of genes after the filtration: 0",".\n",
+                        "Please adjust cut-off conditions."))
+      }
+      if(gene_type3() != "SYMBOL"){
         if(input$Species3 != "not selected"){
           GOI <- count$Unique_ID
         }else GOI <- rownames(count)
@@ -5367,8 +5329,7 @@ shinyServer(function(input, output, session) {
           if(is.null(count)){
             return(NULL)
           }else{
-            if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-               str_detect(rownames(count)[1], "^AT.G")){
+            if(gene_type3() != "SYMBOL"){
               if(input$Species3 != "not selected"){
                 GOI <- count$Unique_ID
               }else GOI <- rownames(count)
@@ -5386,6 +5347,25 @@ shinyServer(function(input, output, session) {
         }else GOI <- rownames(count)
       }
       return(GOI)
+    }
+  })
+  preGOI_list3 <- reactive({
+    data <- d_norm_count_cutoff_uniqueID()
+    print(head(data))
+    if(length(input$selectFC_normGOI) == 2){
+      if(dim(data)[1] != 0){
+        cond1 <- input$selectFC_normGOI[1]
+        cond2 <- input$selectFC_normGOI[2]
+        cond1_num <- data %>% dplyr::select(.,starts_with(cond1)) %>% colnames() %>% length()
+        cond2_num <- data %>% dplyr::select(.,starts_with(cond2)) %>% colnames() %>% length()
+        cond1_ave <- data %>% dplyr::select(starts_with(cond1)) %>% rowSums(na.rm=TRUE)/cond1_num
+        cond2_ave <- data %>% dplyr::select(starts_with(cond2)) %>% rowSums(na.rm=TRUE)/cond2_num
+        Log2FoldChange <- log((cond1_ave + 0.01)/(cond2_ave + 0.01),2)
+        data$Log2FoldChange <- Log2FoldChange
+        data2 <- data %>% dplyr::filter(abs(Log2FoldChange) > log2(input$fc3))
+        data2 <- data2[, - which(colnames(data2) == "Log2FoldChange")]
+      }else data2 <- NULL
+      return(data2)
     }
   })
   
@@ -5408,20 +5388,26 @@ shinyServer(function(input, output, session) {
                            options = list(delimiter = " ", create=TRUE, 'plugins' = list('remove_button'), persist = FALSE))
     })
   })
-  
+  GOI3_INPUT <- reactive({
+    if(is.null(d_norm_count_matrix_cutofff())){
+      return(NULL)
+    }else{
+    if(input$GOI3_type == "ALL") return(GOI_list3())
+    if(input$GOI3_type == "custom") return(input$GOI3)
+    }
+  })
   norm_GOIcount <- reactive({
     count <- d_norm_count_cutoff_uniqueID()
-    if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") || 
-       str_detect(rownames(count)[1], "^AT.G")){
+    if(gene_type3() != "SYMBOL"){
       if(input$Species3 != "not selected"){
-        Unique_ID <- input$GOI3
+        Unique_ID <- GOI3_INPUT()
         label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
         data <- merge(count, label_data, by="Unique_ID")
         rownames(data) <- data$Unique_ID
         data <- data[, - which(colnames(data) == "SYMBOL")]
         data <- data[, - which(colnames(data) == "Unique_ID")]
       }else{
-        Row.names <- input$GOI3
+        Row.names <- GOI3_INPUT()
         count$Row.names <- rownames(count)
         label_data <- as.data.frame(Row.names, row.names = Row.names)
         data <- merge(count, label_data, by="Row.names")
@@ -5429,7 +5415,7 @@ shinyServer(function(input, output, session) {
         data <- data[, - which(colnames(data) == "Row.names")]
       }
     }else{
-      Row.names <- input$GOI3
+      Row.names <- GOI3_INPUT()
       count$Row.names <- rownames(count)
       label_data <- as.data.frame(Row.names, row.names = Row.names)
       data <- merge(count, label_data, by="Row.names")
@@ -5446,7 +5432,7 @@ shinyServer(function(input, output, session) {
     }else{
       data.z <- genescale(data, axis=1, method="Z")
       data.z <- na.omit(data.z)
-      ht <- GOIheatmap(data.z)
+      ht <- GOIheatmap(data.z, type = input$GOI3_type, GOI = input$GOI3)
     }
     return(ht)
   })
@@ -5455,7 +5441,7 @@ shinyServer(function(input, output, session) {
     if(is.null(d_norm_count_matrix_cutofff())){
       return(NULL)
     }else{
-      if(!is.null(input$GOI3)){
+      if(!is.null(GOI3_INPUT())){
         withProgress(message = "heatmap",{
           suppressWarnings(print(norm_GOIheat()))
           incProgress(1)
@@ -5463,15 +5449,39 @@ shinyServer(function(input, output, session) {
       }
     }
   })
-  
-  norm_GOIbox <- reactive({
+  output$statistics <- renderUI({
+    if(!is.null(d_norm_count_matrix_cutofff()) && !is.null(GOI3_INPUT())){
     data <- norm_GOIcount()
-    if(is.null(data)){
+    if(!is.null(data)){
+    collist <- gsub("\\_.+$", "", colnames(data))
+    collist <- unique(collist)
+    if(length(collist) == 2){
+      selectInput("statistics","statistics",choices = c("not_selected","Welch's t-test","Wilcoxon test"),selected="not_selected",multiple = F)
+    }else{
+      selectInput("statistics","statistics",choices = c("not_selected","TukeyHSD","Dunnet's test","Wilcoxon test"),selected="not_selected", multiple = F)
+    }
+    }}
+  })
+  output$PlotType <- renderUI({
+    selectInput('PlotType', 'PlotType', c("Boxplot", "Barplot", "Errorplot"))
+  })
+  
+  statistical_analysis_goi <- reactive({
+    data <- norm_GOIcount()
+    if(is.null(data) || is.null(input$statistics)){
       p <- NULL
     }else{
-      p <- GOIboxplot(data = data)
+      p <- GOIboxplot(data = data,statistical_test =input$statistics,plottype=input$PlotType)
     }
     return(p)
+  })
+  
+  norm_GOIbox <- reactive({
+    if(!is.null(statistical_analysis_goi())){
+    if(input$statistics == "not_selected"){
+      return(statistical_analysis_goi())
+    }else return(statistical_analysis_goi()[["plot"]])
+    }
   })
   
   
@@ -5479,7 +5489,10 @@ shinyServer(function(input, output, session) {
     if(is.null(d_norm_count_matrix_cutofff())){
       return(NULL)
     }else{
-      if(!is.null(input$GOI3)){
+      if(!is.null(GOI3_INPUT())){
+        if(length(rownames(norm_GOIcount())) >200){
+          validate("Unable to display more than 200 genes. Please adjust the threshold to narrow down the number of genes to less than 200, or utilize the 'Custom' mode.")
+        }
         withProgress(message = "Boxplot",{
           suppressWarnings(print(norm_GOIbox()))
           incProgress(1)
@@ -5487,6 +5500,50 @@ shinyServer(function(input, output, session) {
       }
     }
   })
+  
+  norm_GOIbox_statistic <- reactive({
+    if(!is.null(statistical_analysis_goi())){
+    if(input$statistics != "not_selected"){
+    data <- as.data.frame(statistical_analysis_goi()[["statistical_test"]])
+    colnames(data)[1] <- "gene"
+    if(input$statistics == "TukeyHSD" || input$statistics == "Dunnet's test"){
+    data <- data[, - which(colnames(data) == "term")]
+    }else{
+      data <- data[, - which(colnames(data) == ".y.")]
+      data <- data[, - which(colnames(data) == "n1")]
+      data <- data[, - which(colnames(data) == "n2")]
+    }
+    data <- data[, - which(colnames(data) == "y.position")]
+    data <- data[, - which(colnames(data) == "groups")]
+    data <- data[, - which(colnames(data) == "xmin")]
+    data <- data[, - which(colnames(data) == "xmax")]
+    return(data)
+    }else return(NULL)}
+  })
+  
+  output$statistical_table <- DT::renderDataTable({
+    if(is.null(d_norm_count_matrix_cutofff())){
+      return(NULL)
+    }else{
+      if(!is.null(GOI3_INPUT())){
+        if(length(rownames(norm_GOIcount())) >200){
+          validate("Cannot display more than 200 genes.")
+        }
+    norm_GOIbox_statistic()
+      }}
+  })
+  
+  output$download_statisics = downloadHandler(
+    filename = function(){
+      paste0(download_norm_dir(), "GOIboxplot_",input$statistics,".txt")
+    },
+    content = function(file) {
+      withProgress(message = "Preparing download",{
+        write.table(norm_GOIbox_statistic(),file, row.names = F, col.names=TRUE, sep = "\t", quote = F)
+        incProgress(1)
+      })
+    }
+  )
   
   output$download_norm_GOIbox = downloadHandler(
     filename = function(){
@@ -5531,6 +5588,55 @@ shinyServer(function(input, output, session) {
     }
   )
   #norm kmeans------------------------------------------------------
+  updateCounter_kmeans <- reactiveValues(i = 0)
+  
+  observe({
+    input$kmeans_start
+    isolate({
+      updateCounter_kmeans$i <- updateCounter_kmeans$i + 1
+    })
+  })
+  
+  
+  #Restart
+  defaultvalues_kmeans <- observeEvent(norm_kmeans(), {
+    isolate(updateCounter_kmeans$i == 0)
+    updateCounter_kmeans <<- reactiveValues(i = 0)
+  }) 
+  output$selectFC_norm <- renderUI({
+    if(is.null(d_norm_count_matrix_cutofff())){
+      return(NULL)
+    }else{
+      selectizeInput("selectFC_norm", "Select a pair for fold change cut-off", c(unique(unique(gsub("\\_.*","", colnames(d_norm_count_matrix_cutofff()))))),
+                     selected = "", multiple = TRUE, 
+                     options = list(maxItems = 2))
+    }
+  })
+  output$filtered_region <- renderText({
+    if(is.null(d_norm_count_matrix_cutofff_fc())){
+      return(NULL)
+    }else{ 
+      print(paste0("The number of genes after the filtration: ", length(rownames(d_norm_count_matrix_cutofff_fc()))))
+    }
+  })
+  d_norm_count_matrix_cutofff_fc <- reactive({
+    data <- d_norm_count_matrix_cutofff()
+    if(length(input$selectFC_norm) == 2){
+    if(dim(data)[1] != 0){
+      cond1 <- input$selectFC_norm[1]
+      cond2 <- input$selectFC_norm[2]
+      cond1_num <- data %>% dplyr::select(.,starts_with(cond1)) %>% colnames() %>% length()
+      cond2_num <- data %>% dplyr::select(.,starts_with(cond2)) %>% colnames() %>% length()
+      cond1_ave <- data %>% dplyr::select(starts_with(cond1)) %>% rowSums(na.rm=TRUE)/cond1_num
+      cond2_ave <- data %>% dplyr::select(starts_with(cond2)) %>% rowSums(na.rm=TRUE)/cond2_num
+      Log2FoldChange <- log((cond1_ave + 0.01)/(cond2_ave + 0.01),2)
+      data$Log2FoldChange <- Log2FoldChange
+      data2 <- data %>% dplyr::filter(abs(Log2FoldChange) > log2(input$fc3))
+      data2 <- data2[, - which(colnames(data2) == "Log2FoldChange")]
+    }else data2 <- NULL
+    return(data2)
+    }
+  })
   output$norm_kmeans_num <- renderUI({
     if(is.null(d_norm_count_matrix_cutofff())){
       return(NULL)
@@ -5551,7 +5657,7 @@ shinyServer(function(input, output, session) {
   
   
   norm_count_matrix_cutoff2 <- reactive({
-    data <- d_norm_count_matrix_cutofff()
+    data <- d_norm_count_matrix_cutofff_fc()
     if(is.null(data) || is.null(input$kmeans_cv)){
       return(NULL)
     }else{
@@ -5573,7 +5679,7 @@ shinyServer(function(input, output, session) {
   
   norm_kmeans <- reactive({
     data.z <- norm_data_z()
-    if(is.null(data.z)){
+    if(is.null(data.z) || input$kmeans_start == 0 || updateCounter_kmeans$i == 0){
       return(NULL)
     }else{
       withProgress(message = "k-means clustering",{
@@ -5669,8 +5775,7 @@ shinyServer(function(input, output, session) {
     if(!is.null(input$norm_kmeans_count_table_rows_selected)){
       data <- norm_kmeans_cluster()[input$norm_kmeans_count_table_rows_selected,]
       if(input$Species3 != "not selected"){
-        if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||
-           str_detect(rownames(data)[1], "^AT.G")){
+        if(gene_type3() != "SYMBOL"){
           rownames(data) <- paste(data$SYMBOL,rownames(data), sep = "\n- ")
           data <- data[, - which(colnames(data) == "SYMBOL")]
         }
@@ -6143,32 +6248,40 @@ shinyServer(function(input, output, session) {
   })
   
   org7 <- reactive({
-    return(org(Species = input$Species7))
+    return(org(Species = input$Species7,Ortholog = input$Ortholog7))
+  })
+  ortholog7 <- reactive({
+    return(no_org_ID(gene_list = overlap_table2(),Species = input$Species7,Ortholog = input$Ortholog7,Biomart_archive=input$Biomart_archive7))
+  })
+  gene_type7 <- reactive({
+    data <- overlap_table2()
+    data <- data.frame(row.names = unique(data[,1]))
+    return(gene_type(my.symbols=rownames(data),org=org7(),Species=input$Species7))
   })
   org_code7 <- reactive({
     return(org_code(Species = input$Species7))
   })
   
   venn_Hallmark_set <- reactive({
-    return(GeneList_for_enrichment(Species = input$Species7, Gene_set = input$Gene_set9, org = org7()))
+    return(GeneList_for_enrichment(Species = input$Species7, Ortholog=input$Ortholog7,Biomart_archive=input$Biomart_archive7, Gene_set = input$Gene_set9, org = org7()))
   })
   
   venn_enrich_viewer2 <- reactive({
     if(input$Species7 != "Xenopus laevis" && input$Species7 != "Arabidopsis thaliana"){
-      return(enrich_viewer_forMulti2(df = venn_enrich_input1(), Species = input$Species7, org = org7(),
+      return(enrich_viewer_forMulti2(gene_type=gene_type7(),df = venn_enrich_input1(), Species = input$Species7,Ortholog = ortholog7(), org = org7(),
                                      org_code = org_code7(),H_t2g = venn_Hallmark_set(),Gene_set = input$Gene_set9))
-    }else return(enrich_viewer_forMulti2_xenopus(df = venn_enrich_input1(), Species = input$Species7, org = org7(),
+    }else return(enrich_viewer_forMulti2_xenopus(gene_type=gene_type7(),df = venn_enrich_input1(), Species = input$Species7,Ortholog = ortholog7(), org = org7(),
                                                  org_code = org_code7(),Gene_set = input$Gene_set9))
   })
   venn_enrich_h <- reactive({
     if(input$Species7 != "Xenopus laevis" && input$Species7 != "Arabidopsis thaliana"){
-      return(enrich_gene_list(data = enrich_viewer_forMulti1(df = venn_enrich_input1(), Species = input$Species7, org = org7()),
+      return(enrich_gene_list(data = enrich_viewer_forMulti1(gene_type=gene_type7(),df = venn_enrich_input1(), Species = input$Species7,Ortholog=ortholog7(), org = org7()),
                               Gene_set = input$Gene_set9, org = org7(), H_t2g = venn_Hallmark_set()))
-    }else return(enrich_gene_list_xenopus(data = enrich_viewer_forMulti1(df = venn_enrich_input1(), Species = input$Species7, org = org7()),
+    }else return(enrich_gene_list_xenopus(data = enrich_viewer_forMulti1(gene_type=gene_type7(),df = venn_enrich_input1(), Species = input$Species7,Ortholog=ortholog7(), org = org7()),
                                           Gene_set = input$Gene_set9, org = org7(),org_code = org_code7()))
   })
   venn_enrich_H <- reactive({
-    return(enrich_genelist(data = enrich_viewer_forMulti1(df = venn_enrich_input1(), Species = input$Species7, org = org7()),
+    return(enrich_genelist(data = enrich_viewer_forMulti1(gene_type=gene_type7(),df = venn_enrich_input1(), Species = input$Species7,Ortholog=ortholog7(), org = org7()),
                            enrich_gene_list = venn_enrich_h(),section = "venn"))
   })
   
@@ -6245,7 +6358,7 @@ shinyServer(function(input, output, session) {
   })
   
   venn_enrich2 <- reactive({
-    cnet_global(data = enrich_viewer_forMulti1(df = venn_enrich_input2(), Species = input$Species7, org = org7()), 
+    cnet_global(data = enrich_viewer_forMulti1(gene_type=gene_type7(),df = venn_enrich_input2(), Species = input$Species7,Ortholog=ortholog7(), org = org7()), 
                 group = input$venn_whichGroup2, enrich_gene_list = venn_enrich_h())
   })
   output$venn_enrichment2 <- renderPlot({
@@ -6280,10 +6393,18 @@ shinyServer(function(input, output, session) {
     if(input$Species4 == "not selected") print("Please select 'Species'")
   })
   Hallmark_enrich <- reactive({
-    return(GeneList_for_enrichment(Species = input$Species4, Gene_set = input$Gene_set3, org = org4(), Custom_gene_list = Custom_input()))
+    return(GeneList_for_enrichment(Species = input$Species4, Ortholog=input$Ortholog4,Biomart_archive=input$Biomart_archive4, Gene_set = input$Gene_set3, org = org4(), Custom_gene_list = Custom_input()))
   })
   org4 <- reactive({
-    return(org(Species = input$Species4))
+    return(org(Species = input$Species4,Ortholog = input$Ortholog4))
+  })
+  ortholog4 <- reactive({
+    return(no_org_ID(gene_list = enrich_input(),Species = input$Species4,Ortholog = input$Ortholog4,Biomart_archive=input$Biomart_archive4))
+  })
+  gene_type4 <- reactive({
+    data <- enrich_input()
+    data <- data.frame(row.names = unique(data[,1]))
+    return(gene_type(my.symbols=rownames(data),org=org4(),Species=input$Species4))
   })
   org_code4 <- reactive({
     return(org_code(Species = input$Species4))
@@ -6339,7 +6460,7 @@ shinyServer(function(input, output, session) {
   Custom_input <- reactive({
     tmp <- input$custom_input$datapath
     data <- read_gene_list(tmp)
-    df <- gene_list_convert_for_enrichment(data= data, Species = input$Species4)
+    df <- gene_list_convert_for_enrichment(gene_type=gene_type4(),data= data, org=org4(),Species = input$Species4,Ortholog=ortholog4())
     return(df)
   })
   
@@ -6349,7 +6470,7 @@ shinyServer(function(input, output, session) {
   
   
   enrich_viewer1 <- reactive({
-    return(gene_list_convert_for_enrichment(data= enrich_input(), Species = input$Species4))
+    return(gene_list_convert_for_enrichment(gene_type=gene_type4(),data= enrich_input(), org=org4(),Species = input$Species4,Ortholog=ortholog4()))
   })
   
   enrich_viewer2 <- reactive({
@@ -6389,6 +6510,7 @@ shinyServer(function(input, output, session) {
                   em <- enrichGO(data3$ENTREZID[data3$Group == name], OrgDb = org(input$Species4), ont = "MF",pvalueCutoff = 0.05) 
                 }
               }
+              print(em)
               if (length(as.data.frame(em)$ID) != 0) {
                 if(length(colnames(as.data.frame(em))) == 9){
                   cnet1 <- as.data.frame(setReadable(em, org4(), 'ENTREZID'))
@@ -6582,7 +6704,7 @@ shinyServer(function(input, output, session) {
   }) 
   enrich_motif <- reactive({
     if(updateCounter$i > 0 && input$motifButton > 0){
-      return(MotifAnalysis(data= enrich_input(), Species = input$Species4, x = promoter()))
+      return(MotifAnalysis(data= enrich_input(), org=org4(),Species = input$Species4, x = promoter()))
     }
   })
   output$motif_plot <- renderPlot({
@@ -6680,7 +6802,13 @@ shinyServer(function(input, output, session) {
   
   #volcano navi------------------------------------------------------
   org5 <- reactive({
-    return(org(Species = input$Species5))
+    return(org(Species = input$Species5,Ortholog = input$Ortholog5))
+  })
+  ortholog5 <- reactive({
+    return(no_org_ID(count = degresult(),Species = input$Species5,Ortholog = input$Ortholog5,Biomart_archive=input$Biomart_archive5))
+  })
+  gene_type5 <- reactive({
+    return(gene_type(my.symbols=rownames(degresult()),org=org5(),Species=input$Species5))
   })
   org_code5 <- reactive({
     return(org_code(Species = input$Species5))
@@ -6730,16 +6858,9 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       if(input$Species5 != "not selected"){
-        if(str_detect(rownames(res)[1], "ENS") || str_detect(rownames(res)[1], "FBgn") ||               
-           str_detect(rownames(res)[1], "^AT.G")){
-          my.symbols <- rownames(res)
-          if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-          gene_IDs<-AnnotationDbi::select(org5(),keys = my.symbols,
-                                          keytype = key,
-                                          columns = c(key,"SYMBOL"))
-          colnames(gene_IDs) <- c("Row.names","SYMBOL")
-          gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
-          rownames(gene_IDs) <- gene_IDs$Row.names
+        if(gene_type5() != "SYMBOL"){
+          gene_IDs <- ensembl2symbol(gene_type=gene_type5(),data = res,Species=input$Species5,
+                                     Ortholog=ortholog5(),org = org5(),merge=FALSE)
           return(gene_IDs)
         }
       }else{ return(NULL) }
@@ -6771,8 +6892,7 @@ shinyServer(function(input, output, session) {
   DEG_uniqueID <- reactive({
     count <- norm_count_combined_DEG()
     if(input$Species5 != "not selected"){
-      if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-         str_detect(rownames(count)[1], "^AT.G")){
+      if(gene_type5() != "SYMBOL"){
         gene_IDs  <- gene_ID_DEG()
         data2 <- merge(count, gene_IDs, by= 0)
         rownames(data2) <- data2[,1]
@@ -6790,8 +6910,7 @@ shinyServer(function(input, output, session) {
       if(is.null(count)){
         return(NULL)
       }else{
-        if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||               
-           str_detect(rownames(count)[1], "^AT.G")){
+        if(gene_type5() != "SYMBOL"){
           if(input$Species5 != "not selected"){
             GOI <- count$Unique_ID
           }else GOI <- rownames(count)
@@ -6863,8 +6982,7 @@ shinyServer(function(input, output, session) {
       if(!is.null(label_data)) {
         Color <- c("blue","green","darkgray","red")
         for(name in label_data){
-          if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") || 
-             str_detect(rownames(data)[1], "^AT.G")){
+          if(gene_type5() != "SYMBOL"){
             if(input$Species5 != "not selected"){
               data$color[data$Unique_ID == name] <- "GOI"
             }else{
@@ -6893,8 +7011,7 @@ shinyServer(function(input, output, session) {
         xlim(input$deg_xrange)+
         ylim(c(0, input$deg_yrange))
       if(!is.null(label_data)) {
-        if(str_detect(rownames(data)[1], "ENS") || str_detect(rownames(data)[1], "FBgn") ||
-           str_detect(rownames(data)[1], "^AT.G")){
+        if(gene_type5() != "SYMBOL"){
           if(input$Species5 != "not selected"){
             v <- v + geom_point(data=dplyr::filter(data, color == "GOI"),color="green", size=1)
             v <- v + ggrepel::geom_label_repel(data = dplyr::filter(data, color == "GOI"), mapping = aes(label = Unique_ID),alpha = 0.6,label.size = NA, 
@@ -6955,8 +7072,7 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       count <- DEG_uniqueID()
-      if(str_detect(rownames(count)[1], "ENS") || str_detect(rownames(count)[1], "FBgn") ||
-         str_detect(rownames(count)[1], "^AT.G")){
+      if(gene_type5() != "SYMBOL"){
         if(input$Species5 != "not selected"){
           Unique_ID <- input$degGOI
           label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
