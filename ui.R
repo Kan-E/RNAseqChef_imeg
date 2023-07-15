@@ -43,7 +43,7 @@ shinyUI(
                  ),
                  column(12,
                         br(),
-                        h4("Current version (v1.0.7, 2023/7/10)"),
+                        h4("Current version (v1.0.7, 2023/7/14)"),
                         "Add new functions for non-model organisms.",br(),
                         "Add new functions to the '3 conditions DEG' and 'Normalized count analysis'.",br(),
                         "See the details from 'More -> Change log'",
@@ -1241,7 +1241,7 @@ shinyUI(
                              width = "80%"),
                    h4("Filter option 2:"),
                    fluidRow(
-                     column(4, numericInput("fc3", "Fold Change", min   = 1, max   = NA, value = 2)),
+                     column(4, numericInput("fc3", "Fold Change", min   = 1, max   = NA, value = 1)),
                      column(4, numericInput("basemean3", "Basemean", min   = 0, max   = NA, value = 0),
                      )
                    ),
@@ -1419,7 +1419,7 @@ shinyUI(
                  sidebarPanel(
                    fileInput("enrich_data_file",
                              strong(
-                               span("Select a gene list file (txt, csv, xlsx)"),
+                               span("Select gene list files (txt, csv, xlsx)"),
                                span(icon("info-circle"), id = "icon13", 
                                     options = list(template = popoverTempate))
                              ),
@@ -1821,7 +1821,7 @@ shinyUI(
                                    h4("v1.0.6 (2023/6/7)"),
                                    strong("・Add new function: generating report (.docx) when 'download summary' button is pressed in the setting panel of 'Pair-wise DEG', '3 conditions DEG', and 'Multi conditions DEG'.(2023/6/7)"),br(),
                                    strong("・Fix 'GOI reset' button in the 'Pair-wise DEG', '3 conditions DEG', 'Normalized data count analysis',and 'Volcano navi'.(2023/6/7)"),br(),
-                                   h4("v1.0.7 (2023/7/10)"),
+                                   h4("v1.0.7 (2023/7/14)"),
                                    strong("・Add approximately 200 non-model organisms."),br(),
                                    strong("・Add new function for the non-model organisms. Related species (Ortholog) can be selected for pathway analysis."),br(),
                                    strong("・Add the function to export and import a Recode.Rdata file in the '3 conditions DEG'. 
