@@ -1828,6 +1828,7 @@ shinyUI(
                                           Recode.Rdata can be obtained by clicking the 'Download summary' button and be imported using 'Option: Recode.Rdata' mode. You can skip the time-consuming EBSeq analysis."),br(),
                                    strong("・Add the functions for log2FoldChange cut-off and statistical analysis in the 'Normalized count analysis'."),br(),
                                    strong("・Bug fix. Pathway analysis of non-model organism."),br(),
+                                   strong("・Bug fix. Column names of count data from excel files."),br(),
                             )
                           )
                  )
