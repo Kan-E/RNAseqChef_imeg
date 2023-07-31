@@ -1379,10 +1379,6 @@ shinyServer(function(input, output, session) {
   })
   
   enrichment_enricher <- reactive({
-    if((input$Species == "Xenopus laevis" || input$Ortholog == "Arabidopsis thaliana" || input$Species == "Arabidopsis thaliana") && 
-       is.null(input$Gene_set)){
-      return(NULL)
-    }else{
       data3 <- data_degcount2()
       if(!is.null(input$Gene_set) && input$Species != "not selected" && !is.null(data3)){
         withProgress(message = "enrichment analysis",{
@@ -1427,17 +1423,9 @@ shinyServer(function(input, output, session) {
           return(df)
         })
       }else{return(NULL)}
-    }
   })
   
   enrichment_1_gsea <- reactive({
-    if((input$Species == "Xenopus laevis" || input$Ortholog == "Arabidopsis thaliana" || input$Species == "Arabidopsis thaliana") && 
-       (input$Gene_set != "KEGG" && 
-        input$Gene_set != "GO biological process" && 
-        input$Gene_set != "GO cellular component" && 
-        input$Gene_set != "GO molecular function")){
-      return(NULL)
-    }else{
       data <- data_degcount()
       data3 <- data_degcount2()
       count <- deg_norm_count()
@@ -1483,7 +1471,6 @@ shinyServer(function(input, output, session) {
           incProgress(1)
         })
       }else return(NULL)
-    }
   })
   
   
@@ -3345,13 +3332,6 @@ shinyServer(function(input, output, session) {
   })
   
   multi_enrichment_1_gsea <- reactive({
-    if((input$Species6 == "Xenopus laevis" || input$Ortholog6 == "Arabidopsis thaliana" || input$Species6 == "Arabidopsis thaliana") && 
-       (input$Gene_set6 != "KEGG" && 
-        input$Gene_set6 != "GO biological process" && 
-        input$Gene_set6 != "GO cellular component" && 
-        input$Gene_set6 != "GO molecular function")){
-      return(NULL)
-    }else{
       if(!is.null(input$Gene_set6) && input$Species6 != "not selected"){
         data <- multi_enrich_pairFC()
         count <- multi_deg_norm_count()
@@ -3395,7 +3375,6 @@ shinyServer(function(input, output, session) {
           incProgress(1)
         })
       }else return(NULL)
-    }
   })
   
   
@@ -3433,13 +3412,6 @@ shinyServer(function(input, output, session) {
     if(is.null(dds) || length(input$selectEnrich_pair) != 2){
       return(NULL)
     }else{
-      if((input$Species6 == "Xenopus laevis" || input$Ortholog6 == "Arabidopsis thaliana" || input$Species6 == "Arabidopsis thaliana") && 
-         (input$Gene_set6 != "KEGG" && 
-          input$Gene_set6 != "GO biological process" && 
-          input$Gene_set6 != "GO cellular component" && 
-          input$Gene_set6 != "GO molecular function")){
-        return(NULL)
-      }else{
         data <- as.data.frame(multi_enrichment_1_gsea())
         if(input$Species6 != "Xenopus laevis" && input$Ortholog6 != "Arabidopsis thaliana" && input$Species6 != "Arabidopsis thaliana"){
           H_t2g <- multi_Hallmark_set()
@@ -3470,7 +3442,7 @@ shinyServer(function(input, output, session) {
             }
           }
         }else return(data)
-      }}
+      }
   })
   
   output$multi_GSEA_result <- DT::renderDataTable({
@@ -6805,13 +6777,6 @@ shinyServer(function(input, output, session) {
   })
   
   enrich_viewer2 <- reactive({
-    if((input$Species4 == "Xenopus laevis"  || input$Ortholog4 == "Arabidopsis thaliana" || input$Species4 == "Arabidopsis thaliana") && 
-       (input$Gene_set3 != "KEGG" &&
-        input$Gene_set3 != "GO biological process" &&
-        input$Gene_set3 != "GO cellular component" &&
-        input$Gene_set3 != "GO molecular function")){
-      return(NULL)
-    }else{
       if(!is.null(input$Gene_set3)){
         data3 <- enrich_viewer1()
         if(is.null(data3)){
@@ -6858,7 +6823,6 @@ shinyServer(function(input, output, session) {
           })
         }
       }
-    }
   })
   
   # enrichment plot ------------------------------------------------------------------------------
