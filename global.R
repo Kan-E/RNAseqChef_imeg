@@ -121,7 +121,9 @@ read_df <- function(tmp, Species=NULL){
     colnames(df) = str_sub(colnames(df), start = 3, end = -2) 
     }
     }
+    if(length(grep("padj", colnames(df))) == 0 || length(grep("log2FoldChange", colnames(df))) == 0){
     df[is.na(df)] <- 0
+    }
     if(dim(df)[2] != 0){
     if(colnames(df)[1] == "Protein.Ids"){
       df <- df %>% distinct(Genes, .keep_all = T)
@@ -364,17 +366,17 @@ no_org_ID <- function(count=NULL,gene_list=NULL,Species,Ortholog,Biomart_archive
                         values = genes ,mart = use,filters = filter,
                         attributesL = c("external_gene_name","entrezgene_id"),
                         martL = ortho_mart, uniqueRows=T))
-        if(length(class(genes2)) == 1){
           if(class(genes2) == "try-error") {
-            genes2 = try(getLDS(attributes = c("ensembl_gene_id"),
+            genes4 = try(getLDS(attributes = c("ensembl_gene_id"),
                                 values = genes ,mart = use,filters = filter,
                                 attributesL = c("external_gene_name","ensembl_gene_id"),
                                 martL = ortho_mart, uniqueRows=T))
-          }
-          if(class(genes2) == "try-error") {
+          }else genes4<-data.frame()
+          if(class(genes4) == "try-error") {
           validate("biomart has encountered an unexpected server error.
                     Please try using a different 'biomart host' or try again later.")
           }else{
+            if(class(genes2) == "try-error" && class(genes4) != "try-error"){
             if(Ortholog == "Drosophila melanogaster") org <- org.Dm.eg.db
             if(Ortholog == "Caenorhabditis elegans") org <- org.Ce.eg.db
             my.symbols <- genes2[,3]
@@ -385,8 +387,8 @@ no_org_ID <- function(count=NULL,gene_list=NULL,Species,Ortholog,Biomart_archive
         gene_IDs <- gene_IDs %>% distinct(Gene.stable.ID.1, .keep_all = T)
         genes3 <- merge(genes2, gene_IDs, by="Gene.stable.ID.1")
         genes2 <- genes3[,-1]
+            }
           }
-        }
         colnames(genes) <- colname1
         colnames(genes2) <- colname
         gene3<-merge(genes,genes2,by=colname1,all=T)
@@ -790,7 +792,7 @@ data_3degcount2 <- function(gene_type,data3, Species, Ortholog,org){
 }
 cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, specific, 
                                fc, fdr, basemean, y_axis=NULL, x_axis=NULL,
-                               GOI=NULL, heatmap = TRUE, Species){
+                               GOI=NULL, heatmap = TRUE, Species,brush=NULL){
   if(is.null(data)){
     return(NULL)
   }else{
@@ -919,7 +921,19 @@ cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, 
     if(!is.null(y_axis) && !is.null(x_axis)){
       p <- p +  xlim(x_axis) + ylim(y_axis)
     }
-    if(!is.null(GOI)) {
+    if(!is.null(dim(brush)[1])){
+    if(!is.null(GOI) || dim(brush)[1]!=0) {
+      if(dim(brush)[1]!=0){
+        if(gene_type != "SYMBOL"){
+          if(Species != "not selected"){
+            GOI <- brush$Unique_ID
+          }else{
+            GOI <- brush$Row.names
+          }
+        }else{
+          GOI <- brush$Row.names
+        }
+      }
       for(name in GOI){
         if(gene_type != "SYMBOL"){
           if(Species != "not selected"){
@@ -946,6 +960,7 @@ cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, 
         p <- p + ggrepel::geom_label_repel(data = dplyr::filter(data3, color == "GOI"), mapping = aes(label = Row.names),alpha = 0.6,label.size = NA, 
                                           box.padding = unit(0.35, "lines"), point.padding = unit(0.3,"lines"), force = 1, fontface = "bold.italic")
       }
+    }
     }
     if(heatmap == TRUE){
     if(length(unique(data3$sig)) == 1){
