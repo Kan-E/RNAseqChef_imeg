@@ -346,6 +346,7 @@ shinyServer(function(input, output, session) {
         }
         if(input$DEG_method == "limma"){
           withProgress(message = "limma",{
+            collist <- gsub(" ", ".", collist)
             group <- factor(collist)
             count <- log(count + 1,2)
             eset = new("ExpressionSet", exprs=as.matrix(count))
