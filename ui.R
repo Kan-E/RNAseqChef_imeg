@@ -44,6 +44,8 @@ shinyUI(
                  column(12,
                         br(),
                         h4("Current version (v1.0.8, 2023/8/1)"),
+                        p("(2023/8/8) Add 'Select samples' function in Pair-wise DEG, 3 conditions DEG, and Normalized count analysis."),
+                        p("(2023/8/8) Add MA plot in GOI profiling of Pair-wise DEG."),
                         p("(2023/8/4) Fix bug regarding the batch-mode in pair-wise DEG.", style = "color:red"),
                         p("(2023/8/1) Significant bug: FDR control for EdgeR in pair-wise DEG. 
                           Previous versions could not properly handle 'Qvalue' and 'IHW' when using EdgeR (There were no issues when 'BH' was selected).", style = "color:red"),
@@ -140,6 +142,9 @@ shinyUI(
                                                             "There is no limitation to the number of uploaded files.<br><br>",
                                                             img(src="input_format1.png", width = 400,height = 250)), 
                                               placement = "right",options = list(container = "body")),
+                   ),
+                   conditionalPanel(condition="input.data_file_type!='Row11'",
+                   selectizeInput("sample_order", "Select samples:", choices = "", multiple = T)
                    ),
                    radioButtons('DEG_method','DEG analysis method:',
                                 c('DESeq2'="DESeq2",
@@ -317,7 +322,9 @@ shinyUI(
                                 column(4, downloadButton("download_pair_GOIheatmap", "Download heatmap"))
                               ),
                               fluidRow(
-                                column(4, htmlOutput("GOI")),
+                                column(4, selectInput("GOI_plot_select","Plot type",c("Volcano plot","MA plot"),
+                                                      selected = "Volcano plot",multiple = F),
+                                       htmlOutput("GOI")),
                                 column(4, htmlOutput("volcano_x"), htmlOutput("GOIreset_pair")),
                                 column(4, htmlOutput("volcano_y"))
                               ),
@@ -433,6 +440,9 @@ shinyUI(
                                                             "You can obtain a recode.Rdata file by clicking 'Download summary' buttom after the analysis with 3 conditions DEG"
                                                             ), 
                                               placement = "right",options = list(container = "body")),
+                   ),
+                   conditionalPanel(condition="input.data_file_type2 != 'RowRecode_cond3'",
+                   selectizeInput("sample_order_cond3", "Select samples:", choices = "", multiple = T)
                    ),
                    fluidRow(
                      column(6, selectInput("Species2", "Species", species_list, selected = "not selected")),
@@ -1219,6 +1229,7 @@ shinyUI(
                                                             img(src="input_format2.png", width = 400,height = 400)), 
                                               placement = "right",options = list(container = "body")),
                    ),
+                   selectizeInput("sample_order_norm", "Select samples:", choices = "", multiple = T),
                    fluidRow(
                      column(6, selectInput("Species3", "Species", species_list, selected = "not selected")),
                      conditionalPanel(condition=c("input.Species3 != 'not selected' && input.Species3 != 'Homo sapiens' &&
@@ -1846,7 +1857,11 @@ shinyUI(
                                    strong("You can select genes by drawing the box on the volcano/scatter plot."),br(),
                                    img(src="pair-wise GOI profiling3.png", width = 400,height = 400),
                                    img(src="cond 3 goi3.png", width = 400,height = 400),br(),br(),
-                                   strong("(2023/8/4) Fix bug regarding the batch-mode in pair-wise DEG."),br()
+                                   strong("(2023/8/4) Fix bug regarding the batch-mode in pair-wise DEG."),br(),
+                                   strong("(2023/8/8) Add 'Select samples' function in Pair-wise DEG, 3 conditions DEG, and Normalized count analysis. 
+                                          You can choose the samples you want to analyze using the 'Select samples' function in Pair-wise DEG and 3 conditions DEG, and Normalized count analysis. 
+                                          It's not necessary to create a count file containing only the samples you intend to analyze, except for the batch-mode in Pair-wise DEG."),br(),
+                                   strong("(2023/8/8) Add MA plot in GOI profiling of Pair-wise DEG."),br(),
                             )
                           )
                  )
