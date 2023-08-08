@@ -198,7 +198,19 @@ shinyServer(function(input, output, session) {
   ortholog1_batch <- reactive({
     return(no_org_ID(count = batch_files()[[1]],Species = input$Species,Ortholog = input$Ortholog,Biomart_archive=input$Biomart_archive))
   })
-  
+  observeEvent(pre_d_row_count_matrix(),({
+    updateSelectizeInput(session,inputId = "sample_order","Select samples:",
+                         choices = colnames(pre_d_row_count_matrix()),selected = colnames(pre_d_row_count_matrix()))
+  }))
+  observeEvent(d_row_count_matrix(), ({
+    updateCollapse(session,id =  "input_collapse_panel", open="D_row_count_matrix_panel")
+  }))
+  d_row_count_matrix <- reactive({
+    count <- pre_d_row_count_matrix()
+    order <- input$sample_order
+    data <- count[,order]
+        return(data)
+  })
   row_count_matrix <- reactive({
     withProgress(message = "Importing row count matrix, please wait",{
       if (input$data_file_type == "Row1"){
@@ -240,7 +252,7 @@ shinyServer(function(input, output, session) {
       return(upload)
     }
   })
-  d_row_count_matrix <- reactive({
+  pre_d_row_count_matrix <- reactive({
     withProgress(message = "Creating defined count matrix, please wait",{
       row <- row_count_matrix()
       if (input$data_file_type == "Row1"){
@@ -457,7 +469,6 @@ shinyServer(function(input, output, session) {
   observeEvent(input$file2, ({
     updateCollapse(session,id =  "input_collapse_panel", open="Metadata_panel")
   }))
-  
   output$Row_count_matrix <- DT::renderDataTable({
     if(input$data_file_type == "Row11"){
       uploaded_files = names(batch_files())
@@ -857,22 +868,36 @@ shinyServer(function(input, output, session) {
   output$volcano_x <- renderUI({
     if(!is.null(data_degcount())){
       data <- as.data.frame(data_degcount())
+      if(input$GOI_plot_select == "Volcano plot"){
       min <- floor(min(data$log2FoldChange))
       max <- ceiling(max(data$log2FoldChange))
       sliderInput("xrange","X_axis range:",min = min-1,
                   max=max+1, step = 0.5,
                   value = c(min, max))
+      }else{
+        max <- ceiling(max(log(data$baseMean,2)))
+        sliderInput("xrange","X_axis range:",min = 0,
+                    max=max+1, step = 0.5, value = max)
+      }
     }
   })
   output$volcano_y <- renderUI({
     if(!is.null(data_degcount())){
       data <- as.data.frame(data_degcount())
+      if(input$GOI_plot_select == "Volcano plot"){
       data$padj[data$padj == 0] <- 10^(-300)
       data <- na.omit(data)
       max <- ceiling(max(-log10(data$padj)))
       print(max)
       sliderInput("yrange","Y_axis range:",min = 0, max= max+1, step = 1,
                   value = max)
+      }else{
+        min <- floor(min(data$log2FoldChange))
+        max <- ceiling(max(data$log2FoldChange))
+        sliderInput("yrange","Y_axis range:",min = min-1,
+                    max=max+1, step = 0.5,
+                    value = c(min, max))
+      }
     }
   })
   
@@ -921,18 +946,29 @@ shinyServer(function(input, output, session) {
       if(input$DEG_method == "limma"){
         if(input$cutoff_limma == "pval") lab_y <- "-log10(pval)"
       }
-      v <- ggplot(data, aes(x = log2FoldChange, y = minusLog10padj)) + geom_point(aes(color = color),size = 0.4) + 
+      if(input$GOI_plot_select == "Volcano plot"){
+      v <- try(ggplot(data, aes(x = log2FoldChange, y = minusLog10padj)) + 
         geom_vline(xintercept = c(-log2(input$fc), log2(input$fc)), linetype = c(2, 2), color = c("black", "black")) +
         geom_hline(yintercept = c(-log10(input$fdr)), linetype = 2, color = c("black")) +
+        xlab("log2 fold change") + ylab(lab_y) +
+        xlim(input$xrange)+
+        ylim(c(0, input$yrange)))
+      }else{
+        data$log2baseMean <- log(data$baseMean,2)
+        v <- try(ggplot(data, aes(x = log2baseMean, y = log2FoldChange)) +
+          geom_hline(yintercept = c(-log2(input$fc), 0 ,log2(input$fc)), linetype = c(2,1,2), color = c("black", "black","black")) +
+          xlab("log2 mean expression") + ylab("log2 fold change") +
+          xlim(c(0, input$xrange))+
+          ylim(c(input$yrange)))
+      }
+      if(length(v) == 1) if(class(v) == "try-error") validate("")
+      v <- v + geom_point(aes(color = color),size = 0.4)  +
         theme_bw()+ scale_color_manual(values = Color)+
         theme(legend.position = "top" , legend.title = element_blank(),
               axis.text.x= ggplot2::element_text(size = 12),
               axis.text.y= ggplot2::element_text(size = 12),
               text = ggplot2::element_text(size = 12),
-              title = ggplot2::element_text(size = 12)) +
-        xlab("log2 fold change") + ylab(lab_y) +
-        xlim(input$xrange)+
-        ylim(c(0, input$yrange))
+              title = ggplot2::element_text(size = 12)) 
       if(!is.null(label_data)) {
         if(gene_type1() != "SYMBOL"){
           if(input$Species != "not selected"){
@@ -958,9 +994,15 @@ shinyServer(function(input, output, session) {
   brush_info <- reactive({
     if(!is.null(input$xrange) && !is.null(data_degcount())){
     data <- as.data.frame(data_degcount())
+    if(input$GOI_plot_select == "Volcano plot"){
     data$padj[data$padj == 0] <- 10^(-300)
     data$minusLog10padj<--log10(data$padj)
-    return(brushedPoints(data, input$plot1_brush,xvar = "log2FoldChange",yvar="minusLog10padj"))
+    brush <- brushedPoints(data, input$plot1_brush,xvar = "log2FoldChange",yvar="minusLog10padj")
+    }else{
+    data$log2baseMean <- log(data$baseMean,2)
+    brush <- brushedPoints(data, input$plot1_brush,xvar = "log2baseMean",yvar="log2FoldChange")
+    }
+    return(brush)
     }
   })
   
@@ -1090,7 +1132,11 @@ shinyServer(function(input, output, session) {
       }
     }else{
       data2<-brush_info()
+      if(input$GOI_plot_select == "Volcano plot"){
       data2 <- data2[, - which(colnames(data2) == "minusLog10padj")]
+      }else{
+        data2 <- data2[, - which(colnames(data2) == "log2baseMean")]
+      }
       if(gene_type1() != "SYMBOL"){
         if(input$Species != "not selected"){
           rownames(data2) <- data2$Unique_ID
@@ -1299,7 +1345,11 @@ shinyServer(function(input, output, session) {
             }
             }else{
               data2<-brush_info()
+              if(input$GOI_plot_select == "Volcano plot"){
               data2 <- data2[, - which(colnames(data2) == "minusLog10padj")]
+              }else{
+                data2 <- data2[, - which(colnames(data2) == "log2baseMean")]
+              }
               if(gene_type1() != "SYMBOL"){
                 if(input$Species != "not selected"){
                   rownames(data2) <- data2$Unique_ID
@@ -4120,7 +4170,19 @@ shinyServer(function(input, output, session) {
   org_code2 <- reactive({
     return(org_code(Species = input$Species2, Ortholog= input$Ortholog2))
   })
-  
+  observeEvent(pre_d_row_count_matrix2(),({
+    updateSelectizeInput(session,inputId = "sample_order_cond3","Select samples:",
+                         choices = colnames(pre_d_row_count_matrix2()),selected = colnames(pre_d_row_count_matrix2()))
+  }))
+  observeEvent(d_row_count_matrix2(), ({
+    updateCollapse(session,id =  "input_collapse_panel2", open="D_row_count_matrix_panel2")
+  }))
+  d_row_count_matrix2 <- reactive({
+    count <- pre_d_row_count_matrix2()
+    order <- input$sample_order_cond3
+    data <- count[,order]
+    return(data)
+  })
   row_count_matrix2 <- reactive({
     if (input$data_file_type2 == "Row3"){
       tmp <- input$file4$datapath
@@ -4183,7 +4245,7 @@ shinyServer(function(input, output, session) {
     return(df)
   })
   
-  d_row_count_matrix2 <- reactive({
+  pre_d_row_count_matrix2 <- reactive({
     row <- row_count_matrix2()
     if (input$data_file_type2 == "Row3"){
       if(is.null(row)) {
@@ -5305,7 +5367,19 @@ shinyServer(function(input, output, session) {
   org_code3 <- reactive({
     return(org_code(Species = input$Species3, Ortholog= input$Ortholog3))
   })
-  
+  observeEvent(pre_d_norm_count_matrix(),({
+    updateSelectizeInput(session,inputId = "sample_order_norm","Select samples:",
+                         choices = colnames(pre_d_norm_count_matrix()),selected = colnames(pre_d_norm_count_matrix()))
+  }))
+  observeEvent(d_norm_count_matrix(), ({
+    updateCollapse(session,id =  "norm_input_collapse_panel", open="D_norm_count_matrix_panel")
+  }))
+  d_norm_count_matrix <- reactive({
+    count <- pre_d_norm_count_matrix()
+    order <- input$sample_order_norm
+    data <- count[,order]
+    return(data)
+  })
   norm_count_input <- reactive({
     withProgress(message = "Importing normalized count matrix, please wait",{
       if (input$data_file_type3 == "Row5"){
@@ -5340,7 +5414,7 @@ shinyServer(function(input, output, session) {
     df <- as.data.frame(gene, row.names = gene)
     return(df)
   })
-  d_norm_count_matrix <- reactive({
+  pre_d_norm_count_matrix <- reactive({
     withProgress(message = "Creating defined count matrix, please wait",{
       row <- norm_count_input()
       gene_list <- gene_list()
