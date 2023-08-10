@@ -771,7 +771,7 @@ shinyServer(function(input, output, session) {
       if(gene_type1() != "SYMBOL"){
         if(input$Species != "not selected"){
           genenames <- as.vector(data$SYMBOL)
-        }else{ genenames=NULL }
+        }else{ genenames=as.vector(data$Row.names) }
       }else{
         genenames <- as.vector(data$Row.names)
       }
@@ -5981,7 +5981,7 @@ shinyServer(function(input, output, session) {
   
   
   #Restart
-  defaultvalues_kmeans <- observeEvent(norm_kmeans(), {
+  defaultvalues_kmeans <- observeEvent(pre_norm_kmeans(), {
     isolate(updateCounter_kmeans$i == 0)
     updateCounter_kmeans <<- reactiveValues(i = 0)
   }) 
@@ -6002,7 +6002,14 @@ shinyServer(function(input, output, session) {
     }
   })
   d_norm_count_matrix_cutofff_fc <- reactive({
-    data <- d_norm_count_matrix_cutofff()
+    data <- d_norm_count_cutoff_uniqueID()
+    if(input$Species3 != "not selected"){
+      if(gene_type3() != "SYMBOL"){
+        rownames(data) <- data$Unique_ID
+        data <- data[, - which(colnames(data) == "SYMBOL")]
+        data <- data[, - which(colnames(data) == "Unique_ID")]
+      }
+    }
     if(length(input$selectFC_norm) == 2){
       if(dim(data)[1] != 0){
         cond1 <- input$selectFC_norm[1]
@@ -6058,55 +6065,132 @@ shinyServer(function(input, output, session) {
       return(data.z)
     }
   })
+
+  pre_norm_kmeans <- reactive({
+    data.z <- norm_data_z()
+    if(is.null(data.z)){
+      return(NULL)
+    }else{
+        consensus_kmeans = function(mat, centers, km_repeats) {
+          partition_list = lapply(seq_len(km_repeats), function(i) {
+            as.cl_hard_partition(kmeans(mat, centers))
+          })
+          partition_list = cl_ensemble(list = partition_list)
+          partition_consensus = cl_consensus(partition_list)
+          as.vector(cl_class_ids(partition_consensus)) 
+        }
+        set.seed(123)
+        cl = consensus_kmeans(data.z, input$norm_kmeans_number, 100)
+        names(cl) <- rownames(data.z)
+        return(cl)
+    }
+  })
+
   
   norm_kmeans <- reactive({
     data.z <- norm_data_z()
-    if(is.null(data.z) || input$kmeans_start == 0 || updateCounter_kmeans$i == 0){
+    if(is.null(data.z) || is.null(pre_norm_kmeans()) || is.null(input$kmeans_order) ||
+       input$kmeans_start == 0 || updateCounter_kmeans$i == 0){
       return(NULL)
     }else{
       withProgress(message = "k-means clustering",{
+       if(length(input$kmeans_order) == length(unique(pre_norm_kmeans()))){
+         set.seed(123)
         ht <- Heatmap(data.z, name = "z-score",
                       column_order = colnames(data.z),
                       clustering_method_columns = 'ward.D2',
-                      row_km= input$norm_kmeans_number, cluster_row_slices = F, row_km_repeats = 100,
+                      cluster_row_slices = F, split = factor(pre_norm_kmeans(),levels = input$kmeans_order),
                       show_row_names = F,column_names_side = "top",use_raster = TRUE)
-        ht <- draw(ht)
+       }else validate("Select all clusters from 'Order of clusters on heatmap'")
         return(ht)
       })
+       }
+  })
+  norm_kmeans_GOI <- reactive({
+    ht <- norm_kmeans()
+    data.z <- norm_data_z()
+    if(is.null(ht) || is.null(pre_norm_kmeans()) || 
+       input$kmeans_start == 0 || updateCounter_kmeans$i == 0){
+      return(NULL)
+    }else{
+        if(!is.null(input$norm_kmeans_count_table_rows_selected)){
+          data <- norm_kmeans_cluster()[input$norm_kmeans_count_table_rows_selected,]
+          lab <- rownames(data)
+          if(input$Species3 != "not selected"){
+            if(gene_type3() != "SYMBOL"){
+              lab <- data$Unique_ID
+            }
+            }
+          indexes <- which(rownames(data.z) %in% lab)
+          labels <- rownames(data.z)[indexes]
+          set.seed(123)
+          ht <- ht + rowAnnotation(
+            link = anno_mark(at = indexes, labels = labels,which="row"),
+            width = unit(1, "cm") + max_text_width(labels))
+        }
+        return(ht)
+    }
+  })
+
+  output$kmeans_order <- renderUI({
+    if(!is.null(pre_norm_kmeans()) && 
+       input$kmeans_start != 0 && updateCounter_kmeans$i != 0){
+      order <- sort(unique(pre_norm_kmeans()))
+      selectInput("kmeans_order","Order of clusters on heatmap",order,
+                  selected = order,multiple = T)
     }
   })
   
-  norm_kmeans_cluster <- reactive({
+  pre_norm_kmeans_cluster <- reactive({
     ht <- norm_kmeans()
     data.z <- norm_data_z()
     data <- norm_count_matrix_cutoff2()
     if(is.null(ht) || is.null(data.z)){
       return(NULL)
     }else{
-      r.dend <- row_dend(ht)
-      rcl.list <- row_order(ht)
+      r.dend <- suppressWarnings(row_dend(ht))
+      rcl.list <- suppressWarnings(row_order(ht))
       lapply(rcl.list, function(x) length(x))
       Cluster <- NULL
       if(!is.null(input$norm_kmeans_number)){
         if(length(lapply(rcl.list, function(x) length(x))) != input$norm_kmeans_number){
           return(NULL)
         }else{
-          for (i in 1:length(row_order(ht))){ if (i == 1) {
-            clu <- t(t(row.names(data.z[row_order(ht)[[i]],])))
+          for (i in 1:length(suppressWarnings(row_order(ht)))){ if (i == 1) {
+            clu <- t(t(row.names(data.z[suppressWarnings(row_order(ht)[[i]]),])))
             out <- cbind(clu, paste("cluster", i, sep=""))
             colnames(out) <- c("GeneID", "Cluster")} else {
-              clu <- t(t(row.names(data.z[row_order(ht)[[i]],])))
+              clu <- t(t(row.names(data.z[suppressWarnings(row_order(ht)[[i]]),])))
               clu <- cbind(clu, paste("cluster", i, sep=""))
               out <- rbind(out, clu)}}
           out <- as.data.frame(out)
           rownames(out) <- out$GeneID
+          print(head(out))
           clusterCount <- merge(out, data, by=0)
           rownames(clusterCount) <- clusterCount$GeneID
+          if(input$Species3 != "not selected"){
+            if(gene_type3() != "SYMBOL"){
+              rownames(clusterCount) <- gsub(".+\\ ", "", clusterCount$GeneID)
+            }}
           clusterCount <- clusterCount[,-1:-2]
           return(clusterCount)
         }
       }else return(NULL)
     }
+  })
+  norm_kmeans_cluster <- reactive({
+    count <- pre_norm_kmeans_cluster()
+    if(input$Species3 != "not selected"){
+      if(gene_type3() != "SYMBOL"){
+        gene_IDs  <- gene_ID_norm()
+        data2 <- merge(count, gene_IDs, by= 0)
+        rownames(data2) <- data2[,1]
+        data2 <- data2[, - which(colnames(data2) == "Row.names.y")]
+        data2$Unique_ID <- paste(data2$SYMBOL,data2$Row.names, sep = "\n- ")
+        count <- data2[,-1]
+      }
+    }
+    return(count)
   })
   
   
@@ -6130,6 +6214,11 @@ shinyServer(function(input, output, session) {
         cluster_name <- input$norm_select_kmean
         clusterCount <- dplyr::filter(clusters, Cluster %in% cluster_name)
         clusterCount <- clusterCount[,-1]
+        if(input$Species3 != "not selected"){
+          if(gene_type3() != "SYMBOL"){
+            data <- data[, - which(colnames(data) == "Unique_ID")]
+          }
+        }
         return(clusterCount)
       }
     }
@@ -6140,11 +6229,12 @@ shinyServer(function(input, output, session) {
   })
   
   output$norm_kmeans_heatmap <- renderPlot({
-    ht <- norm_kmeans()
+    if(is.null(input$norm_kmeans_count_table_rows_selected)) ht <- norm_kmeans() else ht <- norm_kmeans_GOI()
     if(is.null(ht)){
       return(NULL)
     }else{
-      print(ht)
+      set.seed(123)
+      ht
     }
   })
   
@@ -6160,6 +6250,7 @@ shinyServer(function(input, output, session) {
         if(gene_type3() != "SYMBOL"){
           rownames(data) <- paste(data$SYMBOL,rownames(data), sep = "\n- ")
           data <- data[, - which(colnames(data) == "SYMBOL")]
+          data <- data[, - which(colnames(data) == "Unique_ID")]
         }
       }
       data <- data[, - which(colnames(data) == "Cluster")]
@@ -6225,8 +6316,9 @@ shinyServer(function(input, output, session) {
         if(input$norm_pdf_width == 0){
           pdf_width <- 7
         }else pdf_width <- input$norm_pdf_width
+        if(is.null(input$norm_kmeans_count_table_rows_selected)) ht <- norm_kmeans() else ht <- norm_kmeans_GOI()
         pdf(file, height = pdf_height, width = pdf_width)
-        print(norm_kmeans())
+        print(ht)
         dev.off()
         incProgress(1)
       })

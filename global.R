@@ -57,6 +57,7 @@ library(limma)
 library(colorspace)
 library(pdftools)
 library(magick)
+library(clue)
 options(repos = BiocManager::repositories())
 file.copy("Rmd/pair_report.Rmd",file.path(tempdir(),"pair_report.Rmd"), overwrite = TRUE)
 file.copy("Rmd/pair_batch_report.Rmd",file.path(tempdir(),"pair_batch_report.Rmd"), overwrite = TRUE)
@@ -2042,3 +2043,11 @@ gene_type <- function(my.symbols,org,Species){
   return(type)
 }
 
+consensus_kmeans = function(mat, centers, km_repeats) {
+  partition_list = lapply(seq_len(km_repeats), function(i) {
+    as.cl_hard_partition(kmeans(mat, centers))
+  })
+  partition_list = cl_ensemble(list = partition_list)
+  partition_consensus = cl_consensus(partition_list)
+  as.vector(cl_class_ids(partition_consensus)) 
+}
