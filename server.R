@@ -6102,8 +6102,9 @@ shinyServer(function(input, output, session) {
                       cluster_row_slices = F, split = factor(pre_norm_kmeans(),levels = input$kmeans_order),
                       show_row_names = F,column_names_side = "top",use_raster = TRUE)
        }else validate("Select all clusters from 'Order of clusters on heatmap'")
-        return(ht)
+        incProgress(1)
       })
+        return(ht)
        }
   })
   norm_kmeans_GOI <- reactive({
@@ -6216,7 +6217,7 @@ shinyServer(function(input, output, session) {
         clusterCount <- clusterCount[,-1]
         if(input$Species3 != "not selected"){
           if(gene_type3() != "SYMBOL"){
-            data <- data[, - which(colnames(data) == "Unique_ID")]
+            clusterCount <- clusterCount[, - which(colnames(clusterCount) == "Unique_ID")]
           }
         }
         return(clusterCount)
