@@ -44,6 +44,7 @@ shinyUI(
                  column(12,
                         br(),
                         h4("Current version (v1.0.8, 2023/8/1)"),
+                        p("(2023/8/10) Improve k-means clustering in Normalized count analysis."),
                         p("(2023/8/8) Add 'Select samples' function in Pair-wise DEG, 3 conditions DEG, and Normalized count analysis."),
                         p("(2023/8/8) Add MA plot in GOI profiling of Pair-wise DEG."),
                         p("(2023/8/4) Fix bug regarding the batch-mode in pair-wise DEG.", style = "color:red"),
@@ -1397,6 +1398,7 @@ shinyUI(
           }"
                                                  ))),
                                 column(8, downloadButton("download_norm_kmeans_heatmap", "Download heatmap"),
+                                       htmlOutput("kmeans_order"),
                                        plotOutput("norm_kmeans_heatmap"))
                               ),
                               bsCollapse(id="norm_kmeans_collapse_panel",open="norm_kmeans_count",multiple = TRUE,
@@ -1862,6 +1864,9 @@ shinyUI(
                                           You can choose the samples you want to analyze using the 'Select samples' function in Pair-wise DEG and 3 conditions DEG, and Normalized count analysis. 
                                           It's not necessary to create a count file containing only the samples you intend to analyze, except for the batch-mode in Pair-wise DEG."),br(),
                                    strong("(2023/8/8) Add MA plot in GOI profiling of Pair-wise DEG."),br(),
+                                   strong("(2023/8/10) Improve k-means clustering in Normalized count analysis. 
+                                          When genes of interest are selected in the 'k-means clustering result' panel, their positions are displayed on the heatmap.
+                                          Moreover, the order of clusters on the heatmap can be changed using the 'Order of clusters on the heatmap' function."),br(),
                             )
                           )
                  )
