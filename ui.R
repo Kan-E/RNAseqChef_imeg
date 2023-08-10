@@ -318,7 +318,7 @@ shinyUI(
                               )),
                      tabPanel("GOI profiling",
                               fluidRow(
-                                column(4, downloadButton("download_pair_volcano", "Download volcano plot")),
+                                column(4, downloadButton("download_pair_volcano", "Download volcano plot / MA plot")),
                                 column(4, downloadButton("download_pair_GOIheatmap", "Download heatmap"))
                               ),
                               fluidRow(
