@@ -1979,7 +1979,8 @@ GOIheatmap <- function(data.z, show_row_names = TRUE, type = NULL, GOI = NULL){
     indexes <- which(rownames(data.z) %in% GOI)
     labels <- rownames(data.z)[indexes]
     ht <- ht + rowAnnotation(
-      link = anno_mark(at = indexes, labels = labels,which="row"),
+      link = anno_mark(at = indexes, labels = labels,which="row",link_width = unit(1, "cm"),
+                       labels_gp = gpar(fontface = "italic")),
       width = unit(1, "cm") + max_text_width(labels)
     )
   }

@@ -44,6 +44,7 @@ shinyUI(
                  column(12,
                         br(),
                         h4("Current version (v1.0.8, 2023/8/1)"),
+                        p("(2023/8/14) Improve k-means clustering in Multi DEG."),
                         p("(2023/8/10) Improve k-means clustering in Normalized count analysis."),
                         p("(2023/8/8) Add 'Select samples' function in Pair-wise DEG, 3 conditions DEG, and Normalized count analysis."),
                         p("(2023/8/8) Add MA plot in GOI profiling of Pair-wise DEG."),
@@ -930,15 +931,26 @@ shinyUI(
                               ),
                               fluidRow(
                                 column(4, htmlOutput("multi_kmeans_num"),
+                                       actionButton("kmeans_start_multi", "Start"),
+                                       tags$head(tags$style("#kmeans_start_multi{color: red;
+                                 font-size: 20px;
+                                 font-style: bold;
+                                 }"),
+                                                 tags$style("
+          body {
+            padding: 0 !important;
+          }"
+                                                 )),
                                        downloadButton("download_multi_kmeans_heatmap", "Download heatmap"),
                                        downloadButton("download_multi_kmeans_boxplot", "Download boxplots")),
-                                column(8, plotOutput("multi_kmeans_heatmap"))
+                                column(8, htmlOutput("kmeans_order_multi"),
+                                       plotOutput("multi_kmeans_heatmap"))
                               ),
                               div(
                                 plotOutput("multi_kmeans_boxplot", height = "100%"),
                                 style = "height: calc(100vh  - 100px)"
                               ),
-                              bsCollapse(id="multi_collapse_panel2",open="multi_deg_kmeans_pattern_count_panel",multiple = TRUE,
+                              bsCollapse(id="multi_collapse_panel2",open="multi_deg_kmeans_pattern_panel",multiple = TRUE,
                               bsCollapsePanel(title="kmeans_result:",
                                               value="multi_deg_kmeans_pattern_panel",
                                               fluidRow(
@@ -1866,6 +1878,10 @@ shinyUI(
                                    strong("(2023/8/8) Add MA plot in GOI profiling of Pair-wise DEG."),br(),
                                    strong("(2023/8/10) Improve k-means clustering in Normalized count analysis. 
                                           When genes of interest are selected in the 'k-means clustering result' panel, their positions are displayed on the heatmap.
+                                          Moreover, the order of clusters on the heatmap can be changed using the 'Order of clusters on the heatmap' function."),br(),
+                                   img(src="norm k-means 2.png", width = 600,height = 400),br(),br(),
+                                   strong("(2023/8/14) Improve k-means clustering in Multi DEG. 
+                                          When genes of interest are selected in the 'kmeans_result' panel, their positions are displayed on the heatmap.
                                           Moreover, the order of clusters on the heatmap can be changed using the 'Order of clusters on the heatmap' function."),br(),
                             )
                           )
