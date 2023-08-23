@@ -44,6 +44,7 @@ shinyUI(
                  column(12,
                         br(),
                         h4("Current version (v1.0.8, 2023/8/1)"),
+                        p("(2023/8/23) fix bug regarding Normalized count analysis."),
                         p("(2023/8/14) Improve k-means clustering in Multi DEG."),
                         p("(2023/8/10) Improve k-means clustering in Normalized count analysis."),
                         p("(2023/8/8) Add 'Select samples' function in Pair-wise DEG, 3 conditions DEG, and Normalized count analysis."),
@@ -1883,6 +1884,9 @@ shinyUI(
                                    strong("(2023/8/14) Improve k-means clustering in Multi DEG. 
                                           When genes of interest are selected in the 'kmeans_result' panel, their positions are displayed on the heatmap.
                                           Moreover, the order of clusters on the heatmap can be changed using the 'Order of clusters on the heatmap' function."),br(),
+                                   strong("(2023/8/23) Fix bug regarding Normalized count analysis.
+                                          1. bug regarding input format 'normalized count data + meta data'.
+                                          2. bug regarding table data of k-means clustering when 'cluster order' is used."),
                             )
                           )
                  )

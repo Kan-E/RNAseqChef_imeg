@@ -3129,13 +3129,13 @@ shinyServer(function(input, output, session) {
         if(length(lapply(rcl.list, function(x) length(x))) != input$multi_kmeans_number){
           return(NULL)
         }else{
-          for (i in 1:length(suppressWarnings(row_order(ht)))){ if (i == 1) {
+          out <- data.frame(matrix(rep(NA, 2), nrow=1))[numeric(0), ]
+          for (i in input$kmeans_order_multi){
             clu <- t(t(row.names(data.z[suppressWarnings(row_order(ht)[[i]]),])))
-            out <- cbind(clu, paste("cluster", i, sep=""))
-            colnames(out) <- c("GeneID", "Cluster")} else {
-              clu <- t(t(row.names(data.z[suppressWarnings(row_order(ht)[[i]]),])))
-              clu <- cbind(clu, paste("cluster", i, sep=""))
-              out <- rbind(out, clu)}}
+            clu <- cbind(clu, paste("cluster", i, sep=""))
+            out <- rbind(out, clu)
+          }
+          colnames(out) <- c("GeneID", "Cluster")
           out <- as.data.frame(out)
           rownames(out) <- out$GeneID
           if(input$Species6 != "not selected"){
@@ -6234,13 +6234,13 @@ shinyServer(function(input, output, session) {
         if(length(lapply(rcl.list, function(x) length(x))) != input$norm_kmeans_number){
           return(NULL)
         }else{
-          for (i in 1:length(suppressWarnings(row_order(ht)))){ if (i == 1) {
-            clu <- t(t(row.names(data.z[suppressWarnings(row_order(ht)[[i]]),])))
-            out <- cbind(clu, paste("cluster", i, sep=""))
-            colnames(out) <- c("GeneID", "Cluster")} else {
+          out <- data.frame(matrix(rep(NA, 2), nrow=1))[numeric(0), ]
+          for (i in input$kmeans_order){
               clu <- t(t(row.names(data.z[suppressWarnings(row_order(ht)[[i]]),])))
               clu <- cbind(clu, paste("cluster", i, sep=""))
-              out <- rbind(out, clu)}}
+              out <- rbind(out, clu)
+          }
+          colnames(out) <- c("GeneID", "Cluster")
           out <- as.data.frame(out)
           rownames(out) <- out$GeneID
           clusterCount <- merge(out, data, by=0)
