@@ -89,6 +89,7 @@ read_df <- function(tmp, Species=NULL){
   if(is.null(tmp)) {
     return(NULL)
   }else{
+    if(sum(is.element(c("csv","txt","tsv","xlsx"), tools::file_ext(tmp))) == 0) validate("Error: the file extension is in an unexpected format.")
     if(tools::file_ext(tmp) == "xlsx") {
       df2 <- read_xlsx(tmp) 
       df2 <- as.data.frame(df2)

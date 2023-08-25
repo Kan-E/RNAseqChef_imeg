@@ -199,8 +199,10 @@ shinyServer(function(input, output, session) {
     return(no_org_ID(count = batch_files()[[1]],Species = input$Species,Ortholog = input$Ortholog,Biomart_archive=input$Biomart_archive))
   })
   observeEvent(pre_d_row_count_matrix(),({
+    if(!is.null(pre_d_row_count_matrix())){
     updateSelectizeInput(session,inputId = "sample_order","Select samples:",
                          choices = colnames(pre_d_row_count_matrix()),selected = colnames(pre_d_row_count_matrix()))
+    }
   }))
   observeEvent(d_row_count_matrix(), ({
     updateCollapse(session,id =  "input_collapse_panel", open="D_row_count_matrix_panel")
@@ -208,7 +210,10 @@ shinyServer(function(input, output, session) {
   d_row_count_matrix <- reactive({
     count <- pre_d_row_count_matrix()
     order <- input$sample_order
-    data <- count[,order]
+    data <- try(count[,order])
+    if(length(data) == 1){
+    if(class(data) == "try-error") validate("")
+    }
     return(data)
   })
   row_count_matrix <- reactive({
@@ -271,6 +276,7 @@ shinyServer(function(input, output, session) {
           meta <- data.frame(characteristics = meta[,1], row.names = rownames(meta))
           colname <- colnames(meta)
           data <- merge(meta, row_t, by=0, sort = F)
+          if(dim(data)[1] == 0) validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
           rownames(data) <- data$characteristics
           data2 <- data[, - which(colnames(data) %in% c("Row.names", colname))]
           data2_t <- t(data2)
@@ -2410,6 +2416,7 @@ shinyServer(function(input, output, session) {
         row_t <- t(row)
         colname <- colnames(meta)
         data <- merge(meta, row_t, by=0, sort = F)
+        if(dim(data)[1] == 0) validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
         rownames(data) <- data[,1]
         data2 <- data[, - which(colnames(data) %in% c("Row.names", colname))]
         data2 <- data2[,1:length(rownames(row))]
@@ -3061,6 +3068,29 @@ shinyServer(function(input, output, session) {
       return(cl)
     }
   })
+  pre_multi_kmeans_order <- reactive({
+    data.z <- multi_data_z()
+    cl = pre_multi_kmeans()
+    print(unique(cl))
+    if(is.null(cl) || length(unique(cl)) == 1){
+      return(NULL)
+    }else{
+      cl <- data.frame(cl)
+      colnames(cl)[1] <- "cluster" 
+      data2 <- merge(cl,data.z, by=0)
+      rownames(data2)<-data2[,1]
+      data2 <- data2[,-1]
+      df <- data.frame(matrix(rep(NA, 1), nrow=1))[numeric(0), ]
+      for(i in 1:input$multi_kmeans_number){
+        data3 <- data2 %>% dplyr::filter(cluster == i)
+        data4 <- apply(data3[,-1],2,sum)
+        df <- rbind(df,data4)
+      }
+      colnames(df) <- colnames(data2[,-1])
+      order <- hclust(dist(df), "average")$order
+      return(order)
+    }
+  })
   
   multi_kmeans <- reactive({
     data.z <- multi_data_z()
@@ -3106,7 +3136,7 @@ shinyServer(function(input, output, session) {
   })
   output$kmeans_order_multi <- renderUI({
     if(!is.null(multi_deg_count())){
-    order <- sort(unique(pre_multi_kmeans()))
+    order <- pre_multi_kmeans_order()
     withProgress(message = "Draw heatmap",{
       selectInput("kmeans_order_multi","Order of clusters on heatmap",order,
                   selected = order,multiple = T)
@@ -4265,7 +4295,10 @@ shinyServer(function(input, output, session) {
   d_row_count_matrix2 <- reactive({
     count <- pre_d_row_count_matrix2()
     order <- input$sample_order_cond3
-    data <- count[,order]
+    data <- try(count[,order])
+    if(length(data) == 1){
+    if(class(data) == "try-error") validate("")
+    }
     return(data)
   })
   row_count_matrix2 <- reactive({
@@ -4348,6 +4381,7 @@ shinyServer(function(input, output, session) {
         meta <- data.frame(characteristics = meta[,1], row.names = rownames(meta))
         colname <- colnames(meta)
         data <- merge(meta, row_t, by=0, sort = F)
+        if(dim(data)[1] == 0) validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
         rownames(data) <- data$characteristics
         data2 <- data[, - which(colnames(data) %in% c("Row.names", colname))]
         data2_t <- t(data2)
@@ -5462,7 +5496,10 @@ shinyServer(function(input, output, session) {
   d_norm_count_matrix <- reactive({
     count <- pre_d_norm_count_matrix()
     order <- input$sample_order_norm
-    data <- count[,order]
+    data <- try(count[,order])
+    if(length(data) == 1){
+    if(class(data) == "try-error") validate("")
+    }
     return(data)
   })
   norm_count_input <- reactive({
@@ -5509,6 +5546,7 @@ shinyServer(function(input, output, session) {
         }else{
           if(!is.null(gene_list)){
             row <- merge(row,gene_list, by=0)
+            if(dim(row)[1] == 0) validate("No filtered genes.")
             rownames(row) <- row$Row.names
             row <- row[,-1]
             row <- row[, - which(colnames(row) == "gene")]
@@ -5524,6 +5562,7 @@ shinyServer(function(input, output, session) {
           meta <- data.frame(characteristics = meta[,1], row.names = rownames(meta))
           colname <- colnames(meta)
           data <- merge(meta, row_t, by=0, sort = F)
+          if(dim(data)[1] == 0) validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
           rownames(data) <- data$characteristics
           data2 <- data[, - which(colnames(data) %in% c("Row.names", colname))]
           data2_t <- t(data2)
@@ -6165,6 +6204,29 @@ shinyServer(function(input, output, session) {
       return(cl)
     }
   })
+  pre_norm_kmeans_order <- reactive({
+    data.z <- norm_data_z()
+    cl = pre_norm_kmeans()
+    print(unique(cl))
+    if(is.null(cl) || length(unique(cl)) == 1){
+      return(NULL)
+    }else{
+        cl <- data.frame(cl)
+        colnames(cl)[1] <- "cluster" 
+        data2 <- merge(cl,data.z, by=0)
+        rownames(data2)<-data2[,1]
+        data2 <- data2[,-1]
+        df <- data.frame(matrix(rep(NA, 1), nrow=1))[numeric(0), ]
+        for(i in 1:input$norm_kmeans_number){
+          data3 <- data2 %>% dplyr::filter(cluster == i)
+          data4 <- apply(data3[,-1],2,sum)
+          df <- rbind(df,data4)
+        }
+        colnames(df) <- colnames(data2[,-1])
+        order <- hclust(dist(df), "average")$order
+      return(order)
+    }
+  })
   
   
   norm_kmeans <- reactive({
@@ -6212,7 +6274,7 @@ shinyServer(function(input, output, session) {
   })
   
   output$kmeans_order <- renderUI({
-    order <- sort(unique(pre_norm_kmeans()))
+    order <- pre_norm_kmeans_order()
     withProgress(message = "Draw heatmap",{
       selectInput("kmeans_order","Order of clusters on heatmap",order,
                   selected = order,multiple = T)
