@@ -146,9 +146,6 @@ shinyUI(
                                                             img(src="input_format1.png", width = 400,height = 250)), 
                                               placement = "right",options = list(container = "body")),
                    ),
-                   conditionalPanel(condition="input.data_file_type!='Row11'",
-                   selectizeInput("sample_order", "Select samples:", choices = "", multiple = T)
-                   ),
                    radioButtons('DEG_method','DEG analysis method:',
                                 c('DESeq2'="DESeq2",
                                   'EBSeq'="EBSeq",
@@ -250,7 +247,7 @@ shinyUI(
                    tabsetPanel(
                      type = "tabs",
                      tabPanel("Input Data",
-                              bsCollapse(id="input_collapse_panel",open="Row_count_panel",multiple = TRUE,
+                              bsCollapse(id="input_collapse_panel",open="Row_count_panel",multiple = FALSE,
                                          bsCollapsePanel(title="Raw_count_matrix:",
                                                          value="Row_count_panel",
                                                          dataTableOutput('Row_count_matrix')
@@ -261,6 +258,14 @@ shinyUI(
                                          ),
                                          bsCollapsePanel(title="Defined_raw_count_matrix:",
                                                          value="D_row_count_matrix_panel",
+                                                         conditionalPanel(condition="input.data_file_type!='Row11'",
+                                                                          selectizeInput("sample_order", "Select samples:", choices = "", multiple = T),
+                                                                          textOutput("not_cond2_pair"),
+                                                                          tags$head(tags$style("#not_cond2_pair{color: red;
+                                 font-size: 20px;
+            font-style: bold;
+            }"))
+                                                         ),
                                                          fluidRow(
                                                            column(4, downloadButton("download_pair_d_row_count", "Download defined raw count"))
                                                          ),
@@ -444,9 +449,6 @@ shinyUI(
                                                             ), 
                                               placement = "right",options = list(container = "body")),
                    ),
-                   conditionalPanel(condition="input.data_file_type2 != 'RowRecode_cond3'",
-                   selectizeInput("sample_order_cond3", "Select samples:", choices = "", multiple = T)
-                   ),
                    fluidRow(
                      column(6, selectInput("Species2", "Species", species_list, selected = "not selected")),
                      conditionalPanel(condition=c("input.Species2 != 'not selected' && input.Species2 != 'Homo sapiens' &&
@@ -537,6 +539,14 @@ shinyUI(
                                          ),
                                          bsCollapsePanel(title="Defined_raw_count_matrix:",
                                                          value="D_row_count_matrix_panel2",
+                                                         conditionalPanel(condition="input.data_file_type2 != 'RowRecode_cond3'",
+                                                                          selectizeInput("sample_order_cond3", "Select samples:", choices = "", multiple = T),
+                                                                          textOutput("not_cond3_select"),
+                                                                          tags$head(tags$style("#not_cond3_select{color: red;
+                                 font-size: 20px;
+            font-style: bold;
+            }"))
+                                                         ),
                                                          fluidRow(
                                                            column(4, downloadButton("download_cond3_d_row_count", "Download defined raw count"))
                                                          ),
@@ -1243,7 +1253,6 @@ shinyUI(
                                                             img(src="input_format2.png", width = 400,height = 400)), 
                                               placement = "right",options = list(container = "body")),
                    ),
-                   selectizeInput("sample_order_norm", "Select samples:", choices = "", multiple = T),
                    fluidRow(
                      column(6, selectInput("Species3", "Species", species_list, selected = "not selected")),
                      conditionalPanel(condition=c("input.Species3 != 'not selected' && input.Species3 != 'Homo sapiens' &&
@@ -1320,6 +1329,7 @@ shinyUI(
                                          ),
                                          bsCollapsePanel(title="Defined_normalized_count_matrix:",
                                                          value="D_norm_count_matrix_panel",
+                                                         selectizeInput("sample_order_norm", "Select samples:", choices = "", multiple = T),
                                                          fluidRow(
                                                            column(4, downloadButton("download_d_norm_count", "Download defined normalized count"))
                                                          ),

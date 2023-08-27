@@ -296,6 +296,13 @@ shinyServer(function(input, output, session) {
       if(length(unique(collist)) != 2) print("Uploaded count data is in an inappropriate format. Please refer to the RNAseqChef manual for guidance and make the necessary corrections.")
     }
   })
+  output$not_cond2_pair <- renderText({
+    count <- d_row_count_matrix()
+    if(!is.null(count)){
+      collist <- gsub("\\_.+$", "", colnames(count))
+      if(length(unique(collist)) != 2) print(paste0("Your count file contains data for ", length(unique(collist))," conditions. Please select samples to narrow it down to 2 conditions."))
+    }
+  })
   # pair-wise DEG ------------------------------------------------------------------------------
   dds <- reactive({
     count <- d_row_count_matrix()
@@ -4698,6 +4705,13 @@ shinyServer(function(input, output, session) {
     if(!is.null(count)){
       collist <- gsub("\\_.+$", "", colnames(count))
       if(length(unique(collist)) != 3) print("Uploaded count data is in an inappropriate format. Please refer to the RNAseqChef manual for guidance and make the necessary corrections.")
+    }
+  })
+  output$not_cond3_select <- renderText({
+    count <- d_row_count_matrix2()
+    if(!is.null(count)){
+      collist <- gsub("\\_.+$", "", colnames(count))
+      if(length(unique(collist)) != 3) print(paste0("Your count file contains data for ", length(unique(collist))," conditions. Please select samples to narrow it down to 3 conditions."))
     }
   })
   #3conditions DEG_1------------------------
