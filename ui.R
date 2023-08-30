@@ -44,7 +44,7 @@ shinyUI(
                  column(12,
                         br(),
                         h4("Current version (v1.0.8, 2023/8/1)"),
-                        p(paste0("(2023/8/23) fix bug regarding Normalized count analysis. ",
+                        p(paste0("(2023/8/30) fix bug regarding Normalized count analysis. ",
                                  "Add new function 'Correlation analysis' in Normalized count analysis.")),
                         p("(2023/8/14) Improve k-means clustering in Multi DEG."),
                         p("(2023/8/10) Improve k-means clustering in Normalized count analysis."),
