@@ -44,7 +44,8 @@ shinyUI(
                  column(12,
                         br(),
                         h4("Current version (v1.0.8, 2023/8/1)"),
-                        p("(2023/8/23) fix bug regarding Normalized count analysis."),
+                        p(paste0("(2023/8/23) fix bug regarding Normalized count analysis. ",
+                                 "Add new function 'Correlation analysis' in Normalized count analysis.")),
                         p("(2023/8/14) Improve k-means clustering in Multi DEG."),
                         p("(2023/8/10) Improve k-means clustering in Normalized count analysis."),
                         p("(2023/8/8) Add 'Select samples' function in Pair-wise DEG, 3 conditions DEG, and Normalized count analysis."),
@@ -1399,6 +1400,42 @@ shinyUI(
                               ),
                               column(4, downloadButton("download_statisics", "Download table")),
                               dataTableOutput("statistical_table")
+                     ),
+                     tabPanel("Correlation analysis",
+                              fluidRow(
+                                column(4, downloadButton("download_norm_corr", "Download correlation plot"))
+                              ),
+                              fluidRow(
+                                column(4,
+                                       radioButtons('corr_mode','Mode:',
+                                                    c('Screening'="corr_mode1",
+                                                      'Selected pair'="corr_mode2"
+                                                    ),selected = "corr_mode2"),
+                                       selectInput("corr_statistics","Statistics",c("spearman","pearson"),
+                                                   selected = "spearman",multiple = F),
+                                       htmlOutput("GOI_x"),
+                                       htmlOutput("GOI_y"),
+                                       conditionalPanel(condition="input.corr_mode=='corr_mode1'",
+                                       actionButton("corr_start", "Start"),
+                                       tags$head(tags$style("#corr_start{color: red;
+                                 font-size: 20px;
+                                 font-style: bold;
+                                 }"),
+                                                 tags$style("
+          body {
+            padding: 0 !important;
+          }"
+                                                 ))
+                                       ),
+                                       htmlOutput("norm_corr_cutoff")
+                                       ),
+                                column(8, plotOutput("norm_corrplot",brush = "plot1_brush_corr"))
+                              ),
+                              column(4, downloadButton("download_statisics_corrplot", "Download table")),
+                              dataTableOutput("statistical_table_corrplot"),
+                              column(4, htmlOutput("norm_corr_selected_list"),
+                                     downloadButton("download_norm_corr_selected", "Download correlation plot (all selected genes)")),
+                              plotOutput("norm_corrplot_selected")
                      ),
                      tabPanel("k-means clustering",
                               fluidRow(

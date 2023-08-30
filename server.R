@@ -200,8 +200,8 @@ shinyServer(function(input, output, session) {
   })
   observeEvent(pre_d_row_count_matrix(),({
     if(!is.null(pre_d_row_count_matrix())){
-    updateSelectizeInput(session,inputId = "sample_order","Select samples:",
-                         choices = colnames(pre_d_row_count_matrix()),selected = colnames(pre_d_row_count_matrix()))
+      updateSelectizeInput(session,inputId = "sample_order","Select samples:",
+                           choices = colnames(pre_d_row_count_matrix()),selected = colnames(pre_d_row_count_matrix()))
     }
   }))
   observeEvent(d_row_count_matrix(), ({
@@ -212,7 +212,7 @@ shinyServer(function(input, output, session) {
     order <- input$sample_order
     data <- try(count[,order])
     if(length(data) == 1){
-    if(class(data) == "try-error") validate("")
+      if(class(data) == "try-error") validate("")
     }
     return(data)
   })
@@ -938,6 +938,7 @@ shinyServer(function(input, output, session) {
       data$padj[data$padj == 0] <- 10^(-300)
       if(!is.null(label_data)) {
         Color <- c("blue","green","darkgray","red")
+        if(length(data$color[data$log2FoldChange < -log2(input$fc) & data$padj < input$fdr]) == 0) Color <- c("green","darkgray","red")
         for(name in label_data){
           if(gene_type1() != "SYMBOL"){
             if(input$Species != "not selected"){
@@ -952,6 +953,7 @@ shinyServer(function(input, output, session) {
         data$color <- factor(data$color, levels = c("down","GOI","NS", "up"))
       }else{
         Color <- c("blue","darkgray","red")
+        if(length(data$color[data$log2FoldChange < -log2(input$fc) & data$padj < input$fdr]) == 0) Color <- c("darkgray","red")
         data$color <- factor(data$color, levels = c("down","NS", "up"))
       }
       data$minusLog10padj<--log10(data$padj)
@@ -975,7 +977,7 @@ shinyServer(function(input, output, session) {
                    ylim(c(input$yrange)))
       }
       if(length(v) == 1) if(class(v) == "try-error") validate("")
-      v <- v + geom_point(aes(color = color),size = 0.4)  +
+      v <- v + ggrastr::geom_point_rast(aes(color = color),size = 0.4)  +
         theme_bw()+ scale_color_manual(values = Color)+
         theme(legend.position = "top" , legend.title = element_blank(),
               axis.text.x= ggplot2::element_text(size = 12),
@@ -3043,22 +3045,22 @@ shinyServer(function(input, output, session) {
   
   multi_data_z <- reactive({
     if(!is.null(input$topP2)){
-    data <- multi_deg_count()
-    if(is.null(data)){
-      return(NULL)
-    }else{
-      data.z <- genescale(data, axis = 1, method = "Z")
-      data.z <- na.omit(data.z)
-      if(input$Species6 != "not selected") {
-        if(gene_type6() != "SYMBOL"){
-        data.z <- ensembl2symbol(gene_type=gene_type6(),data = data.z, 
-                                 Species=input$Species6,Ortholog=ortholog6(),org = org6())
-        rownames(data.z) <- paste0(data.z$SYMBOL,"\n- ",rownames(data.z))
-        data.z <- data.z[, - which(colnames(data.z) == "SYMBOL")]
+      data <- multi_deg_count()
+      if(is.null(data)){
+        return(NULL)
+      }else{
+        data.z <- genescale(data, axis = 1, method = "Z")
+        data.z <- na.omit(data.z)
+        if(input$Species6 != "not selected") {
+          if(gene_type6() != "SYMBOL"){
+            data.z <- ensembl2symbol(gene_type=gene_type6(),data = data.z, 
+                                     Species=input$Species6,Ortholog=ortholog6(),org = org6())
+            rownames(data.z) <- paste0(data.z$SYMBOL,"\n- ",rownames(data.z))
+            data.z <- data.z[, - which(colnames(data.z) == "SYMBOL")]
+          }
         }
+        return(data.z)
       }
-      return(data.z)
-    }
     }
   })
   pre_multi_kmeans <- reactive({
@@ -3143,11 +3145,11 @@ shinyServer(function(input, output, session) {
   })
   output$kmeans_order_multi <- renderUI({
     if(!is.null(multi_deg_count())){
-    order <- pre_multi_kmeans_order()
-    withProgress(message = "Draw heatmap",{
-      selectInput("kmeans_order_multi","Order of clusters on heatmap",order,
-                  selected = order,multiple = T)
-    })
+      order <- pre_multi_kmeans_order()
+      withProgress(message = "Draw heatmap",{
+        selectInput("kmeans_order_multi","Order of clusters on heatmap",order,
+                    selected = order,multiple = T)
+      })
     }
   })
   
@@ -3193,15 +3195,15 @@ shinyServer(function(input, output, session) {
   
   output$multi_kmeans_heatmap <- renderPlot({
     if(!is.null(multi_deg_count())){
-    if(is.null(input$multi_kmeans_count_table_rows_selected)) ht <- multi_kmeans() else ht <- multi_kmeans_GOI()
-    if(is.null(ht)){
-      return(NULL)
-    }else{
-      withProgress(message = "Draw heatmap",{
-        set.seed(123)
-      draw(ht)
-      })
-    }
+      if(is.null(input$multi_kmeans_count_table_rows_selected)) ht <- multi_kmeans() else ht <- multi_kmeans_GOI()
+      if(is.null(ht)){
+        return(NULL)
+      }else{
+        withProgress(message = "Draw heatmap",{
+          set.seed(123)
+          draw(ht)
+        })
+      }
     }
   })
   
@@ -3238,13 +3240,13 @@ shinyServer(function(input, output, session) {
         table<-na.omit(table)
         if (input$multi_data_file_type == "Row1"){
           p <- try(degPlotCluster(table, time = "condition", process = TRUE)+ 
-            scale_color_brewer(palette = "Set1", direction=-1)+
-            theme_bw(base_size = 15)+ theme(legend.position = "none")+ theme(axis.text.x = element_text(angle = 90, hjust = 1)))
+                     scale_color_brewer(palette = "Set1", direction=-1)+
+                     theme_bw(base_size = 15)+ theme(legend.position = "none")+ theme(axis.text.x = element_text(angle = 90, hjust = 1)))
         }
         else{
           p <- try(degPlotCluster(table, time = "condition", color=colnames(meta)[2], process = TRUE)+ 
-            scale_color_brewer(palette = "Set1", direction=-1)+
-            theme_bw(base_size = 15)+ theme(legend.position = "top")+ theme(axis.text.x = element_text(angle = 90, hjust = 1)))
+                     scale_color_brewer(palette = "Set1", direction=-1)+
+                     theme_bw(base_size = 15)+ theme(legend.position = "top")+ theme(axis.text.x = element_text(angle = 90, hjust = 1)))
         }
         if(length(p) == 1){
           if(class(p) == "try-error") validate(p)
@@ -4304,7 +4306,7 @@ shinyServer(function(input, output, session) {
     order <- input$sample_order_cond3
     data <- try(count[,order])
     if(length(data) == 1){
-    if(class(data) == "try-error") validate("")
+      if(class(data) == "try-error") validate("")
     }
     return(data)
   })
@@ -5512,7 +5514,7 @@ shinyServer(function(input, output, session) {
     order <- input$sample_order_norm
     data <- try(count[,order])
     if(length(data) == 1){
-    if(class(data) == "try-error") validate("")
+      if(class(data) == "try-error") validate("")
     }
     return(data)
   })
@@ -5520,7 +5522,7 @@ shinyServer(function(input, output, session) {
     withProgress(message = "Importing normalized count matrix, please wait",{
       if (input$data_file_type3 == "Row5"){
         tmp <- input$file7$datapath
-        if(is.null(input$file7) && input$goButton3 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/example4.txt"
+        if(is.null(input$file7) && input$goButton3 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/example8.txt"
         return(read_df(tmp = tmp))
       }else{
         tmp <- input$file8$datapath
@@ -5611,37 +5613,18 @@ shinyServer(function(input, output, session) {
     }
   })
   
-  d_norm_count_matrix2 <- reactive({
-    data <- d_norm_count_matrix()
-    if(is.null(data)){
-      return(NULL)
-    }else{
-      if(input$Species3 != "not selected"){
-        if(gene_type3() != "SYMBOL"){
-          gene_IDs <- gene_ID_norm()
-          data <- merge(data, gene_IDs, by=0)
-          data <- data[, - which(colnames(data) == "Row.names.y")]
-          rownames(data) <- data[,1] 
-          data <- data[,-1]
-        }
-      }
-      return(data)
-    }
-  })
   
   gene_ID_norm <- reactive({
-    res <- d_norm_count_matrix()
-    if(is.null(res)){
-      return(NULL)
-    }else{
       if(input$Species3 != "not selected"){
         if(gene_type3() != "SYMBOL"){
+          res <- d_norm_count_matrix()
+          if(!is.null(res)){
           gene_IDs <- ensembl2symbol(gene_type=gene_type3(),data = res,Species=input$Species3,
                                      Ortholog=ortholog3(),org = org3(),merge=FALSE)
           return(gene_IDs)
+          }
         }
       }else{ return(NULL) }
-    }
   })
   
   observeEvent(input$goButton3,({
@@ -5667,7 +5650,7 @@ shinyServer(function(input, output, session) {
     norm_metadata()
   })
   output$d_norm_count <- DT::renderDataTable({
-    d_norm_count_matrix2()
+    d_norm_count_matrix()
   })
   output$Gene_list <- DT::renderDataTable({
     gene_list()
@@ -5679,7 +5662,7 @@ shinyServer(function(input, output, session) {
       }else{
         paste(gsub("\\..+$", "", input$file8), paste0(gsub("\\..+$", "", input$file9),".txt"), sep ="-")
       }},
-    content = function(file){write.table(d_norm_count_matrix2(), file, row.names = T, col.names=NA, sep = "\t", quote = F)}
+    content = function(file){write.table(d_norm_count_matrix(), file, row.names = T, col.names=NA, sep = "\t", quote = F)}
   )
   
   download_norm_dir <-reactive({
@@ -5818,8 +5801,7 @@ shinyServer(function(input, output, session) {
   
   d_norm_count_cutoff_uniqueID <- reactive({
     count <- d_norm_count_matrix_cutofff()
-    if(input$Species3 != "not selected"){
-      if(gene_type3() != "SYMBOL"){
+      if(!is.null(gene_ID_norm())){
         gene_IDs  <- gene_ID_norm()
         data2 <- merge(count, gene_IDs, by= 0)
         rownames(data2) <- data2[,1]
@@ -5827,7 +5809,6 @@ shinyServer(function(input, output, session) {
         data2$Unique_ID <- paste(data2$SYMBOL,data2$Row.names, sep = "\n- ")
         count <- data2[,-1]
       }
-    }
     return(count)
   })
   GOI_list3 <- reactive({
@@ -5844,24 +5825,6 @@ shinyServer(function(input, output, session) {
           GOI <- count$Unique_ID
         }else GOI <- rownames(count)
       }else{
-        GOI_list3 <- reactive({
-          count <- d_norm_count_cutoff_uniqueID()
-          if(is.null(count)){
-            return(NULL)
-          }else{
-            if(gene_type3() != "SYMBOL"){
-              if(input$Species3 != "not selected"){
-                GOI <- count$Unique_ID
-              }else GOI <- rownames(count)
-            }else{
-              if(input$Species3 != "not selected"){
-                GOI <- rownames(count)
-              }else GOI <- rownames(count)
-            }
-            return(GOI)
-          }
-        })
-        
         if(input$Species3 != "not selected"){
           GOI <- rownames(count)
         }else GOI <- rownames(count)
@@ -5871,7 +5834,6 @@ shinyServer(function(input, output, session) {
   })
   preGOI_list3 <- reactive({
     data <- d_norm_count_cutoff_uniqueID()
-    print(head(data))
     if(length(input$selectFC_normGOI) == 2){
       if(dim(data)[1] != 0){
         cond1 <- input$selectFC_normGOI[1]
@@ -6107,6 +6069,454 @@ shinyServer(function(input, output, session) {
       })
     }
   )
+  #norm corrplot---------------------
+  updateCounter_corr <- reactiveValues(i = 0)
+  
+  observe({
+    input$corr_start
+    isolate({
+      updateCounter_corr$i <- updateCounter_corr$i + 1
+    })
+  })
+  
+  
+  #Restart
+  observeEvent(input$GOI_x, {
+    isolate(updateCounter_corr$i == 0)
+    updateCounter_corr <<- reactiveValues(i = 0)
+  }) 
+  observeEvent(input$corr_statistics, {
+    isolate(updateCounter_corr$i == 0)
+    updateCounter_corr <<- reactiveValues(i = 0)
+  }) 
+  GOI_list3_corr <- reactive({
+    count <- d_norm_count_cutoff_uniqueID()
+    if(is.null(count)){
+      return(NULL)
+    }else{
+      if(gene_type3() != "SYMBOL"){
+        if(input$Species3 != "not selected"){
+          GOI <- count$Unique_ID
+        }else GOI <- rownames(count)
+      }else{
+        if(input$Species3 != "not selected"){
+          GOI <- rownames(count)
+        }else GOI <- rownames(count)
+      }
+      return(GOI)
+    }
+  })
+  output$GOI_x <- renderUI({
+    if(is.null(d_norm_count_matrix_cutofff())){
+      return(NULL)
+    }else{
+      withProgress(message = "Preparing GOI list (about 10 sec)",{
+        selectizeInput("GOI_x", "Select GOI", c("",GOI_list3_corr()),
+                       selected="",multiple = F)
+      })
+    }
+  })
+  output$GOI_y <- renderUI({
+    if(is.null(d_norm_count_matrix_cutofff())){
+      return(NULL)
+    }else{
+      if(input$corr_mode == "corr_mode2"){
+        withProgress(message = "Preparing GOI list (about 10 sec)",{
+        selectizeInput("GOI_y", "Select GOI (y_axis)", c("",GOI_list3_corr()),multiple = F)
+        })
+      }
+    }
+  })
+  output$norm_corr_cutoff <- renderUI({
+    if(!is.null(pre_pre_norm_GOI_corrplot())){
+    radioButtons("norm_corr_cutoff", "cut-off (padj or pval)", c('padj'="padj",'pval'="pval"), selected = "padj")
+    }
+  })
+  norm_GOIcount_corr <- reactive({
+    if(!is.null(input$GOI_x)){
+      if(input$GOI_x != ""){
+        count <- d_norm_count_cutoff_uniqueID()
+    if(input$corr_mode == "corr_mode2"){
+      if(!is.null(input$GOI_y)){
+        if(gene_type3() != "SYMBOL"){
+          if(input$Species3 != "not selected"){
+            Unique_ID <- unique(c(input$GOI_x,input$GOI_y))
+            label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
+            data <- merge(count, label_data, by="Unique_ID")
+            rownames(data) <- data$Unique_ID
+            data <- data[, - which(colnames(data) == "SYMBOL")]
+            data <- data[, - which(colnames(data) == "Unique_ID")]
+          }else{
+            Row.names <- unique(c(input$GOI_x,input$GOI_y))
+            count$Row.names <- rownames(count)
+            label_data <- as.data.frame(Row.names, row.names = Row.names)
+            data <- merge(count, label_data, by="Row.names")
+            rownames(data) <- data$Row.names
+            data <- data[, - which(colnames(data) == "Row.names")]
+          }
+        }else{
+          Row.names <- unique(c(input$GOI_x,input$GOI_y))
+          count$Row.names <- rownames(count)
+          label_data <- as.data.frame(Row.names, row.names = Row.names)
+          data <- merge(count, label_data, by="Row.names")
+          rownames(data) <- data$Row.names
+          data <- data[, - which(colnames(data) == "Row.names")]
+        }
+      }
+    }else{
+      data <- count
+      if(gene_type3() != "SYMBOL"){
+        if(input$Species3 != "not selected"){
+          rownames(data) <- data$Unique_ID
+          data <- data[, - which(colnames(data) == "SYMBOL")]
+          data <- data[, - which(colnames(data) == "Unique_ID")]
+        }
+      }
+    }
+    return(data)
+      }
+    }
+  })
+  
+  norm_GOI_corrplot <- reactive({
+    data <- norm_GOIcount_corr()
+    if(is.null(data) || is.null(input$GOI_x)){
+      p <- NULL
+    }else{
+      if(input$corr_mode == "corr_mode2"){
+      }else{
+        if(!is.null(pre_norm_GOI_corrplot())){
+          df2 <- pre_norm_GOI_corrplot()
+          if(!is.null(input$statistical_table_corrplot_rows_selected)){
+            if(dim(brush_info_corr())[1]!=0){
+              label_data <- brush_info_corr()[input$statistical_table_corrplot_rows_selected,]$prey
+            }else label_data <- df2[input$statistical_table_corrplot_rows_selected,]$prey
+          }else label_data <- NULL
+          if(!is.null(label_data)) {
+            Color <- c("blue","green","darkgray","red")
+            if(length(df2$prey[df2$color == "negative_correlation"]) == 0) Color <- c("green","darkgray","red")
+            for(name in label_data){
+              df2$color[df2$prey == name] <- "GOI"
+            }
+            df2$color <- factor(df2$color, levels = c("negative_correlation","GOI","NS", "positive_correlation"))
+          }else{
+            Color <- c("blue","darkgray","red")
+            df2$color <- factor(df2$color, levels = c("negative_correlation","NS", "positive_correlation"))
+            if(length(df2$prey[df2$color == "negative_correlation"]) == 0) Color <- c("darkgray","red")
+          }
+          if(input$corr_statistics == "spearman") ylab <- paste0("Spearman's correlation") else ylab <- paste0("Pearson's correlation")
+          p <- ggplot(df2,aes(x=rank,y=corr_score,col=color))+
+            ggrastr::geom_point_rast(aes(color = color),size = 0.4)  +
+            theme_bw()+ scale_color_manual(values = Color)+
+            theme(legend.position = "top" , legend.title = element_blank(),
+                  axis.text.x= ggplot2::element_text(size = 12),
+                  axis.text.y= ggplot2::element_text(size = 12),
+                  text = ggplot2::element_text(size = 12),
+                  title = ggplot2::element_text(size = 12))  + ylab(ylab)
+          if(!is.null(label_data)) {
+            p <- p + geom_point(data=dplyr::filter(df2, color == "GOI"),color="green", size=1)
+            p <- p + ggrepel::geom_label_repel(data = dplyr::filter(df2, color == "GOI"), mapping = aes(label = prey),
+                                               alpha = 0.6,label.size = NA, color = "black",segment.color = "black",
+                                               box.padding = unit(0.35, "lines"), point.padding = unit(0.3,"lines"), force = 1, fontface = "bold.italic")+ 
+              guides(
+                fill = guide_legend(
+                  override.aes = aes(label = "")
+                )
+              )
+          }
+        }
+      }
+    }
+    return(p)
+  })
+  norm_GOI_corrplot_pair <- reactive({
+    data <- norm_GOIcount_corr()
+    if(is.null(data) || is.null(input$GOI_x)){
+      p <- NULL
+    }else{
+      if(input$corr_mode == "corr_mode2"){
+        data <- as.data.frame(t(data))
+        label <- gsub("\\_.+$", "", rownames(data))
+        data$label <- label
+        p <- ggplot(data, aes(x=log10(.data[[input$GOI_x]]+1),y=log10(.data[[input$GOI_y]]+1), col=label)) +
+          geom_smooth(method=lm, se=FALSE, color='#2C3E50',linetype="dashed",size=0.5)
+        p <- p +
+          geom_point()+ 
+          theme_bw()+ 
+          theme(legend.position = "top" , legend.title = element_blank(),
+                axis.text.x= ggplot2::element_text(size = 12),
+                axis.text.y= ggplot2::element_text(size = 12),
+                text = ggplot2::element_text(size = 15),
+                title = ggplot2::element_text(size = 15))
+      }
+    }
+    return(p)
+  })
+  pre_pre_norm_GOI_corrplot <- reactive({
+    data <- norm_GOIcount_corr()
+    if(is.null(data) || input$corr_start == 0  || updateCounter_corr$i == 0){
+      df2 <- NULL
+    }else{
+      withProgress(message = "Correlation analysis takes a few minutes",{
+          df2 <- data.frame(matrix(rep(NA, 10), nrow=1))[numeric(0), ]
+          print(dim(data))
+          for(i in rownames(data)){
+            corr<-suppressWarnings(cor.test(x=as.numeric(data[input$GOI_x,]),y=as.numeric(data[i,]),method="spearman"))
+            df <- data.frame(y_axis = i, x_axis = input$GOI_x, statistics=corr$statistic,corr_score = corr$estimate,
+                             pvalue = corr$p.value,method = input$corr_statistics)
+            df2 <- rbind(df2,df)
+          }
+          print(head(df2))
+          padj <- p.adjust(df2$pvalue,method="BH")
+          df2$padj <- padj
+          colnames(df2) <- c("prey","bait","statistics","corr_score","pvalue","method","padj")
+          df2 <- na.omit(df2)
+          df2 <- df2%>% dplyr::arrange(-corr_score, padj) %>%
+            dplyr::mutate(rank = row_number())
+          rownames(df2) <- df2$rank
+      })
+    }
+    return(df2)
+  })
+  pre_norm_GOI_corrplot   <- reactive({
+    df2 <- pre_pre_norm_GOI_corrplot()
+    if(!is.null(df2) && !is.null(input$norm_corr_cutoff)){
+    df2$color <- "NS"
+    if(input$norm_corr_cutoff == "padj"){
+      df2$color[df2$padj < 0.05 & df2$corr_score > 0] <- "positive_correlation"
+      df2$color[df2$padj < 0.05 & df2$corr_score < 0] <- "negative_correlation"
+    }else{
+      df2$color[df2$pvalue < 0.05 & df2$corr_score > 0] <- "positive_correlation"
+      df2$color[df2$pvalue < 0.05 & df2$corr_score < 0] <- "negative_correlation"
+    }
+    df2 <- df2 %>% dplyr::select(prey,color,everything())
+    return(df2)
+    }
+  })
+  norm_GOI_corrplot_selected <- reactive({
+    data <- norm_GOIcount_corr()
+    if(is.null(data) || is.null(input$GOI_x) || is.null(input$norm_corr_selected_list) ||
+       is.null(input$statistical_table_corrplot_rows_selected)){
+      p <- NULL
+    }else{
+      if(input$corr_mode == "corr_mode1"){
+        GOI_y <- input$norm_corr_selected_list
+        data <- as.data.frame(t(data))
+        label <- gsub("\\_.+$", "", rownames(data))
+        data$label <- label
+        p <- ggplot(data, aes(x=log10(.data[[input$GOI_x]]+1),y=log10(.data[[GOI_y]]+1), col=label)) +
+          geom_smooth(method=lm, se=FALSE, color='#2C3E50',linetype="dashed",size=0.5)
+        p <- p +
+          geom_point()+ 
+          theme_bw()+ 
+          theme(legend.position = "top" , legend.title = element_blank(),
+                axis.text.x= ggplot2::element_text(size = 12),
+                axis.text.y= ggplot2::element_text(size = 12),
+                text = ggplot2::element_text(size = 15),
+                title = ggplot2::element_text(size = 15))
+      }
+    }
+    return(p)
+  })
+  norm_GOI_corrplot_selected_for_download <- reactive({
+    data <- norm_GOIcount_corr()
+    if(is.null(data) || is.null(input$GOI_x) || is.null(input$norm_corr_selected_list) ||
+       is.null(input$statistical_table_corrplot_rows_selected)){
+      df <- NULL
+    }else{
+      if(input$corr_mode == "corr_mode1"){
+        df2 <- pre_norm_GOI_corrplot()
+        if(dim(brush_info_corr())[1]!=0){
+          GOI_y <- brush_info_corr()[input$statistical_table_corrplot_rows_selected,]$prey
+        }else GOI_y <- df2[input$statistical_table_corrplot_rows_selected,]$prey
+        data <- as.data.frame(t(data))
+        label <- gsub("\\_.+$", "", rownames(data))
+        data$label <- label
+        df <- list()
+        for(y in GOI_y){
+          p <- ggplot(data, aes(x=log10(.data[[input$GOI_x]]+1),y=log10(.data[[y]]+1), col=label)) +
+            geom_smooth(method=lm, se=FALSE, color='#2C3E50',linetype="dashed",size=0.5)
+          p <- p +
+            geom_point()+ 
+            theme_bw()+ 
+            theme(legend.position = "top" , legend.title = element_blank(),
+                  axis.text.x= ggplot2::element_text(size = 12),
+                  axis.text.y= ggplot2::element_text(size = 12),
+                  text = ggplot2::element_text(size = 15),
+                  title = ggplot2::element_text(size = 15)) 
+          df[[y]] <- p
+        }
+      }
+    }
+    return(df)
+  })
+  
+  brush_info_corr <- reactive({
+    data <- as.data.frame(pre_norm_GOI_corrplot())
+    if(dim(data)[1] != 0) return(brushedPoints(data, input$plot1_brush_corr,xvar = "rank",yvar="corr_score"))
+  })
+  
+  output$norm_corrplot <- renderPlot({
+    if(is.null(d_norm_count_matrix_cutofff())){
+      return(NULL)
+    }else{
+      if(input$corr_mode == "corr_mode2"){
+        if(!is.null(norm_GOI_corrplot_pair()) && !is.null(input$GOI_x) && !is.null(input$GOI_y) &&
+           input$GOI_x != "" && input$GOI_y != ""){
+          norm_GOI_corrplot_pair()
+        }
+      }else{
+        if(!is.null(norm_GOI_corrplot()) && !is.null(input$GOI_x) && input$GOI_x != ""){
+          norm_GOI_corrplot()
+        }
+        
+      }
+    }
+  })
+  output$norm_corrplot_selected <- renderPlot({
+    if(is.null(d_norm_count_matrix_cutofff())){
+      return(NULL)
+    }else{
+      if(input$corr_mode == "corr_mode1"){
+        if(!is.null(norm_GOI_corrplot_selected()) && 
+           !is.null(input$GOI_x) && input$GOI_x != ""){
+          norm_GOI_corrplot_selected()
+        }
+      }
+    }
+  })
+  corr_table <- reactive({
+    data <- norm_GOIcount_corr()
+    if(input$corr_mode == "corr_mode2"){
+    }else{
+      if(!is.null(pre_norm_GOI_corrplot())){
+      if(dim(brush_info_corr())[1] == 0){
+        df <- pre_norm_GOI_corrplot()
+      }else{
+        df <- brush_info_corr()
+      }
+        return(df)
+      }
+    }
+  })
+  corr_table_pair <- reactive({
+    data <- norm_GOIcount_corr()
+    if(input$corr_mode == "corr_mode2"){
+      if(is.null(data) || is.null(input$GOI_x) || is.null(input$GOI_y)){
+        corr <- NULL
+      }else{
+        corr <- cor.test(x=as.numeric(data[input$GOI_x,]),y=as.numeric(data[input$GOI_y,]),method=input$corr_statistics)
+        df <- data.frame(x_axis = input$GOI_x, y_axis = input$GOI_y, statistics=corr$statistic,corr_score = corr$estimate,
+                         pvalue = corr$p.value, method = corr$method,alternative=corr$alternative)
+        return(df)
+      }
+    }
+  })
+  output$statistical_table_corrplot <- renderDataTable({
+    if(input$corr_mode == "corr_mode2"){
+      if(!is.null(norm_GOI_corrplot_pair()) && !is.null(input$GOI_x) && !is.null(input$GOI_y) &&
+         input$GOI_x != "" && input$GOI_y != ""){
+        corr_table_pair()
+      }
+    }else{
+      if(!is.null(corr_table()) && !is.null(input$GOI_x) && input$GOI_x != ""){
+        corr_table()
+      }
+    }
+  })
+  corr_pair <- reactive({
+    if(input$corr_mode == "corr_mode2"){
+      if(!is.null(norm_GOI_corrplot_pair()) && !is.null(input$GOI_x) && !is.null(input$GOI_y) &&
+         input$GOI_x != "" && input$GOI_y != ""){
+        return(paste0(input$GOI_x,"-",input$GOI_y))
+      }
+    }else{
+      if(!is.null(corr_table()) && !is.null(input$GOI_x) && 
+         input$corr_start > 0 && updateCounter_corr$i > 0 && input$GOI_x != ""){
+        return(paste0(input$GOI_x,"-screen"))
+      }
+    }
+  })
+
+  output$norm_corr_selected_list <- renderUI({
+    if(input$corr_mode == "corr_mode1"){
+      if(!is.null(corr_table()) && !is.null(input$GOI_x) && 
+         !is.null(input$statistical_table_corrplot_rows_selected) && input$GOI_x != ""){
+        df2 <- pre_norm_GOI_corrplot()
+        if(dim(brush_info_corr())[1]!=0){
+          GOI_y <- brush_info_corr()[input$statistical_table_corrplot_rows_selected,]$prey
+        }else GOI_y <- df2[input$statistical_table_corrplot_rows_selected,]$prey
+        selectInput("norm_corr_selected_list","select GOI", GOI_y, multiple = F)
+      }
+    }
+  })
+  output$download_norm_corr = downloadHandler(
+    filename = function(){
+      paste0(download_norm_dir(), "correlation_plot_",corr_pair(),".pdf")
+    },
+    content = function(file) {
+      withProgress(message = "Preparing download",{
+        if(input$norm_pdf_height == 0){
+          pdf_height <- 5
+        }else pdf_height <- input$norm_pdf_height
+        if(input$norm_pdf_width == 0){
+          pdf_width <- 5
+        }else pdf_width <- input$norm_pdf_width
+        if(input$corr_mode == "corr_mode2"){
+          p <- norm_GOI_corrplot_pair()
+        }else{
+          p <- norm_GOI_corrplot()
+        }
+        pdf(file, height = pdf_height, width = pdf_width)
+        print(p)
+        dev.off()
+        incProgress(1)
+      })
+    }
+  )
+  output$download_norm_corr_selected = downloadHandler(
+    filename = function(){
+      paste0(download_norm_dir(), "correlation_plot_",input$GOI_x,"-selected.pdf")
+    },
+    content = function(file) {
+      withProgress(message = "Preparing download",{
+        if(input$norm_pdf_height == 0){
+          pdf_height <- 5
+        }else pdf_height <- input$norm_pdf_height
+        if(input$norm_pdf_width == 0){
+          pdf_width <- 5
+        }else pdf_width <- input$norm_pdf_width
+          p <- norm_GOI_corrplot_selected_for_download()
+          print(names(p))
+          df2 <- pre_norm_GOI_corrplot()
+          if(dim(brush_info_corr())[1]!=0){
+            GOI_y <- brush_info_corr()[input$statistical_table_corrplot_rows_selected,]$prey
+          }else GOI_y <- df2[input$statistical_table_corrplot_rows_selected,]$prey
+        pdf(file, height = pdf_height, width = pdf_width)
+        for(y in GOI_y){
+          print(p[[y]]) 
+        }
+        dev.off()
+        incProgress(1)
+      })
+    }
+  )
+  output$download_statisics_corrplot = downloadHandler(
+    filename = function(){
+      paste0(download_norm_dir(), "correlation_",corr_pair(),".txt")
+    },
+    content = function(file) {
+      withProgress(message = "Preparing download",{
+        if(input$corr_mode == "corr_mode2"){
+          table <- corr_table_pair()
+        }else{
+          table <- corr_table()
+        }
+        write.table(table,file, row.names = F, col.names=TRUE, sep = "\t", quote = F)
+        incProgress(1)
+      })
+    }
+  )
   #norm kmeans------------------------------------------------------
   updateCounter_kmeans <- reactiveValues(i = 0)
   
@@ -6119,7 +6529,11 @@ shinyServer(function(input, output, session) {
   
   
   #Restart
-  defaultvalues_kmeans <- observeEvent(pre_norm_kmeans(), {
+  observeEvent(input$norm_kmeans_number, {
+    isolate(updateCounter_kmeans$i == 0)
+    updateCounter_kmeans <<- reactiveValues(i = 0)
+  }) 
+  observeEvent(input$kmeans_cv, {
     isolate(updateCounter_kmeans$i == 0)
     updateCounter_kmeans <<- reactiveValues(i = 0)
   }) 
@@ -6141,12 +6555,10 @@ shinyServer(function(input, output, session) {
   })
   d_norm_count_matrix_cutofff_fc <- reactive({
     data <- d_norm_count_cutoff_uniqueID()
-    if(input$Species3 != "not selected"){
-      if(gene_type3() != "SYMBOL"){
+    if(!is.null(gene_ID_norm())){
         rownames(data) <- data$Unique_ID
         data <- data[, - which(colnames(data) == "SYMBOL")]
         data <- data[, - which(colnames(data) == "Unique_ID")]
-      }
     }
     if(length(input$selectFC_norm) == 2){
       if(dim(data)[1] != 0){
@@ -6225,19 +6637,19 @@ shinyServer(function(input, output, session) {
     if(is.null(cl) || length(unique(cl)) == 1){
       return(NULL)
     }else{
-        cl <- data.frame(cl)
-        colnames(cl)[1] <- "cluster" 
-        data2 <- merge(cl,data.z, by=0)
-        rownames(data2)<-data2[,1]
-        data2 <- data2[,-1]
-        df <- data.frame(matrix(rep(NA, 1), nrow=1))[numeric(0), ]
-        for(i in 1:input$norm_kmeans_number){
-          data3 <- data2 %>% dplyr::filter(cluster == i)
-          data4 <- apply(data3[,-1],2,sum)
-          df <- rbind(df,data4)
-        }
-        colnames(df) <- colnames(data2[,-1])
-        order <- hclust(dist(df), "average")$order
+      cl <- data.frame(cl)
+      colnames(cl)[1] <- "cluster" 
+      data2 <- merge(cl,data.z, by=0)
+      rownames(data2)<-data2[,1]
+      data2 <- data2[,-1]
+      df <- data.frame(matrix(rep(NA, 1), nrow=1))[numeric(0), ]
+      for(i in 1:input$norm_kmeans_number){
+        data3 <- data2 %>% dplyr::filter(cluster == i)
+        data4 <- apply(data3[,-1],2,sum)
+        df <- rbind(df,data4)
+      }
+      colnames(df) <- colnames(data2[,-1])
+      order <- hclust(dist(df), "average")$order
       return(order)
     }
   })
@@ -6312,9 +6724,9 @@ shinyServer(function(input, output, session) {
         }else{
           out <- data.frame(matrix(rep(NA, 2), nrow=1))[numeric(0), ]
           for (i in input$kmeans_order){
-              clu <- t(t(row.names(data.z[suppressWarnings(row_order(ht)[[i]]),])))
-              clu <- cbind(clu, paste("cluster", i, sep=""))
-              out <- rbind(out, clu)
+            clu <- t(t(row.names(data.z[suppressWarnings(row_order(ht)[[i]]),])))
+            clu <- cbind(clu, paste("cluster", i, sep=""))
+            out <- rbind(out, clu)
           }
           colnames(out) <- c("GeneID", "Cluster")
           out <- as.data.frame(out)
@@ -6333,8 +6745,7 @@ shinyServer(function(input, output, session) {
   })
   norm_kmeans_cluster <- reactive({
     count <- pre_norm_kmeans_cluster()
-    if(input$Species3 != "not selected"){
-      if(gene_type3() != "SYMBOL"){
+    if(!is.null(gene_ID_norm())){
         gene_IDs  <- gene_ID_norm()
         data2 <- merge(count, gene_IDs, by= 0)
         rownames(data2) <- data2[,1]
@@ -6342,7 +6753,6 @@ shinyServer(function(input, output, session) {
         data2$Unique_ID <- paste(data2$SYMBOL,data2$Row.names, sep = "\n- ")
         count <- data2[,-1]
       }
-    }
     return(count)
   })
   
@@ -7621,6 +8031,7 @@ shinyServer(function(input, output, session) {
       data$padj[data$padj == 0] <- 10^(-300)
       if(!is.null(label_data)) {
         Color <- c("blue","green","darkgray","red")
+        if(length(data$color[data$log2FoldChange < -log2(input$fc4) & data$padj < input$fdr4]) == 0) Color <- c("green","darkgray","red")
         for(name in label_data){
           if(gene_type5() != "SYMBOL"){
             if(input$Species5 != "not selected"){
@@ -7635,10 +8046,11 @@ shinyServer(function(input, output, session) {
         data$color <- factor(data$color, levels = c("down","GOI","NS", "up"))
       }else{
         Color <- c("blue","darkgray","red")
+        if(length(data$color[data$log2FoldChange < -log2(input$fc4) & data$padj < input$fdr4]) == 0) Color <- c("darkgray","red")
         data$color <- factor(data$color, levels = c("down","NS", "up"))
       }
       data$minusLog10padj<--log10(data$padj)
-      v <- ggplot(data, aes(x = log2FoldChange, y = minusLog10padj)) + geom_point(aes(color = color),size = 0.4)
+      v <- ggplot(data, aes(x = log2FoldChange, y = minusLog10padj)) + ggrastr::geom_point_rast(aes(color = color),size = 0.4)
       v <- v  + geom_vline(xintercept = c(-log2(input$fc4), log2(input$fc4)), linetype = c(2, 2), color = c("black", "black")) +
         geom_hline(yintercept = c(-log10(input$fdr4)), linetype = 2, color = c("black"))
       v <- v +theme_bw()+ scale_color_manual(values = Color)+

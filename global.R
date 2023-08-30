@@ -58,6 +58,7 @@ library(colorspace)
 library(pdftools)
 library(magick)
 library(clue)
+library(ggrastr) ##devtools::install_github('VPetukhov/ggrastr')
 options(repos = BiocManager::repositories())
 file.copy("Rmd/pair_report.Rmd",file.path(tempdir(),"pair_report.Rmd"), overwrite = TRUE)
 file.copy("Rmd/pair_batch_report.Rmd",file.path(tempdir(),"pair_batch_report.Rmd"), overwrite = TRUE)
@@ -166,15 +167,16 @@ read_gene_list <- function(tmp){
 anno_rep <- function(row){
   if(!str_detect(colnames(row)[1], "_1")){
     colnames(row) <- gsub("\\.[0-9]+$", "", colnames(row))
-    total <- length(colnames(row))
+    name_list <- colnames(row) %>% sort()
+    row <- row %>% dplyr::select(all_of(name_list)) 
     unique_col <- unique(colnames(row))
-    cond1 <- length(which(colnames(row) == unique_col[1]))
-    cond2 <- length(which(colnames(row) == unique_col[2]))
-    for(i in 1:cond1){
-      colnames(row)[i] <- paste0(colnames(row)[i], "_", i)
-    }
-    for(i in 1:cond2){
-      colnames(row)[(cond1 + i)] <- paste0(colnames(row)[(cond1 + i)], "_", i)
+    total <- 0
+    for(i in 1:length(unique_col)){
+      cond <- length(which(colnames(row) == unique_col[i]))
+      for(k in 1:cond){
+        colnames(row)[total + k] <- paste0(colnames(row)[total + k], "_", k)
+      }
+      total <- total + cond
     }
   }
   return(row)
@@ -184,14 +186,22 @@ anno_rep_meta <- function(meta){
     return(NULL)
   }else{
   if(!str_detect(meta[1,1], "_1")){
-    total <- length(meta[,1])
-    cond1 <- length(which(meta[,1] == unique(meta[,1])[1]))
-    cond2 <- length(which(meta[,1] == unique(meta[,1])[2]))
-    for(i in 1:cond1){
-      meta[i,1] <- paste0(meta[i,1], "_", i)
+    meta[,1] <- gsub("\\.[0-9]+$", "", meta[,1])
+    if(colnames(meta)[1] != "characteristics"){
+    if(length(grep("characteristics", colnames(meta))) != 0){
+      meta <- meta[, - which(colnames(meta) == "characteristics")]
     }
-    for(i in 1:cond2){
-      meta[(cond1 + i),1] <- paste0(meta[(cond1 + i),1], "_", i)
+    }
+    colnames(meta)[1] <- "characteristics"
+    meta <- meta %>% dplyr::arrange(characteristics)
+    unique_col <- unique(meta[,1])
+    total <- 0
+    for(i in 1:length(unique_col)){
+      cond <- length(which(meta[,1] == unique_col[i]))
+      for(k in 1:cond){
+        meta[total + k,1] <- paste0(meta[total + k,1], "_", k)
+      }
+      total <- total + cond
     }
   }
   return(meta)
