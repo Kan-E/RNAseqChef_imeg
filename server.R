@@ -5801,6 +5801,8 @@ shinyServer(function(input, output, session) {
   
   d_norm_count_cutoff_uniqueID <- reactive({
     count <- d_norm_count_matrix_cutofff()
+    if(!is.null(count)){
+    count <- dplyr::filter(count, apply(count,1,mean) > input$basemean3)
       if(!is.null(gene_ID_norm())){
         gene_IDs  <- gene_ID_norm()
         data2 <- merge(count, gene_IDs, by= 0)
@@ -5810,6 +5812,7 @@ shinyServer(function(input, output, session) {
         count <- data2[,-1]
       }
     return(count)
+    }
   })
   GOI_list3 <- reactive({
     count <- preGOI_list3()
@@ -6534,6 +6537,18 @@ shinyServer(function(input, output, session) {
     updateCounter_kmeans <<- reactiveValues(i = 0)
   }) 
   observeEvent(input$kmeans_cv, {
+    isolate(updateCounter_kmeans$i == 0)
+    updateCounter_kmeans <<- reactiveValues(i = 0)
+  }) 
+  observeEvent(input$selectFC_norm, {
+    isolate(updateCounter_kmeans$i == 0)
+    updateCounter_kmeans <<- reactiveValues(i = 0)
+  }) 
+  observeEvent(input$fc3, {
+    isolate(updateCounter_kmeans$i == 0)
+    updateCounter_kmeans <<- reactiveValues(i = 0)
+  }) 
+  observeEvent(input$basemean3, {
     isolate(updateCounter_kmeans$i == 0)
     updateCounter_kmeans <<- reactiveValues(i = 0)
   }) 
