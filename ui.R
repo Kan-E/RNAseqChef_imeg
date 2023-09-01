@@ -1296,7 +1296,8 @@ shinyUI(
                    bsPopover("norm_pdf_icon", "Output plot size setting for pdf (default: 0): ", 
                              content=paste("You can adjust the plot size by using", strong('pdf_height'), "and", strong('pdf_width'), "parameters.<br>", 
                                            "Default size: <br>",strong("Clustering:"), "height = 3.5, width = 9<br>", 
-                                           strong("UMAP:"), "height = 3.5, width = 4.7 <br>",pdfSize_for_GOI),trigger = "click"), 
+                                           strong("UMAP:"), "height = 3.5, width = 4.7 <br>", 
+                                           strong("Correlation plot:"), "height = 5, width = 5 <br>",pdfSize_for_GOI),trigger = "click"), 
                    actionButton("goButton3", "example data"),
                    tags$head(tags$style("#goButton{color: black;
                                  font-size: 12px;
@@ -1415,6 +1416,7 @@ shinyUI(
                                                    selected = "spearman",multiple = F),
                                        htmlOutput("GOI_x"),
                                        htmlOutput("GOI_y"),
+                                       htmlOutput("corr_color"),
                                        conditionalPanel(condition="input.corr_mode=='corr_mode1'",
                                        actionButton("corr_start", "Start"),
                                        tags$head(tags$style("#corr_start{color: red;
@@ -1433,8 +1435,11 @@ shinyUI(
                               ),
                               column(4, downloadButton("download_statisics_corrplot", "Download table")),
                               dataTableOutput("statistical_table_corrplot"),
+                              fluidRow(
                               column(4, htmlOutput("norm_corr_selected_list"),
-                                     downloadButton("download_norm_corr_selected", "Download correlation plot (all selected genes)")),
+                                     htmlOutput("corr_color_selected"),
+                                     downloadButton("download_norm_corr_selected", "Download correlation plot (all genes from 'select GOI')"))
+                              ),
                               plotOutput("norm_corrplot_selected")
                      ),
                      tabPanel("k-means clustering",

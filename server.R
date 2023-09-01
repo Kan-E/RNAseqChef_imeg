@@ -6138,44 +6138,14 @@ shinyServer(function(input, output, session) {
   norm_GOIcount_corr <- reactive({
     if(!is.null(input$GOI_x)){
       if(input$GOI_x != ""){
-        count <- d_norm_count_cutoff_uniqueID()
-    if(input$corr_mode == "corr_mode2"){
-      if(!is.null(input$GOI_y)){
+        data <- d_norm_count_cutoff_uniqueID()
         if(gene_type3() != "SYMBOL"){
           if(input$Species3 != "not selected"){
-            Unique_ID <- unique(c(input$GOI_x,input$GOI_y))
-            label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
-            data <- merge(count, label_data, by="Unique_ID")
             rownames(data) <- data$Unique_ID
             data <- data[, - which(colnames(data) == "SYMBOL")]
             data <- data[, - which(colnames(data) == "Unique_ID")]
-          }else{
-            Row.names <- unique(c(input$GOI_x,input$GOI_y))
-            count$Row.names <- rownames(count)
-            label_data <- as.data.frame(Row.names, row.names = Row.names)
-            data <- merge(count, label_data, by="Row.names")
-            rownames(data) <- data$Row.names
-            data <- data[, - which(colnames(data) == "Row.names")]
           }
-        }else{
-          Row.names <- unique(c(input$GOI_x,input$GOI_y))
-          count$Row.names <- rownames(count)
-          label_data <- as.data.frame(Row.names, row.names = Row.names)
-          data <- merge(count, label_data, by="Row.names")
-          rownames(data) <- data$Row.names
-          data <- data[, - which(colnames(data) == "Row.names")]
         }
-      }
-    }else{
-      data <- count
-      if(gene_type3() != "SYMBOL"){
-        if(input$Species3 != "not selected"){
-          rownames(data) <- data$Unique_ID
-          data <- data[, - which(colnames(data) == "SYMBOL")]
-          data <- data[, - which(colnames(data) == "Unique_ID")]
-        }
-      }
-    }
     return(data)
       }
     }
@@ -6232,25 +6202,27 @@ shinyServer(function(input, output, session) {
     }
     return(p)
   })
+  output$corr_color <- renderUI({
+    if(input$corr_mode == "corr_mode2"){
+      if(is.null(d_norm_count_matrix_cutofff())){
+      p <- NULL
+    }else{
+      selectInput("corr_color","Color",c("","sample_name",GOI_list3_corr()),selected = "")
+    }
+    }
+  })
+
   norm_GOI_corrplot_pair <- reactive({
     data <- norm_GOIcount_corr()
-    if(is.null(data) || is.null(input$GOI_x)){
+    if(is.null(data) || is.null(input$GOI_x) || is.null(input$corr_color) || is.null(corr_table_pair())){
       p <- NULL
     }else{
       if(input$corr_mode == "corr_mode2"){
         data <- as.data.frame(t(data))
-        label <- gsub("\\_.+$", "", rownames(data))
-        data$label <- label
-        p <- ggplot(data, aes(x=log10(.data[[input$GOI_x]]+1),y=log10(.data[[input$GOI_y]]+1), col=label)) +
-          geom_smooth(method=lm, se=FALSE, color='#2C3E50',linetype="dashed",size=0.5)
-        p <- p +
-          geom_point()+ 
-          theme_bw()+ 
-          theme(legend.position = "top" , legend.title = element_blank(),
-                axis.text.x= ggplot2::element_text(size = 12),
-                axis.text.y= ggplot2::element_text(size = 12),
-                text = ggplot2::element_text(size = 15),
-                title = ggplot2::element_text(size = 15))
+        print(corr_table_pair())
+        p <- corr_plot_pair(data = data, corr_color = input$corr_color,GOI_x = input$GOI_x,GOI_y = input$GOI_y)
+        if(corr_table_pair()$pvalue < 0.0001) pvalue <- "p < 0.0001" else pvalue <- paste0("p = ", round(corr_table_pair()$pvalue, digits = 5))
+        p <- p +  labs(caption = paste0("r = ", round(corr_table_pair()$corr_score, digits = 4), ", ", pvalue))
       }
     }
     return(p)
@@ -6296,27 +6268,29 @@ shinyServer(function(input, output, session) {
     return(df2)
     }
   })
+  output$corr_color_selected <- renderUI({
+    data <- norm_GOIcount_corr()
+    if(input$corr_mode == "corr_mode1"){
+      if(is.null(data) || is.null(input$GOI_x) || is.null(input$norm_corr_selected_list)){
+        p <- NULL
+      }else{
+        selectInput("corr_color_selected","Color",c("","sample_name",GOI_list3_corr()),selected = "")
+      }
+    }
+  })
   norm_GOI_corrplot_selected <- reactive({
     data <- norm_GOIcount_corr()
     if(is.null(data) || is.null(input$GOI_x) || is.null(input$norm_corr_selected_list) ||
-       is.null(input$statistical_table_corrplot_rows_selected)){
+       is.null(input$statistical_table_corrplot_rows_selected) || is.null(input$corr_color_selected)){
       p <- NULL
     }else{
       if(input$corr_mode == "corr_mode1"){
         GOI_y <- input$norm_corr_selected_list
         data <- as.data.frame(t(data))
-        label <- gsub("\\_.+$", "", rownames(data))
-        data$label <- label
-        p <- ggplot(data, aes(x=log10(.data[[input$GOI_x]]+1),y=log10(.data[[GOI_y]]+1), col=label)) +
-          geom_smooth(method=lm, se=FALSE, color='#2C3E50',linetype="dashed",size=0.5)
-        p <- p +
-          geom_point()+ 
-          theme_bw()+ 
-          theme(legend.position = "top" , legend.title = element_blank(),
-                axis.text.x= ggplot2::element_text(size = 12),
-                axis.text.y= ggplot2::element_text(size = 12),
-                text = ggplot2::element_text(size = 15),
-                title = ggplot2::element_text(size = 15))
+        p <- corr_plot_pair(data = data, corr_color = input$corr_color_selected,GOI_x = input$GOI_x,GOI_y = GOI_y)
+        if(corr_table()$pvalue[corr_table()$prey == GOI_y] < 0.0001) pvalue <- "p < 0.0001" else pvalue <- paste0("p = ", round(corr_table()$pvalue[corr_table()$prey == GOI_y], digits = 5))
+        if(corr_table()$padj[corr_table()$prey == GOI_y] < 0.0001) padj <- "padj < 0.0001" else padj <- paste0("padj = ", round(corr_table()$padj[corr_table()$prey == GOI_y], digits = 5))
+        p <- p +  labs(caption = paste0("r = ", round(corr_table()$corr_score[corr_table()$prey == GOI_y], digits = 4), ", ", pvalue,", ",padj))
       }
     }
     return(p)
@@ -6333,20 +6307,12 @@ shinyServer(function(input, output, session) {
           GOI_y <- brush_info_corr()[input$statistical_table_corrplot_rows_selected,]$prey
         }else GOI_y <- df2[input$statistical_table_corrplot_rows_selected,]$prey
         data <- as.data.frame(t(data))
-        label <- gsub("\\_.+$", "", rownames(data))
-        data$label <- label
         df <- list()
         for(y in GOI_y){
-          p <- ggplot(data, aes(x=log10(.data[[input$GOI_x]]+1),y=log10(.data[[y]]+1), col=label)) +
-            geom_smooth(method=lm, se=FALSE, color='#2C3E50',linetype="dashed",size=0.5)
-          p <- p +
-            geom_point()+ 
-            theme_bw()+ 
-            theme(legend.position = "top" , legend.title = element_blank(),
-                  axis.text.x= ggplot2::element_text(size = 12),
-                  axis.text.y= ggplot2::element_text(size = 12),
-                  text = ggplot2::element_text(size = 15),
-                  title = ggplot2::element_text(size = 15)) 
+          p <- corr_plot_pair(data = data, corr_color = input$corr_color_selected,GOI_x = input$GOI_x,GOI_y = y)
+          if(corr_table()$pvalue[corr_table()$prey == y] < 0.0001) pvalue <- "p < 0.0001" else pvalue <- paste0("p = ", round(corr_table()$pvalue[corr_table()$prey == y], digits = 5))
+          if(corr_table()$padj[corr_table()$prey == y] < 0.0001) padj <- "padj < 0.0001" else padj <- paste0("padj = ", round(corr_table()$padj[corr_table()$prey == y], digits = 5))
+          p <- p +  labs(caption = paste0("r = ", round(corr_table()$corr_score[corr_table()$prey == y], digits = 4), ", ", pvalue,", ",padj))
           df[[y]] <- p
         }
       }
@@ -6408,10 +6374,12 @@ shinyServer(function(input, output, session) {
       if(is.null(data) || is.null(input$GOI_x) || is.null(input$GOI_y)){
         corr <- NULL
       }else{
+        if(input$GOI_x != "" && input$GOI_y != ""){
         corr <- cor.test(x=as.numeric(data[input$GOI_x,]),y=as.numeric(data[input$GOI_y,]),method=input$corr_statistics)
         df <- data.frame(x_axis = input$GOI_x, y_axis = input$GOI_y, statistics=corr$statistic,corr_score = corr$estimate,
                          pvalue = corr$p.value, method = corr$method,alternative=corr$alternative)
         return(df)
+        }
       }
     }
   })
