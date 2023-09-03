@@ -5799,7 +5799,7 @@ shinyServer(function(input, output, session) {
   })
   
   d_norm_count_cutoff_uniqueID <- reactive({
-    count <- d_norm_count_matrix_cutofff()
+    count <- as.data.frame(d_norm_count_matrix_cutofff())
     if(!is.null(count)){
     count <- dplyr::filter(count, apply(count,1,mean) > input$basemean3)
       if(!is.null(gene_ID_norm())){
