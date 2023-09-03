@@ -3675,7 +3675,7 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       clusters$cluster <- paste0("Group",clusters$cluster)
-      selectInput("multi_whichGroup1_1", "cluster_list", choices = c(unique(clusters$cluster)), multiple = TRUE)
+      selectInput("multi_whichGroup1_1", "cluster_list", choices = c(sort(unique(clusters$cluster))), multiple = TRUE)
     }
   })
   
@@ -3684,7 +3684,7 @@ shinyServer(function(input, output, session) {
     if(is.null(clusters)){
       return(NULL)
     }else{
-      selectInput("multi_whichGroup2_1", "cluster_list", choices = c(unique(clusters$Cluster)),multiple = TRUE)
+      selectInput("multi_whichGroup2_1", "cluster_list", choices = c(sort(unique(clusters$Cluster))),multiple = TRUE)
     }
   })
   
@@ -3770,7 +3770,7 @@ shinyServer(function(input, output, session) {
   })
   multi_enrich_H <- reactive({
     return(enrich_genelist(data = enrich_viewer_forMulti1(gene_type=gene_type6(),df = multi_enrich_input1(), Species = input$Species6,Ortholog=ortholog6(), org = org6()),
-                           enrich_gene_list = multi_enrich_h()))
+                           enrich_gene_list = multi_enrich_h(),group_order = input$multi_whichGroup1_1))
   })
   multi_enrich_h2 <- reactive({
     if(input$Species6 != "Xenopus laevis" && input$Ortholog6 != "Arabidopsis thaliana" && input$Species6 != "Arabidopsis thaliana"){
@@ -3781,7 +3781,7 @@ shinyServer(function(input, output, session) {
   })
   multi_enrich_H2 <- reactive({
     return(enrich_genelist(data = enrich_viewer_forMulti1(gene_type=gene_type6(),df = multi_enrich_input2(), Species = input$Species6,Ortholog=ortholog6(), org = org6()),
-                           enrich_gene_list = multi_enrich_h2()))
+                           enrich_gene_list = multi_enrich_h2(),group_order = input$multi_whichGroup2_1))
   })
   
   output$multi_enrichment3 <- renderPlot({
@@ -5613,7 +5613,6 @@ shinyServer(function(input, output, session) {
     }
   })
   
-  
   gene_ID_norm <- reactive({
       if(input$Species3 != "not selected"){
         if(gene_type3() != "SYMBOL"){
@@ -6160,11 +6159,11 @@ shinyServer(function(input, output, session) {
       }else{
         if(!is.null(pre_norm_GOI_corrplot())){
           df2 <- pre_norm_GOI_corrplot()
-          if(!is.null(input$statistical_table_corrplot_rows_selected)){
             if(dim(brush_info_corr())[1]!=0){
-              label_data <- brush_info_corr()[input$statistical_table_corrplot_rows_selected,]$prey
-            }else label_data <- df2[input$statistical_table_corrplot_rows_selected,]$prey
-          }else label_data <- NULL
+              label_data <- brush_info_corr()$prey
+            }else if(!is.null(input$statistical_table_corrplot_rows_selected)){
+              label_data <- df2[input$statistical_table_corrplot_rows_selected,]$prey
+            }else label_data <- NULL
           if(!is.null(label_data)) {
             Color <- c("blue","green","darkgray","red")
             if(length(df2$prey[df2$color == "negative_correlation"]) == 0) Color <- c("green","darkgray","red")
@@ -6253,16 +6252,22 @@ shinyServer(function(input, output, session) {
     }
     return(df2)
   })
+  output$corr_fdr <- renderUI({
+    if(!is.null(pre_pre_norm_GOI_corrplot())){
+      numericInput("corr_fdr","padj (or pval) cut-off",max = 1, value = 0.05,step=0.001)
+    }
+  })
+
   pre_norm_GOI_corrplot   <- reactive({
     df2 <- pre_pre_norm_GOI_corrplot()
     if(!is.null(df2) && !is.null(input$norm_corr_cutoff)){
     df2$color <- "NS"
     if(input$norm_corr_cutoff == "padj"){
-      df2$color[df2$padj < 0.05 & df2$corr_score > 0] <- "positive_correlation"
-      df2$color[df2$padj < 0.05 & df2$corr_score < 0] <- "negative_correlation"
+      df2$color[df2$padj < input$corr_fdr & df2$corr_score > 0] <- "positive_correlation"
+      df2$color[df2$padj < input$corr_fdr & df2$corr_score < 0] <- "negative_correlation"
     }else{
-      df2$color[df2$pvalue < 0.05 & df2$corr_score > 0] <- "positive_correlation"
-      df2$color[df2$pvalue < 0.05 & df2$corr_score < 0] <- "negative_correlation"
+      df2$color[df2$pvalue < input$corr_fdr & df2$corr_score > 0] <- "positive_correlation"
+      df2$color[df2$pvalue < input$corr_fdr & df2$corr_score < 0] <- "negative_correlation"
     }
     df2 <- df2 %>% dplyr::select(prey,color,everything())
     return(df2)
@@ -6280,41 +6285,46 @@ shinyServer(function(input, output, session) {
   })
   norm_GOI_corrplot_selected <- reactive({
     data <- norm_GOIcount_corr()
-    if(is.null(data) || is.null(input$GOI_x) || is.null(input$norm_corr_selected_list) ||
-       is.null(input$statistical_table_corrplot_rows_selected) || is.null(input$corr_color_selected)){
+    if(is.null(data) || is.null(input$GOI_x) || is.null(input$norm_corr_selected_list) || 
+       is.null(corr_table()) || is.null(input$corr_color_selected)){
       p <- NULL
     }else{
       if(input$corr_mode == "corr_mode1"){
         GOI_y <- input$norm_corr_selected_list
+        if(GOI_y != ""){
         data <- as.data.frame(t(data))
         p <- corr_plot_pair(data = data, corr_color = input$corr_color_selected,GOI_x = input$GOI_x,GOI_y = GOI_y)
         if(corr_table()$pvalue[corr_table()$prey == GOI_y] < 0.0001) pvalue <- "p < 0.0001" else pvalue <- paste0("p = ", round(corr_table()$pvalue[corr_table()$prey == GOI_y], digits = 5))
         if(corr_table()$padj[corr_table()$prey == GOI_y] < 0.0001) padj <- "padj < 0.0001" else padj <- paste0("padj = ", round(corr_table()$padj[corr_table()$prey == GOI_y], digits = 5))
         p <- p +  labs(caption = paste0("r = ", round(corr_table()$corr_score[corr_table()$prey == GOI_y], digits = 4), ", ", pvalue,", ",padj))
+        }
       }
     }
     return(p)
   })
   norm_GOI_corrplot_selected_for_download <- reactive({
     data <- norm_GOIcount_corr()
-    if(is.null(data) || is.null(input$GOI_x) || is.null(input$norm_corr_selected_list) ||
-       is.null(input$statistical_table_corrplot_rows_selected)){
+    if(is.null(data) || is.null(input$GOI_x) || is.null(input$norm_corr_selected_list)){
       df <- NULL
     }else{
       if(input$corr_mode == "corr_mode1"){
         df2 <- pre_norm_GOI_corrplot()
         if(dim(brush_info_corr())[1]!=0){
-          GOI_y <- brush_info_corr()[input$statistical_table_corrplot_rows_selected,]$prey
+          GOI_y <- brush_info_corr()$prey
         }else GOI_y <- df2[input$statistical_table_corrplot_rows_selected,]$prey
         data <- as.data.frame(t(data))
         df <- list()
+        processNum <- length(GOI_y)
+        withProgress(message = paste0("Prepare correlation plots of all selected genes (",length(GOI_y),")"),{
         for(y in GOI_y){
           p <- corr_plot_pair(data = data, corr_color = input$corr_color_selected,GOI_x = input$GOI_x,GOI_y = y)
           if(corr_table()$pvalue[corr_table()$prey == y] < 0.0001) pvalue <- "p < 0.0001" else pvalue <- paste0("p = ", round(corr_table()$pvalue[corr_table()$prey == y], digits = 5))
           if(corr_table()$padj[corr_table()$prey == y] < 0.0001) padj <- "padj < 0.0001" else padj <- paste0("padj = ", round(corr_table()$padj[corr_table()$prey == y], digits = 5))
           p <- p +  labs(caption = paste0("r = ", round(corr_table()$corr_score[corr_table()$prey == y], digits = 4), ", ", pvalue,", ",padj))
           df[[y]] <- p
+          incProgress(1/processNum, message = paste0("Prepare ",y))
         }
+        })
       }
     }
     return(df)
@@ -6359,14 +6369,24 @@ shinyServer(function(input, output, session) {
     if(input$corr_mode == "corr_mode2"){
     }else{
       if(!is.null(pre_norm_GOI_corrplot())){
-      if(dim(brush_info_corr())[1] == 0){
         df <- pre_norm_GOI_corrplot()
-      }else{
-        df <- brush_info_corr()
-      }
         return(df)
       }
     }
+  })
+  corr_table_forOutput <- reactive({
+    df <- corr_table()
+        if(gene_type3() != "SYMBOL"){
+          if(input$Species3 != "not selected"){
+            colnames(df)[1] <- "prey_UniqueID"
+            df$prey <- gsub(".+\\-","",df$prey_UniqueID)
+            df$prey <- gsub(" ","",df$prey)
+            df <- df %>% dplyr::select(prey, color, everything())
+            df$prey_UniqueID <- gsub("\n"," ",df$prey_UniqueID)
+            df$bait <- gsub("\n"," ",df$bait)
+          }
+        }
+        return(df)
   })
   corr_table_pair <- reactive({
     data <- norm_GOIcount_corr()
@@ -6383,15 +6403,30 @@ shinyServer(function(input, output, session) {
       }
     }
   })
+  corr_table_pair_forOutput <- reactive({
+    df <- corr_table_pair()
+    if(gene_type3() != "SYMBOL"){
+      if(input$Species3 != "not selected"){
+        colnames(df)[1] <- "x_axis_UniqueID"
+        df$x_axis <- gsub(".+\\-","",df$x_axis_UniqueID)
+        df$x_axis <- gsub(" ","",df$x_axis)
+        df <- df %>% dplyr::select(x_axis, x_axis_UniqueID, everything())
+        df$x_axis_UniqueID <- gsub("\n"," ",df$x_axis_UniqueID)
+        df$y_axis <- gsub("\n"," ",df$y_axis)
+      }
+    }
+    print(df)
+          return(df)
+  })
   output$statistical_table_corrplot <- renderDataTable({
     if(input$corr_mode == "corr_mode2"){
       if(!is.null(norm_GOI_corrplot_pair()) && !is.null(input$GOI_x) && !is.null(input$GOI_y) &&
          input$GOI_x != "" && input$GOI_y != ""){
-        corr_table_pair()
+        corr_table_pair_forOutput()
       }
     }else{
       if(!is.null(corr_table()) && !is.null(input$GOI_x) && input$GOI_x != ""){
-        corr_table()
+        corr_table_forOutput()
       }
     }
   })
@@ -6411,12 +6446,12 @@ shinyServer(function(input, output, session) {
 
   output$norm_corr_selected_list <- renderUI({
     if(input$corr_mode == "corr_mode1"){
-      if(!is.null(corr_table()) && !is.null(input$GOI_x) && 
-         !is.null(input$statistical_table_corrplot_rows_selected) && input$GOI_x != ""){
-        df2 <- pre_norm_GOI_corrplot()
+      if(!is.null(corr_table()) && !is.null(input$GOI_x) && input$GOI_x != ""){
         if(dim(brush_info_corr())[1]!=0){
-          GOI_y <- brush_info_corr()[input$statistical_table_corrplot_rows_selected,]$prey
-        }else GOI_y <- df2[input$statistical_table_corrplot_rows_selected,]$prey
+          GOI_y <- brush_info_corr()$prey
+        }else{
+          GOI_y <- corr_table()[input$statistical_table_corrplot_rows_selected,]$prey
+        }
         selectInput("norm_corr_selected_list","select GOI", GOI_y, multiple = F)
       }
     }
@@ -6450,22 +6485,20 @@ shinyServer(function(input, output, session) {
       paste0(download_norm_dir(), "correlation_plot_",input$GOI_x,"-selected.pdf")
     },
     content = function(file) {
-      withProgress(message = "Preparing download",{
+      p <- norm_GOI_corrplot_selected_for_download()
+      GOI_y <- names(p)
+      processNum <- length(GOI_y)
+      withProgress(message = paste0("Download correlation plots of all selected genes (",length(GOI_y),")"),{
         if(input$norm_pdf_height == 0){
           pdf_height <- 5
         }else pdf_height <- input$norm_pdf_height
         if(input$norm_pdf_width == 0){
           pdf_width <- 5
         }else pdf_width <- input$norm_pdf_width
-          p <- norm_GOI_corrplot_selected_for_download()
-          print(names(p))
-          df2 <- pre_norm_GOI_corrplot()
-          if(dim(brush_info_corr())[1]!=0){
-            GOI_y <- brush_info_corr()[input$statistical_table_corrplot_rows_selected,]$prey
-          }else GOI_y <- df2[input$statistical_table_corrplot_rows_selected,]$prey
         pdf(file, height = pdf_height, width = pdf_width)
         for(y in GOI_y){
           print(p[[y]]) 
+          incProgress(1/processNum, message = paste0("Download ",y))
         }
         dev.off()
         incProgress(1)
@@ -6479,9 +6512,9 @@ shinyServer(function(input, output, session) {
     content = function(file) {
       withProgress(message = "Preparing download",{
         if(input$corr_mode == "corr_mode2"){
-          table <- corr_table_pair()
+          table <- corr_table_pair_forOutput()
         }else{
-          table <- corr_table()
+          table <- corr_table_forOutput()
         }
         write.table(table,file, row.names = F, col.names=TRUE, sep = "\t", quote = F)
         incProgress(1)
@@ -7237,7 +7270,7 @@ shinyServer(function(input, output, session) {
     if(is.null(clusters)){
       return(NULL)
     }else{
-      selectInput("venn_whichGroup1", "gene list", choices = c(unique(clusters$Group)),multiple = TRUE)
+      selectInput("venn_whichGroup1", "gene list", choices = c(sort(unique(clusters$Group))),multiple = TRUE)
     }
   })
   
@@ -7304,7 +7337,7 @@ shinyServer(function(input, output, session) {
   })
   venn_enrich_H <- reactive({
     return(enrich_genelist(data = enrich_viewer_forMulti1(gene_type=gene_type7(),df = venn_enrich_input1(), Species = input$Species7,Ortholog=ortholog7(), org = org7()),
-                           enrich_gene_list = venn_enrich_h(),section = "venn"))
+                           enrich_gene_list = venn_enrich_h(),section = "venn",group_order = input$venn_whichGroup1))
   })
   
   output$venn_enrichment1 <- renderPlot({
@@ -7432,7 +7465,7 @@ shinyServer(function(input, output, session) {
     return(org_code(Species = input$Species4, Ortholog= input$Ortholog4))
   })
   
-  enrich_input <- reactive({
+  pre_enrich_input <- reactive({
     upload = list()
     name = c()
     tmp <- NULL
@@ -7479,6 +7512,41 @@ shinyServer(function(input, output, session) {
       if(input$goButton4 > 0 )  tmp = read_gene_list("https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/enrich_example.txt")
     }
     return(tmp)
+  })
+  output$pre_enrich_input_choice <- renderUI({
+    if(!is.null(pre_enrich_input())){
+      list <- unique(pre_enrich_input()[,2])
+      if(length(list) > 20 && length(input$enrich_data_file[, 1]) == 1){ 
+        selectInput("pre_enrich_input_choice","Group name",c("File name","Second column"),selected = "File name",multiple = F)
+      }else return(NULL)
+    }
+  })
+  output$enrich_input_choice <- renderUI({
+    if(!is.null(pre_enrich_input())){
+      list <- unique(pre_enrich_input()[,2])
+      if(!is.null(input$pre_enrich_input_choice)){
+        if(input$pre_enrich_input_choice == "File name"){
+          file_name <- gsub(paste0("\\.",tools::file_ext(input$enrich_data_file[[1, 'datapath']]),"$"), "", input$enrich_data_file[1,]$name)
+          list <- file_name
+        }
+      }
+      list <- sort(list)
+      selectInput("enrich_input_choice","Group order",list, selected = list, multiple = TRUE)
+    }
+  })
+  enrich_input <- reactive({
+    list <- pre_enrich_input()
+    if(!is.null(list) && !is.null(input$enrich_input_choice)){
+      if(!is.null(input$pre_enrich_input_choice)){
+        if(input$pre_enrich_input_choice == "File name"){
+          file_name <- gsub(paste0("\\.",tools::file_ext(input$enrich_data_file[[1, 'datapath']]),"$"), "", input$enrich_data_file[1,]$name)
+          list$Group <- file_name
+        }
+      }
+    group <- factor(input$enrich_input_choice, levels = input$enrich_input_choice)
+    list <- list %>% dplyr::filter(Group %in% group)
+    return(list)
+    }
   })
   
   Custom_input <- reactive({
@@ -7555,7 +7623,7 @@ shinyServer(function(input, output, session) {
                                           org = org4(), org_code = org_code4()))
   })
   enrich_H <- reactive({
-    return(enrich_genelist(data = enrich_viewer1(), enrich_gene_list = enrich_venn(), 
+    return(enrich_genelist(data = enrich_viewer1(), enrich_gene_list = enrich_venn(), group_order=input$enrich_input_choice,
                            showCategory = input$enrich_showCategory,section = "enrichmentviewer"))
   })
   
@@ -7725,7 +7793,7 @@ shinyServer(function(input, output, session) {
   })
   output$motif_plot <- renderPlot({
     if(input$motifButton > 0 && !is.null(enrich_motif())){
-      Motifplot(df2 = enrich_motif(), showCategory = input$enrich_showCategory, padj = input$promoter_padj)
+      Motifplot(df2 = enrich_motif(), showCategory = input$enrich_showCategory, padj = input$promoter_padj,data= enrich_input(), group_order=input$enrich_input_choice)
     }
   })
   motif_table <- reactive({
@@ -7741,6 +7809,7 @@ shinyServer(function(input, output, session) {
       colnames(df) <- c("motif.id", "motif.name","motif.percentGC", "negLog10P", "negLog10Padj", "log2enr",
                         "pearsonResid", "expForegroundWgtWithHits", "sumForegroundWgtWithHits", "sumBackgroundWgtWithHits",
                         "Group")
+      df$Group <- gsub("\n"," ",df$Group)
       df$padj <- 10^(-df$negLog10Padj)
       return(df)
     }
@@ -7789,7 +7858,7 @@ shinyServer(function(input, output, session) {
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        p1 <- Motifplot(df2 = enrich_motif(), showCategory = input$enrich_showCategory, padj = input$promoter_padj)
+        p1 <- Motifplot(df2 = enrich_motif(), showCategory = input$enrich_showCategory, padj = input$promoter_padj,data= enrich_input(), group_order=input$enrich_input_choice)
         if(input$enrich_pdf_height == 0){
           pdf_height <- 6
         }else pdf_height <- input$enrich_pdf_height

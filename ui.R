@@ -43,7 +43,8 @@ shinyUI(
                  ),
                  column(12,
                         br(),
-                        h4("Current version (v1.0.8, 2023/8/1)"),
+                        h4("Current version (v1.0.9, 2023/9/3)"),
+                        p("(2023/9/3) Improve correlation analysis in Normalized count analysis. Improve dotplot for enrichment analysis (you can change the order of groups)."),
                         p(paste0("(2023/8/30) fix bug regarding Normalized count analysis. ",
                                  "Add new function 'Correlation analysis' in Normalized count analysis.")),
                         p("(2023/8/14) Improve k-means clustering in Multi DEG."),
@@ -1429,7 +1430,9 @@ shinyUI(
           }"
                                                  ))
                                        ),
-                                       htmlOutput("norm_corr_cutoff")
+                                       htmlOutput("norm_corr_cutoff"),
+                                       htmlOutput("corr_fdr"),
+                                       htmlOutput("corr_rho")
                                        ),
                                 column(8, plotOutput("norm_corrplot",brush = "plot1_brush_corr"))
                               ),
@@ -1570,6 +1573,8 @@ shinyUI(
                    tabsetPanel(
                      type = "tabs",
                      tabPanel("Input gene list",
+                              htmlOutput("pre_enrich_input_choice"),
+                              htmlOutput("enrich_input_choice"),
                               dataTableOutput('enrichment_input')
                      ),
                      tabPanel("Enrichment analysis",

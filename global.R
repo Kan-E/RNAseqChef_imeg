@@ -1,3 +1,5 @@
+
+##corrplot brush
 library(shiny)
 library(DT)
 library(readxl)
@@ -1210,6 +1212,7 @@ enrich_for_table <- function(data, H_t2g, Gene_set){
     colnames(data)[1] <- "gs_name"
     H_t2g <- H_t2g %>% distinct(gs_name, .keep_all = T)
     data2 <- left_join(data, H_t2g, by="gs_name")  %>% as.data.frame()
+    data2$Group <- gsub("\n"," ", data2$Group)
     if(Gene_set == "DoRothEA regulon (activator)" || Gene_set == "DoRothEA regulon (repressor)"){
       data3 <- data.frame(Group = data2$Group, Gene_set_name = data2$gs_name, Confidence = data2$confidence,
                           Count = data2$Count, GeneRatio = data2$GeneRatio, BgRatio = data2$BgRatio, pvalue = data2$pvalue, 
@@ -1660,7 +1663,7 @@ enrich_gene_list_xenopus <- function(data, Gene_set, org,org_code=NULL){
 }
 
 
-enrich_genelist <- function(data, enrich_gene_list, showCategory=5,section=NULL){
+enrich_genelist <- function(data, enrich_gene_list, showCategory=5,section=NULL,group_order=NULL){
       if(is.null(data) || is.null(enrich_gene_list)){
         return(NULL)
       }else{
@@ -1673,6 +1676,7 @@ enrich_genelist <- function(data, enrich_gene_list, showCategory=5,section=NULL)
               if(length(colnames(as.data.frame(em))) == 9){
                 cnet1 <- as.data.frame(em)
                 cnet1$Group <- paste(name, "\n","(",sum, ")",sep = "")
+                if(!is.null(group_order)) group_order[which(group_order == name)] <- paste(name, "\n","(",sum, ")",sep = "")
                 cnet1 <- cnet1[sort(cnet1$pvalue, decreasing = F, index=T)$ix,]
                 if (length(cnet1$pvalue) > showCategory){
                   cnet1 <- cnet1[1:showCategory,]
@@ -1687,26 +1691,40 @@ enrich_genelist <- function(data, enrich_gene_list, showCategory=5,section=NULL)
             if(!is.null(section)){
             if(section == "enrichmentviewer"){
               df$Group <- gsub("_", " ", df$Group)
+              if(!is.null(group_order)) group_order <- gsub("_", " ", group_order)
               for(i in 1:length(df$Group)){
                 df$Group[i] <- paste(strwrap(df$Group[i], width = 15),collapse = "\n")
               }
+              for(i in 1:length(unique(df$Group))){
+                if(!is.null(group_order)) group_order[i] <- paste(strwrap(group_order[i], width = 15),collapse = "\n")
+              }
               df$Group <- gsub(" \\(", "\n\\(", df$Group)
+              if(!is.null(group_order)) group_order <- gsub(" \\(", "\n\\(", group_order)
             }
             if(section == "venn"){
               df$Group <- gsub(":", ": ", df$Group)
+              if(!is.null(group_order)) group_order <- gsub(":", ": ", group_order)
               for(i in 1:length(df$Group)){
                 df$Group[i] <- paste(strwrap(df$Group[i], width = 15),collapse = "\n")
               }
+              for(i in 1:length(unique(df$Group))){
+                if(!is.null(group_order)) group_order[i] <- paste(strwrap(group_order[i], width = 15),collapse = "\n")
+              }
               df$Group <- gsub(" \\(", "\n\\(", df$Group)
+              if(!is.null(group_order)) group_order <- gsub(" \\(", "\n\\(", group_order)
             }
+            }
+            if(!is.null(group_order)) {
+              df$Group <- factor(df$Group, levels=group_order)
+              df <- df %>% dplyr::arrange(Group) 
             }
             df$GeneRatio <- parse_ratio(df$GeneRatio)
             df <- dplyr::filter(df, !is.na(qvalue))
             df$Description <- gsub("_", " ", df$Description)
             df <- dplyr::mutate(df, x = paste0(Group, 1/(-log10(eval(parse(text = "qvalue"))))))
             df$x <- gsub(":","", df$x)
-            df <- dplyr::arrange(df, x)
-            idx <- order(df[["x"]], decreasing = FALSE)
+            df <- dplyr::arrange(df, Group, x)
+            idx <- order(df[["Group"]], df[["x"]], decreasing = FALSE)
             df$Description <- factor(df$Description,
                                      levels=rev(unique(df$Description[idx])))
             p1 <- as.grob(ggplot(df, aes(x = Group,y= Description,color=qvalue,size=GeneRatio))+
@@ -1834,12 +1852,9 @@ MotifAnalysis <- function(data, Species, org,x){
       }
       colnames(gene_IDs) <- c("SYMBOL","gene_id")
     }
-    print(head(gene_IDs))
-    print(head(x))
     y <- subset(x, gene_id %in% gene_IDs$gene_id)
     if(length(rownames(as.data.frame(y))) == 0) stop("Incorrect species")
     seq <- getSeq(genome, y)
-    print(seq)
     se <- calcBinnedMotifEnrR(seqs = seq,
                               pwmL = pwms,
                               background = "genome",
@@ -1917,10 +1932,15 @@ MotifRegion <- function(data, target_motif, Species, x){
   return(res2)
 }
 
-Motifplot <- function(df2, showCategory=5,padj){
+Motifplot <- function(df2, showCategory=5,padj,data,group_order){
   df <- data.frame(matrix(rep(NA, 11), nrow=1))[numeric(0), ]
+  data <- data.frame(GeneID = data[,1], Group = data[,2])
   for(name in names(df2)){
     res <- df2[[name]]
+    print(name)
+    data2 <- dplyr::filter(data, Group == name)
+    my.symbols <- data2$GeneID
+    if(!is.null(group_order)) group_order[which(group_order == name)] <- paste(name, "\n(", length(my.symbols),")",sep = "")
     res <- dplyr::filter(res, X1 > -log10(padj))
     res <- res %>% dplyr::arrange(-X1.1)
     if(length(rownames(res)) > showCategory){
@@ -1935,11 +1955,16 @@ Motifplot <- function(df2, showCategory=5,padj){
     return(NULL)
   }else{
     df$Group <- gsub("_", " ", df$Group)
+    print(unique(df$Group))
+    
+    if(!is.null(group_order)) group_order <- gsub("_", " ", group_order)
+    print(group_order)
+    if(!is.null(group_order)) df$Group <- factor(df$Group,levels=group_order)
   df$padj <- 10^(-df$negLog10Padj)
   df <- dplyr::mutate(df, x = paste0(Group, 1/-log10(eval(parse(text = "padj")))))
   df$x <- gsub(":","", df$x)
   df <- dplyr::arrange(df, x)
-  idx <- order(df[["x"]], decreasing = FALSE)
+  idx <- order(df[["Group"]], df[["x"]], decreasing = FALSE)
   df$motif.name <- factor(df$motif.name,
                           levels=rev(unique(df$motif.name[idx])))
   d <- ggplot(df, aes(x = Group,y= motif.name,color=padj,size=log2enr))+
@@ -2086,8 +2111,8 @@ corr_plot_pair <- function(data,corr_color,GOI_x,GOI_y){
     p <- p1 +
       geom_point()+ 
       theme_bw()+ 
-      xlab(paste(strwrap(paste0("log10(", GOI_x,")"), width = 15),collapse = "\n"))+
-      ylab(paste(strwrap(paste0("log10(", GOI_y,")"), width = 15),collapse = "\n"))+
+      xlab(paste(strwrap(paste0("log10(", GOI_x," + 1)"), width = 30),collapse = "\n"))+
+      ylab(paste(strwrap(paste0("log10(", GOI_y," + 1)"), width = 30),collapse = "\n"))+
       theme(legend.position = "top" , legend.title = element_blank(),
             axis.text.x= ggplot2::element_text(size = 12),
             axis.text.y= ggplot2::element_text(size = 12),
@@ -2100,9 +2125,9 @@ corr_plot_pair <- function(data,corr_color,GOI_x,GOI_y){
       geom_point()+
       scale_color_continuous(low="blue", high="red")+ 
       theme_bw()+
-      ggtitle(paste(strwrap(paste0("color = log10(", corr_color,")"), width = 15),collapse = "\n"))+ 
-      xlab(paste(strwrap(paste0("log10(", GOI_x,")"), width = 15),collapse = "\n"))+
-      ylab(paste(strwrap(paste0("log10(", GOI_y,")"), width = 15),collapse = "\n"))+
+      ggtitle(paste(strwrap(paste0("color = log10(", corr_color," + 1)"), width = 30),collapse = "\n"))+ 
+      xlab(paste(strwrap(paste0("log10(", GOI_x," + 1)"), width = 30),collapse = "\n"))+
+      ylab(paste(strwrap(paste0("log10(", GOI_y," + 1)"), width = 30),collapse = "\n"))+
       theme(legend.title = element_blank(),
             axis.text.x= ggplot2::element_text(size = 12),
             axis.text.y= ggplot2::element_text(size = 12),
