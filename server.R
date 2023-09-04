@@ -246,7 +246,14 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       if(length(input$norm_file1[, 1]) == 1){
+        if(!is.null(input$sample_order)){
         upload <- anno_rep(read_df(input$norm_file1[[1, 'datapath']]))
+        order <- input$sample_order
+        upload <- try(upload[,order])
+        if(length(upload) == 1){
+          if(class(upload) == "try-error") validate("")
+        }
+        }else return(NULL)
       }else{
         upload = list()
         for(nr in 1:length(input$norm_file1[, 1])){
@@ -3962,9 +3969,10 @@ shinyServer(function(input, output, session) {
             clusters$cluster <- paste0("Group",clusters$cluster)
             clusters <- merge(clusters, data, by=0)
             cluster_names <- unique(clusters$cluster)
-            rownames(clusterCount) <- clusterCount$Row.names
+            print(head(clusters))
             for(name in cluster_names){
               clusterCount <- dplyr::filter(clusters, cluster == name)
+              rownames(clusterCount) <- clusterCount$Row.names
               clusterCount <- clusterCount[,-1:-3]
               DEG_pattern_count <- paste0("Divisive clustering_",as.character(input$selectFC[1]),"_vs_",as.character(input$selectFC[2]),"/group_list/",name,".txt")
               fs <- c(fs,DEG_pattern_count)
@@ -4362,11 +4370,18 @@ shinyServer(function(input, output, session) {
     }
     df <- read_df(tmp = tmp)
     if(!is.null(df)){
+      if(!is.null(input$sample_order_cond3)){
       df <- anno_rep(df)
+      order <- input$sample_order_cond3
+      df <- try(df[,order])
+      if(length(df) == 1){
+        if(class(df) == "try-error") validate("")
+      }
       if(input$Species2 != "not selected"){
         if(gene_type2() != "SYMBOL"){
           rownames(df) < gsub("\\..*","", rownames(df))
         }
+      }
       }
     }else df <- NULL
     return(df)
