@@ -247,7 +247,23 @@ shinyServer(function(input, output, session) {
     }else{
       if(length(input$norm_file1[, 1]) == 1){
         if(!is.null(input$sample_order)){
-        upload <- anno_rep(read_df(input$norm_file1[[1, 'datapath']]))
+        upload <- read_df(input$norm_file1[[1, 'datapath']])
+        if (input$data_file_type == "Row2"){
+          meta <- anno_rep_meta(metadata())
+          if (!is.null(upload) && !is.null(meta)){
+            row_t <- t(upload)
+            meta <- data.frame(characteristics = meta[,1], row.names = rownames(meta))
+            colname <- colnames(meta)
+            data <- merge(meta, row_t, by=0, sort = F)
+            if(dim(data)[1] == 0) validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
+            rownames(data) <- data$characteristics
+            data2 <- data[, - which(colnames(data) %in% c("Row.names", colname))]
+            data2_t <- t(data2)
+            upload <- apply(data2_t, 2, as.numeric)
+            rownames(upload) <- rownames(data2_t)
+            upload <- as.data.frame(upload)
+          }else return(NULL)
+        }else upload <- anno_rep(upload)
         order <- input$sample_order
         upload <- try(upload[,order])
         if(length(upload) == 1){
@@ -443,7 +459,10 @@ shinyServer(function(input, output, session) {
       collist <- gsub("\\_.+$", "", colnames(count))
       if(length(unique(collist)) == 2){
         if(!is.null(norm_count_matrix())){
-          return(norm_count_matrix())
+          normalized_counts <- norm_count_matrix()
+          if(input$Species != "not selected") normalized_counts <- ensembl2symbol(gene_type=gene_type1(),data = normalized_counts, 
+                                                                                  Species=input$Species,Ortholog=ortholog1(),org = org1())
+          return(normalized_counts)
         }else {
           file_name <- gsub("\\..+$", "", input$file1)
           group <- data.frame(con = factor(collist))
@@ -1776,6 +1795,8 @@ shinyServer(function(input, output, session) {
         df <- read_df(input$file11[[nr, 'datapath']])
         upload[gsub("\\..+$", "", input$file11[nr,]$name)] <- list(df)
       }
+      name_list <- names(upload) %>% sort()
+      upload <- upload[name_list]
       return(upload)
     }
   })
@@ -1917,8 +1938,18 @@ shinyServer(function(input, output, session) {
   deg_norm_count_batch <- reactive({
     if(!is.null(norm_count_matrix())){
       files <- norm_count_matrix()
+      name_list <- names(files) %>% sort()
+      files <- files[name_list]
+      names(files) <- names(batch_files())
       files["combined"] <- list(batch_count_combined())
-      return(files)
+      norm_list <- list()
+      for(name in names(files)){
+        normalized_counts <- files[[name]]
+        if(input$Species != "not selected") normalized_counts <- ensembl2symbol(gene_type=gene_type1_batch(),Species=input$Species,
+                                                                                Ortholog=ortholog1_batch(),data = normalized_counts, org = org1())
+        norm_list[name] <- list(normalized_counts)
+      }
+      return(norm_list)
     }else{
       count_files <- batch_files()
       count_files["combined"] <- list(batch_count_combined())
@@ -1988,7 +2019,7 @@ shinyServer(function(input, output, session) {
       }else{
         matrix_list <- list()
         for (name in names(files)) {
-          matrix <- as.data.frame(files[name])
+          matrix <- as.data.frame(files[[name]])
           matrix_2 <- matrix
           matrix_3 <- merge(matrix, matrix_2, by = 0)[,-2:-(1 + length(colnames(matrix)))]
           matrix_list[name] <- list(matrix_3)
@@ -2056,8 +2087,11 @@ shinyServer(function(input, output, session) {
           Row.names <- NULL
           log2FoldChange <- NULL
           value <- NULL
+          print(head(data))
+          print(head(count))
           data <- merge(data,count, by=0)
           Type <- input$DEG_method
+          print(head(data))
           data <- dplyr::filter(data, apply(data[,8:(7 + Cond_1 + Cond_2)],1,mean) > input$basemean)
           
           if(input$Species != "not selected"){
@@ -2175,8 +2209,9 @@ shinyServer(function(input, output, session) {
           }
           Cond_1 <- vec[1]
           Cond_2 <- vec[2]
-          data2 <- as.data.frame(data_degcount2_batch()[name])
+          data2 <- as.data.frame(data_degcount2_batch()[[name]])
           colnames(data2) <- sub(paste0(name,"."), "", colnames(data2))
+          print(head(data2))
           up_all <- dplyr::filter(data2, log2FoldChange > 0)
           rownames(up_all) <- up_all$Row.names
           up_all <- up_all[,8:(7 + Cond_1 + Cond_2)]
@@ -2213,7 +2248,7 @@ shinyServer(function(input, output, session) {
           }
           Cond_1 <- vec[1]
           Cond_2 <- vec[2]
-          data2 <- as.data.frame(data_degcount2_batch()[name])
+          data2 <- as.data.frame(data_degcount2_batch()[[name]])
           colnames(data2) <- sub(paste0(name,"."), "", colnames(data2))
           down_all <- dplyr::filter(data2, log2FoldChange < 0)
           rownames(down_all) <- down_all$Row.names
@@ -2276,8 +2311,7 @@ shinyServer(function(input, output, session) {
                                  font.main = "bold",xlab = xlab,
                                  ggtheme = ggplot2::theme_minimal(),
                                  select.top.method = "fc"))
-          data2 <- as.data.frame(data_degcount2_batch()[name])
-          colnames(data2) <- sub(paste0(name,"."), "", colnames(data2))
+          data2 <- as.data.frame(data_degcount2_batch()[[name]])
           if(is.null(data2)){
             ht <- NULL
           }else{
@@ -2539,7 +2573,9 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       if(!is.null(multi_norm_count_matrix())){
-        return(multi_norm_count_matrix())
+        normalized_counts <- ensembl2symbol(gene_type=gene_type6(),data = multi_norm_count_matrix(), 
+                                            Species=input$Species6,Ortholog=ortholog6(),org = org6())
+        return(normalized_counts)
       }else {
         count <- multi_d_row_count_matrix()
         dds <- multi_dds()
@@ -4361,7 +4397,7 @@ shinyServer(function(input, output, session) {
   })
   norm_count_matrix2 <- reactive({
     tmp <- input$norm_file2$datapath
-    if (input$data_file_type2 == "RowRecode_cond3" && !is.null(tmp)){
+    if (input$data_file_type2 == "RowRecode_cond3" && is.null(tmp)){
       recode <- input$file_recode_cond3$datapath
       if(!is.null(recode)){
         load(recode)
@@ -4371,7 +4407,27 @@ shinyServer(function(input, output, session) {
     df <- read_df(tmp = tmp)
     if(!is.null(df)){
       if(!is.null(input$sample_order_cond3)){
-      df <- anno_rep(df)
+      if (input$data_file_type2 == "Row4"){
+        meta <- anno_rep_meta(metadata2())
+        if (!is.null(df) && !is.null(meta)){
+          row_t <- t(df)
+          meta <- data.frame(characteristics = meta[,1], row.names = rownames(meta))
+          colname <- colnames(meta)
+          data <- merge(meta, row_t, by=0, sort = F)
+          if(dim(data)[1] == 0) validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
+          rownames(data) <- data$characteristics
+          data2 <- data[, - which(colnames(data) %in% c("Row.names", colname))]
+          data2_t <- t(data2)
+          df <- apply(data2_t, 2, as.numeric)
+          rownames(df) <- rownames(data2_t)
+          df <- as.data.frame(df)
+          if(input$Species2 != "not selected"){
+            if(gene_type2() != "SYMBOL"){
+              rownames(df) < gsub("\\..*","", rownames(df))
+            }
+          }
+        }else return(NULL)
+      }else df <- anno_rep(df)
       order <- input$sample_order_cond3
       df <- try(df[,order])
       if(length(df) == 1){
@@ -7504,7 +7560,12 @@ shinyServer(function(input, output, session) {
           colnames(tmp) = str_sub(colnames(tmp), start = 3, end = -2) 
         }
         if(rownames(tmp)[1] == 1){
+          if(dim(tmp)[2] >= 2){
           tmp <- data.frame(Gene = tmp[,1], Group = tmp[,2])
+          }else{
+            tmp <- data.frame(Gene = tmp[,1], 
+                              Group = gsub(paste0("\\.",tools::file_ext(input$enrich_data_file[[1, 'datapath']]),"$"), "", input$enrich_data_file[1,]$name))
+          }
         }else{
           tmp <- data.frame(Gene = rownames(tmp), Group = tmp[,1])
         }
@@ -7546,7 +7607,7 @@ shinyServer(function(input, output, session) {
         }
       }
       list <- sort(list)
-      selectInput("enrich_input_choice","Group order",list, selected = list, multiple = TRUE)
+      selectInput("enrich_input_choice","Order of groups",list, selected = list, multiple = TRUE)
     }
   })
   enrich_input <- reactive({
