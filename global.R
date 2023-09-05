@@ -238,7 +238,6 @@ gene_list_convert_for_enrichment <- function(gene_type,data, Ortholog,org,Specie
       }
       gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
       data <- merge(df, gene_IDs, by="GeneID")
-      print(data)
       return(data)
     }
 }
@@ -1617,7 +1616,6 @@ enrich_gene_list <- function(data, Gene_set, H_t2g, org,org_code=NULL){
         for (name in unique(data$Group)) {
           sum <- length(data$ENTREZID[data$Group == name])
           em <- enricher(data$ENTREZID[data$Group == name], TERM2GENE=H_t2g2, pvalueCutoff = 0.05)
-          print(em)
           if (length(as.data.frame(em)$ID) != 0) {
             if(length(colnames(as.data.frame(em))) == 9){
               cnet1 <- setReadable(em, org, 'ENTREZID')
@@ -1667,6 +1665,7 @@ enrich_genelist <- function(data, enrich_gene_list, showCategory=5,section=NULL,
       }else{
           df <- data.frame(matrix(rep(NA, 10), nrow=1))[numeric(0), ]
           colnames(df) <- c("ID", "Description", "GeneRatio", "BgRatio", "pvalue", "p.adjust", " qvalue", "geneID", "Count", "Group")
+          cluster_list <- c()
           for (name in names(enrich_gene_list)) {
             sum <- length(data$ENTREZID[data$Group == name])
             em <- enrich_gene_list[[name]]
@@ -1674,6 +1673,7 @@ enrich_genelist <- function(data, enrich_gene_list, showCategory=5,section=NULL,
               if(length(colnames(as.data.frame(em))) == 9){
                 cnet1 <- as.data.frame(em)
                 cnet1$Group <- paste(name, "\n","(",sum, ")",sep = "")
+                cluster_list <- c(cluster_list, paste(name, "\n","(",sum, ")",sep = ""))
                 if(!is.null(group_order)) group_order[which(group_order == name)] <- paste(name, "\n","(",sum, ")",sep = "")
                 cnet1 <- cnet1[sort(cnet1$pvalue, decreasing = F, index=T)$ix,]
                 if (length(cnet1$pvalue) > showCategory){
@@ -1683,6 +1683,7 @@ enrich_genelist <- function(data, enrich_gene_list, showCategory=5,section=NULL,
               }
             }
           }
+          if(!is.null(group_order)) group_order <- group_order[group_order %in% cluster_list]
           if ((length(df$Description) == 0) || length(which(!is.na(unique(df$qvalue)))) == 0) {
             p1 <- NULL
           } else{

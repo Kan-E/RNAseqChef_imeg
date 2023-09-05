@@ -4766,9 +4766,15 @@ shinyServer(function(input, output, session) {
   })
   output$download_cond3_result = downloadHandler(
     filename = function() {paste(download_cond3_dir(),"DEG_result_ALL.txt", sep = "-")},
-    content = function(file){write.table(data_3degcount1(gene_type=gene_type2(),data = deg_norm_count2(),result_Condm = deg_result2_condmean(),
-                                                         result_FDR = deg_result2(), specific = 1,result_list=TRUE), 
-                                         file, row.names = T, col.names=NA, sep = "\t", quote = F)}
+    content = function(file){
+      table <- data_3degcount1(gene_type=gene_type2(),data = deg_norm_count2(),result_Condm = deg_result2_condmean(),
+                               result_FDR = deg_result2(), specific = 1,result_list=TRUE)
+      if(gene_type2() != "SYMBOL"){
+        if(length(grep("SYMBOL", colnames(table))) != 0){
+          table$Unique_ID <- gsub("\n"," ",table$Unique_ID)
+        }
+      }
+      write.table(table,file, row.names = T, col.names=NA, sep = "\t", quote = F)}
   )
   
   
