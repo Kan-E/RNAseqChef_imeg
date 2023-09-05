@@ -2019,7 +2019,7 @@ shinyServer(function(input, output, session) {
       }else{
         matrix_list <- list()
         for (name in names(files)) {
-          matrix <- as.data.frame(files[[name]])
+          matrix <- as.data.frame(files[name])
           matrix_2 <- matrix
           matrix_3 <- merge(matrix, matrix_2, by = 0)[,-2:-(1 + length(colnames(matrix)))]
           matrix_list[name] <- list(matrix_3)
