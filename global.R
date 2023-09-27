@@ -1347,12 +1347,13 @@ GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene
       return(H_t2g)
   }else return(NULL)
 }
-GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot"){
+GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL){
   collist <- gsub("\\_.+$", "", colnames(data))
   collist <- unique(collist)
   rowlist <- rownames(data)
   data$Row.names <- rownames(data)
   data <- data %>% gather(key=sample, value=value,-Row.names)
+  if(!is.null(pair)) data <- dplyr::left_join(data,pair)
   data$sample <- gsub("\\_.+$", "", data$sample)
   data$Row.names <- as.factor(data$Row.names)
   data$sample <- factor(data$sample,levels=collist,ordered=TRUE)
@@ -1468,6 +1469,20 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot"){
                        scales = "free", add = "jitter", facet.by = "Row.names",
                        add.params = list(size=0.5), xlab = FALSE, error.plot = "errorbar") + 
         stat_summary(geom = "point", shape = 95,size = 5,col = "black", fun = "mean")
+    }
+    if(!is.null(pair)){
+      if(plottype == "Boxplot"){
+      p <- ggplot(data, aes(x = sample, y = value)) + geom_boxplot(aes(fill=sample),alpha = .2)+
+        geom_line(aes(group = pair),alpha = .2) +
+        geom_point() + theme_classic() + theme(legend.position = "top")+ 
+        xlab(NULL)
+      }
+      if(plottype == "without boxplot"){
+        p <- ggplot(data, aes(x = sample, y = value,group = pair)) + 
+          geom_line() +
+          geom_point(aes(color = sample)) + theme_classic() + theme(legend.position = "top")+ 
+          xlab(NULL)+ scale_color_manual(values=c("#00BFC4", "#F8766D"))
+      }
     }
   p <- (facet(p, facet.by = "Row.names",
               panel.labs.background = list(fill = "transparent", color = "transparent"),

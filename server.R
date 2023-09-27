@@ -206,25 +206,28 @@ shinyServer(function(input, output, session) {
   }))
   output$paired_sample_file <- renderUI({
     if(input$paired_sample == "Yes"){
-      fileInput("paired_sample_file","Select a file.",accept = c("txt", "csv","xlsx"),
+      fileInput("paired_sample_file","Select a paired-sample file.",accept = c("txt", "csv","xlsx"),
                 multiple = FALSE, width = "100%")
     }
   })
   d_paired_sample_file <- reactive({
-    if(!is.null(input$paired_sample_file) && !is.null(input$sample_order)){
+    if(!is.null(input$sample_order)){
       tmp <- input$paired_sample_file$datapath
-      if(is.null(input$paired_sample_file) && input$goButton > 0 )  tmp = "data/paired.csv"
+      if(is.null(input$paired_sample_file) && input$goButton > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/paired.csv"
+      print(tmp)
       df <- read_df(tmp = tmp)
-      if(!is.null(df)) rownames(df) <- gsub("-",".",rownames(df))
-      df2 <- data.frame(rowname=rownames(df),pair=df[,1])
-      df <- df2 %>% dplyr::filter(rowname %in% input$sample_order) %>% dplyr::arrange(factor(rowname, levels=input$sample_order))
+      if(!is.null(df)) {
+        rownames(df) <- gsub("-",".",rownames(df))
+        df2 <- data.frame(sample=rownames(df),pair=df[,1])
+        df <- df2 %>% dplyr::filter(sample %in% input$sample_order) %>% dplyr::arrange(factor(sample, levels=input$sample_order))
+      }
       return(df)
     }
   })
   output$paired_table <- renderDataTable({
     if(input$paired_sample == "Yes" && !is.null(d_row_count_matrix)){
       if(input$DEG_method == "EBSeq") validate("The EBSeq method is not available for paired-sample analysis. Please use a different method.")
-      d_paired_sample_file()
+      data.frame(pair=d_paired_sample_file()$pair,row.names = d_paired_sample_file()$sample)
     }
   })
   observeEvent(d_row_count_matrix(), ({
@@ -1257,7 +1260,11 @@ shinyServer(function(input, output, session) {
     }
     return(data2)
   })
-  
+  output$paired_for_GOItype <- renderUI({
+    if(input$paired_sample == "Yes"){
+      selectInput("paired_for_GOItype","Plot type",c("Boxplot","without boxplot"))
+    }
+  })
   pair_GOIbox <- reactive({
     count <- deg_norm_count()
     if(gene_type1() != "SYMBOL"){
@@ -1278,7 +1285,8 @@ shinyServer(function(input, output, session) {
       p <- NULL
     }else{
       data3 <- data2[,8:(7 + Cond_1 + Cond_2)]
-      p <- GOIboxplot(data = data3) + scale_fill_manual(values=c("gray", "#ff8082"))
+      if(input$paired_sample != "Yes") pair= NULL else pair = d_paired_sample_file()
+      p <- GOIboxplot(data = data3, pair=pair,plottype = input$paired_for_GOItype) + scale_fill_manual(values=c("gray", "#ff8082"))
     }
     return(p)
   })

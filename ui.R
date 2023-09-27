@@ -353,6 +353,7 @@ shinyUI(
                                        ),
                                 column(4, plotOutput("GOIheatmap"))
                               ),
+                              htmlOutput("paired_for_GOItype"),
                               div(
                                 plotOutput("GOIbox", height = "100%"),
                                 style = "height: calc(100vh  - 100px)"
