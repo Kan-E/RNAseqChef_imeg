@@ -44,6 +44,7 @@ shinyUI(
                  column(12,
                         br(),
                         h4("Current version (v1.0.9, 2023/9/3)"),
+                        p("(2023/9/27) Add function for paired-sample analysis in Pair-wise DEG"),
                         p("(2023/9/5) Fix bug regarding 'Option: Select a normalized count file' in Pair-wise DEG, 3 conditions DEG, and Multi DEG when using ENSEMBL ID as gene names."),
                         p("(2023/9/3) Improve correlation analysis in Normalized count analysis. Improve dotplot for enrichment analysis (you can change the order of groups)."),
                         p(paste0("(2023/8/30) fix bug regarding Normalized count analysis. ",
@@ -1953,6 +1954,7 @@ shinyUI(
                                    strong("(2023/8/23) Fix bug regarding Normalized count analysis.
                                           1. bug regarding input format 'normalized count data + meta data'.
                                           2. bug regarding table data of k-means clustering when 'cluster order' is used."),
+                                   strong("(2023/9/27) Add function for paired-sample analysis in Pair-wise DEG"),br(),
                             )
                           )
                  )

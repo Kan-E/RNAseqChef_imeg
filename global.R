@@ -1472,16 +1472,17 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL){
     }
     if(!is.null(pair)){
       if(plottype == "Boxplot"){
-      p <- ggplot(data, aes(x = sample, y = value)) + geom_boxplot(aes(fill=sample),alpha = .2)+
+      p <- ggplot(data, aes(x = sample, y = value)) + geom_boxplot(aes(fill=sample))+
         geom_line(aes(group = pair),alpha = .2) +
         geom_point() + theme_classic() + theme(legend.position = "top")+ 
-        xlab(NULL)
+        xlab(NULL) + ylim(c(0, NA)) + ylab("Normalized_count")
       }
       if(plottype == "without boxplot"){
         p <- ggplot(data, aes(x = sample, y = value,group = pair)) + 
           geom_line() +
           geom_point(aes(color = sample)) + theme_classic() + theme(legend.position = "top")+ 
-          xlab(NULL)+ scale_color_manual(values=c("#00BFC4", "#F8766D"))
+          xlab(NULL) + ylim(c(0, NA)) + ylab("Normalized_count")+ 
+          scale_color_manual(values=c("#00BFC4", "#F8766D"))
       }
     }
   p <- (facet(p, facet.by = "Row.names",
