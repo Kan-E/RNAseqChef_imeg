@@ -204,6 +204,29 @@ shinyServer(function(input, output, session) {
                            choices = colnames(pre_d_row_count_matrix()),selected = colnames(pre_d_row_count_matrix()))
     }
   }))
+  output$paired_sample_file <- renderUI({
+    if(input$paired_sample == "Yes"){
+      fileInput("paired_sample_file","Select a file.",accept = c("txt", "csv","xlsx"),
+                multiple = FALSE, width = "100%")
+    }
+  })
+  d_paired_sample_file <- reactive({
+    if(!is.null(input$paired_sample_file) && !is.null(input$sample_order)){
+      tmp <- input$paired_sample_file$datapath
+      if(is.null(input$paired_sample_file) && input$goButton > 0 )  tmp = "data/paired.csv"
+      df <- read_df(tmp = tmp)
+      if(!is.null(df)) rownames(df) <- gsub("-",".",rownames(df))
+      df2 <- data.frame(rowname=rownames(df),pair=df[,1])
+      df <- df2 %>% dplyr::filter(rowname %in% input$sample_order) %>% dplyr::arrange(factor(rowname, levels=input$sample_order))
+      return(df)
+    }
+  })
+  output$paired_table <- renderDataTable({
+    if(input$paired_sample == "Yes" && !is.null(d_row_count_matrix)){
+      if(input$DEG_method == "EBSeq") validate("The EBSeq method is not available for paired-sample analysis. Please use a different method.")
+      d_paired_sample_file()
+    }
+  })
   observeEvent(d_row_count_matrix(), ({
     updateCollapse(session,id =  "input_collapse_panel", open="D_row_count_matrix_panel")
   }))
@@ -334,8 +357,15 @@ shinyServer(function(input, output, session) {
     if(length(unique(collist)) == 2){
       if (input$DEG_method == "DESeq2") {
         withProgress(message = "DESeq2",{
-          group <- data.frame(con = factor(collist))
-          dds<- DESeqDataSetFromMatrix(countData = round(count),colData = group, design = ~ con)
+          if(input$paired_sample == "Yes"){
+            if(!is.null(d_paired_sample_file())) {
+              group <- data.frame(con = factor(collist),pair=factor(d_paired_sample_file()$pair))
+              dds<- DESeqDataSetFromMatrix(countData = round(count),colData = group, design = ~ pair + con)
+            }else validate("Please upload a paired-sample file")
+          }else{
+            group <- data.frame(con = factor(collist))
+            dds<- DESeqDataSetFromMatrix(countData = round(count),colData = group, design = ~ con)
+          }
           dds$con <- factor(dds$con, levels = unique(collist))
           dds <- DESeq(dds)
           incProgress(1)
@@ -348,8 +378,19 @@ shinyServer(function(input, output, session) {
           keep <- filterByExpr(dds)
           dds = dds[keep, , keep.lib.sizes=FALSE]
           dds <- calcNormFactors(dds)
+          if(input$paired_sample == "Yes"){
+            if(!is.null(d_paired_sample_file())) {
+              con = factor(collist)
+              pair=factor(d_paired_sample_file()$pair)
+              design <- model.matrix(~ pair + con)
+              dds <- estimateGLMCommonDisp(dds, design)
+              dds <- estimateGLMTrendedDisp(dds, design)
+              dds <- estimateGLMTagwiseDisp(dds, design)
+            }else validate("Please upload a paired-sample file")
+          }else{
           dds <- estimateCommonDisp(dds)
           dds <- estimateTagwiseDisp(dds)
+          }
           incProgress(1)
         })
       }
@@ -382,8 +423,15 @@ shinyServer(function(input, output, session) {
         if(input$DEG_method == "edgeR"){
           dds <- dds()
           group <- factor(collist)
-          result <- exactTest(dds, pair = c(unique(group)[2],unique(group)[1]))
+          if(input$paired_sample == "Yes") {
+            con = factor(collist)
+            pair=factor(d_paired_sample_file()$pair)
+            design <- model.matrix(~ pair + con)
+            fit <- glmFit(dds, design)
+            result <- glmLRT(fit, coef = dim(design)[2])
+          }else result <- exactTest(dds, pair = c(unique(group)[2],unique(group)[1]))
           res <- as.data.frame(topTags(result, n = nrow(count)))
+          if(input$paired_sample == "Yes") res <- res[,-3]
           qvalue <- qvalue::qvalue(res$PValue)
           res$padj <- qvalue$qvalues
           ihw_res <- try(ihw(PValue ~ 2^logCPM,  data=res, alpha = 0.1))
@@ -399,26 +447,39 @@ shinyServer(function(input, output, session) {
           colnames(res) <- label
         }
         if(input$DEG_method == "limma"){
-          withProgress(message = "limma",{
+          
             collist <- gsub(" ", ".", collist)
             group <- factor(collist)
             count <- log(count + 1,2)
             eset = new("ExpressionSet", exprs=as.matrix(count))
-            design <- model.matrix(~0+collist)
-            colnames(design) <- unique(collist)
-            fit <- lmFit(eset, design)
-            comparisons <-  paste(unique(collist)[1],"-",unique(collist)[2],sep="")
-            cont.matrix <- makeContrasts(contrasts=comparisons, levels=design)
-            fit <- contrasts.fit(fit, cont.matrix)
-            fit2 <- eBayes(fit,trend = TRUE)
-            res =topTable(fit2, number = 1e12)
+
+            if(input$paired_sample == "Yes"){
+              if(!is.null(d_paired_sample_file())) {
+                con = factor(collist)
+                pair=factor(d_paired_sample_file()$pair,levels = unique(d_paired_sample_file()$pair))
+                design <- model.matrix(~ pair + con)
+                fit <- lmFit(eset, design)
+                fit <- eBayes(fit)
+                print(fit)
+                res <- topTable(fit,coef = dim(design)[2], number = 1e12)
+              }
+            }else{
+              design <- model.matrix(~0+collist)
+              colnames(design) <- unique(collist)
+              fit <- lmFit(eset, design)
+              comparisons <-  paste(unique(collist)[1],"-",unique(collist)[2],sep="")
+              cont.matrix <- makeContrasts(contrasts=comparisons, levels=design)
+              fit <- contrasts.fit(fit, cont.matrix)
+              fit2 <- eBayes(fit,trend = TRUE)
+              res =topTable(fit2, number = 1e12)
+            }
             if(input$cutoff_limma == "fdr"){
               colnames(res) <- c("log2FoldChange","baseMean","t","pval","padj","B")
             }else{
               colnames(res) <- c("log2FoldChange","baseMean","t","padj","padj2","B")
             }
             res$baseMean <- 2^res$baseMean
-          })
+        
         }
         if(input$DEG_method == "EBSeq"){
           withProgress(message = "EBSeq",{
@@ -473,6 +534,12 @@ shinyServer(function(input, output, session) {
           }
           if (input$DEG_method == "edgeR") {
             dds <- dds()
+            if(input$paired_sample == "Yes"){
+              if(!is.null(d_paired_sample_file())) {
+                dds <- estimateCommonDisp(dds)
+                dds <- estimateTagwiseDisp(dds)
+              }else validate("Please upload a paired-sample file")
+            }
             normalized_counts <- t(t(dds$pseudo.counts)*(dds$samples$norm.factors))
           }
           if (input$DEG_method == "limma") {
@@ -5478,9 +5545,14 @@ shinyServer(function(input, output, session) {
         PCA_table <- "Clustering/pca.txt"
         scatter <- "DEG_result/scatter_plot.pdf"
         fs <- c(DEG, result1,result2,result3,count,PCA,PCA_table,scatter)
-        write.table(data_3degcount1(gene_type=gene_type2(),data = deg_norm_count2(),result_Condm = deg_result2_condmean(),
-                                    result_FDR = deg_result2(), specific = 1,result_list=TRUE), 
-                    DEG, row.names = T, col.names=NA, sep = "\t", quote = F)
+        table <- data_3degcount1(gene_type=gene_type2(),data = deg_norm_count2(),result_Condm = deg_result2_condmean(),
+                                 result_FDR = deg_result2(), specific = 1,result_list=TRUE)
+        if(gene_type2() != "SYMBOL"){
+          if(length(grep("SYMBOL", colnames(table))) != 0){
+            table$Unique_ID <- gsub("\n"," ",table$Unique_ID)
+          }
+        }
+        write.table(table, DEG, row.names = T, col.names=NA, sep = "\t", quote = F)
         write.table(deg_norm_count2(), count, row.names = T, col.names=NA, sep = "\t", quote = F)
         write.table(data_3degcount2_1(), result1, row.names = F, sep = "\t", quote = F)
         write.table(data_3degcount2_2(), result2, row.names = F, sep = "\t", quote = F)
@@ -7351,7 +7423,7 @@ shinyServer(function(input, output, session) {
     }
   })
   
-  venn_enrich_input1 <- reactive({
+  pre_venn_enrich_input1 <- reactive({
     if(is.null(input$venn_whichGroup1)){
       return(NULL)
     }else{
@@ -7367,6 +7439,8 @@ shinyServer(function(input, output, session) {
       return(clusterCount)
     }
   })
+  
+  venn_enrich_input1 <- debounce(pre_venn_enrich_input1,1000)
   
   output$Gene_set9 <- renderUI({
     if(input$Species7 != "Xenopus laevis" && input$Ortholog7 != "Arabidopsis thaliana" && input$Species7 != "Arabidopsis thaliana"){

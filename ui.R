@@ -271,6 +271,11 @@ shinyUI(
             }"))
                                                          ),
                                                          fluidRow(
+                                                           column(6, radioButtons("paired_sample", "Paired-sample?", c('No'="No",'Yes'="Yes"), selected = "No")),
+                                                           column(6, htmlOutput("paired_sample_file"),)
+                                                         ),
+                                                         dataTableOutput('paired_table'),
+                                                         fluidRow(
                                                            column(4, downloadButton("download_pair_d_row_count", "Download defined raw count"))
                                                          ),
                                                          dataTableOutput('D_Row_count_matrix')
