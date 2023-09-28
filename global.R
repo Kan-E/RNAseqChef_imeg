@@ -96,9 +96,14 @@ read_df <- function(tmp, Species=NULL){
       df2 <- as.data.frame(df2)
       df <- try(data.frame(row.names = df2[,1]),silent = T)
       if(class(df) != "try-error") {
-        rownames(df2) <- df2[,1]
+        if(dim(df2)[2] == 2){
+          df <- data.frame(row.names = df2[,1],a = df2[,2])
+          colnames(df)[1] <- colnames(df2)[2]
+        }else{
+          rownames(df2) <- df2[,1]
         df <- df2[,-1]
         colnames(df) <- gsub("-",".",colnames(df))
+        }
       }
     }
     if(tools::file_ext(tmp) == "csv") df <- try(read.csv(tmp, header=TRUE, sep = ",", row.names = 1,quote = ""))
