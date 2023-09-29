@@ -1285,8 +1285,14 @@ shinyServer(function(input, output, session) {
       p <- NULL
     }else{
       data3 <- data2[,8:(7 + Cond_1 + Cond_2)]
-      if(input$paired_sample != "Yes") pair= NULL else pair = d_paired_sample_file()
-      p <- GOIboxplot(data = data3, pair=pair,plottype = input$paired_for_GOItype) + scale_fill_manual(values=c("gray", "#ff8082"))
+      if(input$paired_sample != "Yes") {
+        pair= NULL
+        plottype="Boxplot"
+      }else {
+        pair = d_paired_sample_file()
+        plottype = input$paired_for_GOItype
+      }
+      p <- GOIboxplot(data = data3, pair=pair,plottype = plottype) + scale_fill_manual(values=c("gray", "#ff8082"))
     }
     return(p)
   })
@@ -1318,23 +1324,41 @@ shinyServer(function(input, output, session) {
             count <- count[, - which(colnames(count) == "SYMBOL")]
           }
         }
-        if(gene_type1() != "SYMBOL"){
-          if(input$Species != "not selected"){
-            Unique_ID <- input$GOI
-            label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
-            data2 <- merge(data, label_data, by="Unique_ID")
-            rownames(data2) <- data2$Unique_ID
-            data2 <- data2[, - which(colnames(data2) == "Row.names")]
+        if(dim(brush_info())[1] == 0){
+          if(gene_type1() != "SYMBOL"){
+            if(input$Species != "not selected"){
+              Unique_ID <- input$GOI
+              label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
+              data2 <- merge(data, label_data, by="Unique_ID")
+              rownames(data2) <- data2$Unique_ID
+              data2 <- data2[, - which(colnames(data2) == "Row.names")]
+            }else{
+              Row.names <- input$GOI
+              label_data <- as.data.frame(Row.names, row.names = Row.names)
+              data2 <- merge(data, label_data, by="Row.names")
+              rownames(data2) <- data2$Row.names}
           }else{
             Row.names <- input$GOI
             label_data <- as.data.frame(Row.names, row.names = Row.names)
             data2 <- merge(data, label_data, by="Row.names")
-            rownames(data2) <- data2$Row.names}
+            rownames(data2) <- data2$Row.names
+          }
         }else{
-          Row.names <- input$GOI
-          label_data <- as.data.frame(Row.names, row.names = Row.names)
-          data2 <- merge(data, label_data, by="Row.names")
-          rownames(data2) <- data2$Row.names
+          data2<-brush_info()
+          if(input$GOI_plot_select == "Volcano plot"){
+            data2 <- data2[, - which(colnames(data2) == "minusLog10padj")]
+          }else{
+            data2 <- data2[, - which(colnames(data2) == "log2baseMean")]
+          }
+          if(gene_type1() != "SYMBOL"){
+            if(input$Species != "not selected"){
+              rownames(data2) <- data2$Unique_ID
+            }else{
+              rownames(data2) <- data2$Row.names
+            }
+          }else{
+            rownames(data2) <- data2$Row.names
+          }
         }
         rowlist <- rownames(data2)
         if(input$pair_pdf_height == 0){
