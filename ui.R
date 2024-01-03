@@ -33,7 +33,7 @@ shinyUI(
                ),
       "",
       id='navBar',
-      tabPanel("RNAseqChef" ,value='Title', icon = icon("utensils"),
+      tabPanel("RNAseqChef_beta" ,value='Title', icon = icon("utensils"),
                fluidRow(
                  column(12,
                         br(),br(),
@@ -43,22 +43,9 @@ shinyUI(
                  ),
                  column(12,
                         br(),
-                        h4("Current version (v1.0.9, 2023/9/3)"),
-                        p("(2023/9/27) Add function for paired-sample analysis in Pair-wise DEG"),
-                        p("(2023/9/5) Fix bug regarding 'Option: Select a normalized count file' in Pair-wise DEG, 3 conditions DEG, and Multi DEG when using ENSEMBL ID as gene names."),
-                        p("(2023/9/3) Improve correlation analysis in Normalized count analysis. Improve dotplot for enrichment analysis (you can change the order of groups)."),
-                        p(paste0("(2023/8/30) fix bug regarding Normalized count analysis. ",
-                                 "Add new function 'Correlation analysis' in Normalized count analysis.")),
-                        p("(2023/8/14) Improve k-means clustering in Multi DEG."),
-                        p("(2023/8/10) Improve k-means clustering in Normalized count analysis."),
-                        p("(2023/8/8) Add 'Select samples' function in Pair-wise DEG, 3 conditions DEG, and Normalized count analysis."),
-                        p("(2023/8/8) Add MA plot in GOI profiling of Pair-wise DEG."),
-                        p("(2023/8/4) Fix bug regarding the batch-mode in pair-wise DEG.", style = "color:red"),
-                        p("(2023/8/1) Significant bug: FDR control for EdgeR in pair-wise DEG. 
-                          Previous versions could not properly handle 'Qvalue' and 'IHW' when using EdgeR (There were no issues when 'BH' was selected).", style = "color:red"),
-                        "Add new species (117 plants, 70 fungi, and 251 metazoa).",br(),
-                        "Improve GOI profiling in the Pair-wise DEG, 3 conditions DEG, and volcano navi.",br(),
-                        "Improve the image to provide instructions on the input format for the Venn diagram.",br(),
+                        h4("Current version (v1.1.0-beta, 2024/1/3)"),
+                        p("(2024/1/3) Improve the visualization of the clustering analysis (PCA, MDS, and UMAP)."),
+                        p("(2024/1/3) Add a function to select a second pair for fold change cut-off in Multi DEG and Normalized count analysis."),
                         "See the details from 'More -> Change log'",
                         h4("Publication"),
                         "Etoh K. & Nakao M. A web-based integrative transcriptome analysis, RNAseqChef, uncovers cell/tissue type-dependent action of sulforaphane. JBC, (2023), 299(6), 104810.", 
@@ -160,6 +147,16 @@ shinyUI(
                                     selectInput("FDR_method", "FDR method", c("BH", "Qvalue", "IHW"), selected = "BH")
                    ),
                    conditionalPanel(condition="input.DEG_method=='limma'",
+                                    fluidRow(
+                                      column(6, radioButtons("limma_trend","Trend",
+                                                             c('TRUE'=TRUE,
+                                                               'FALSE'=FALSE
+                                                             ), selected = TRUE)),
+                                      column(6, radioButtons("regression_mode","Regression",
+                                                             c('least squares'=FALSE,
+                                                               'robust'=TRUE
+                                                             ), selected = FALSE))
+                                    ),
                                     radioButtons("cutoff_limma", "parameter for cut-off (fdr or pval)", c('fdr'="fdr",'pval'="pval"), selected = "fdr")
                    ),
                    fluidRow(
@@ -192,6 +189,7 @@ shinyUI(
                      column(4, numericInput("fdr", "FDR", min   = 0, max   = 1, value = 0.05)),
                      column(4, numericInput("basemean", "Basemean", min   = 0, max   = NA, value = 0))
                    ),
+                   conditionalPanel(condition="input.DEG_method!='limma'",
                    fileInput("norm_file1",
                              strong(
                                span("Option: Select a normalized count file"),
@@ -204,7 +202,8 @@ shinyUI(
                    bsPopover("icon4", "Option: Normalized count file (txt, csv, or xlsx):", 
                              content=paste0("You can use a normalized count data (e.g. TPM count) for basemean cutoff and boxplot.<br>",
                                             strong("The column names of the normalized count data must match those of the uploaded raw count data.")), 
-                             placement = "right",options = list(container = "body")),
+                             placement = "right",options = list(container = "body"))
+                   ),
                    strong(span("Output plot size setting for pdf (0: default)"),
                           span(icon("info-circle"), id = "pair_pdf_icon", 
                                options = list(template = popoverTempate))),
@@ -285,12 +284,13 @@ shinyUI(
                      ),
                      tabPanel("Result overview",
                               fluidRow(
-                                column(12, downloadButton("download_pair_PCA", "Download clustering analysis"),
+                                column(6, downloadButton("download_pair_PCA", "Download clustering analysis"),
                                        textOutput("not_cond2"),
                                        tags$head(tags$style("#not_cond2{color: red;
                                  font-size: 20px;
             font-style: bold;
-            }")))
+            }"))),
+                                column(6, selectInput("PCA_legend","Label",c("Label","Legend"),selected = "Label"))
                               ),
                               plotOutput("PCA"),
                               fluidRow(
@@ -568,12 +568,13 @@ shinyUI(
                      ),
                      tabPanel("Result overview",
                               fluidRow(
-                                column(12, downloadButton("download_3cond_PCA", "Download clustering analysis"),
+                                column(6, downloadButton("download_3cond_PCA", "Download clustering analysis"),
                                        textOutput("not_cond3"),
                                        tags$head(tags$style("#not_cond3{color: red;
                                  font-size: 20px;
             font-style: bold;
-            }")))
+            }"))),
+                                column(6, selectInput("PCA_legend_cond3","Label",c("Label","Legend"),selected = "Label"))
                               ),
                               plotOutput("PCA2"),
                               fluidRow(
@@ -733,6 +734,25 @@ shinyUI(
                                                             img(src="input_format_multi.png", width = 400,height = 400)),
                                               placement = "right",options = list(container = "body")),
                    ),
+                   radioButtons('DEG_method_multi','DEG analysis method:',
+                                c('DESeq2'="DESeq2"),selected = "DESeq2"),
+                   conditionalPanel(condition="input.DEG_method_multi=='limma'",
+                                    fluidRow(
+                                      column(6, radioButtons("limma_trend_multi","Trend",
+                                                             c('TRUE'=TRUE,
+                                                               'FALSE'=FALSE
+                                                             ), selected = TRUE)),
+                                      column(6, radioButtons("regression_mode_multi","Regression",
+                                                             c('least squares'=FALSE,
+                                                               'robust'=TRUE
+                                                             ), selected = FALSE))
+                                    )
+                   ),
+                   conditionalPanel(condition="input.DEG_method_multi=='DESeq2'",
+                                    fluidRow(
+                                      column(6,  selectInput("FDR_method6", "FDR method", c("BH", "Qvalue", "IHW"), selected = "BH"))
+                                    )
+                   ),
                    fluidRow(
                             column(6, selectInput("Species6", "Species", species_list, selected = "not selected")),
                             conditionalPanel(condition=c("input.Species6 != 'not selected' && input.Species6 != 'Homo sapiens' &&
@@ -753,15 +773,13 @@ shinyUI(
                                                        placement = "right",options = list(container = "body"))),
                                              column(12, selectInput("Biomart_archive6", "Biomart host", ensembl_archive)))
                             ),
-                   fluidRow(
-                     column(6,  selectInput("FDR_method6", "FDR method", c("BH", "Qvalue", "IHW"), selected = "BH"))
-                   ),
                    h4("Cut-off conditions:"),
                    fluidRow(
                      column(4, numericInput("fc6", "Fold Change", min   = 0, max   = NA, value = 1.5)),
                      column(4, numericInput("fdr6", "FDR", min   = 0, max   = 1, value = 0.05)),
                      column(4, numericInput("basemean6", "Basemean", min   = 0, max   = NA, value = 0))
                    ),
+                   conditionalPanel(condition="input.DEG_method_multi!='limma'",
                    fileInput("multi_norm_file1",
                              strong(
                                span("Option: Select a normalized count file"),
@@ -773,7 +791,8 @@ shinyUI(
                              width = "80%"),
                    bsPopover("icon10", "Option: Normalized count file (txt, csv, or xlsx):", 
                              content="You can use a normalized count data (e.g. TPM count) for basemean cutoff and boxplot.", 
-                             placement = "right",options = list(container = "body")),
+                             placement = "right",options = list(container = "body"))
+                   ),
                    strong(span("Output plot size setting for pdf (0: default)"),
                           span(icon("info-circle"), id = "multi_pdf_icon", 
                                options = list(template = popoverTempate))),
@@ -831,7 +850,8 @@ shinyUI(
                      ),
                      tabPanel("Result overview",
                               fluidRow(
-                                column(4, downloadButton("download_multi_PCA", "Download clustering analysis"))
+                                column(4, downloadButton("download_multi_PCA", "Download clustering analysis")),
+                                column(6, selectInput("PCA_legend_multi","Label",c("Label","Legend"),selected = "Label"))
                               ),
                               plotOutput("multi_PCA"),
                               fluidRow(
@@ -841,7 +861,8 @@ shinyUI(
                                        tags$head(tags$style("#multi_umap_error{color: red;
                                  font-size: 20px;
             font-style: bold;
-            }")))
+            }"))),
+                                column(6, selectInput("multi_umap_label","Label",c("Label","None"),selected = "Label"))
                                 ),
                               div(
                                 plotOutput("multi_umap", height = "100%"),
@@ -872,16 +893,29 @@ shinyUI(
                               )),
                      tabPanel("Divisive clustering",
                               fluidRow(
-                                column(4, downloadButton("download_multi_boxplot", "Download boxplots"))
+                                column(6, htmlOutput("selectFC")),
+                                column(6, htmlOutput("selectFC_2")),
                               ),
-                              fluidRow(
-                                column(3, htmlOutput("selectFC")),
-                                column(3, textOutput("multi_DEG_total1"),
-                                       tags$head(tags$style("#multi_DEG_total1{color: red;
+                              textOutput("multi_DEG_total1"),
+                              tags$head(tags$style("#multi_DEG_total1{color: red;
                                  font-size: 20px;
                                  font-style: bold;
-                                 }"))),
-                                column(6, htmlOutput("topP")),
+                                 }")),
+                              htmlOutput("topP"),
+                              fluidRow(
+                                column(3, actionButton("start_multi", "Start"),
+                                       tags$head(tags$style("#start_multi{color: red;
+                                 font-size: 20px;
+                                 font-style: bold;
+                                 }"),
+                                                 tags$style("
+          body {
+            padding: 0 !important;
+          }"
+                                                 ))),
+                              ),
+                              fluidRow(
+                                column(4, downloadButton("download_multi_boxplot", "Download boxplots"))
                               ),
                               div(
                                 plotOutput("multi_boxplot", height = "100%"),
@@ -944,12 +978,15 @@ shinyUI(
                      ),
                      tabPanel("k-means clustering",
                               fluidRow(
-                                column(3, htmlOutput("selectFC2")),
-                                column(3, textOutput("multi_DEG_total2"),
-                                       tags$head(tags$style("#multi_DEG_total2{color: red;
+                                column(6, htmlOutput("selectFC2")),
+                                column(6, htmlOutput("selectFC2_2"))
+                              ),
+                              textOutput("multi_DEG_total2"),
+                              tags$head(tags$style("#multi_DEG_total2{color: red;
                                  font-size: 20px;
                                  font-style: bold;
-                                 }"))),
+                                 }")),
+                              fluidRow(
                                 column(6, htmlOutput("topP2"))
                               ),
                               fluidRow(
@@ -1352,7 +1389,8 @@ shinyUI(
                      ),
                      tabPanel("Clustering",
                               fluidRow(
-                                column(3, downloadButton("download_norm_PCA", "Download Clustering"))
+                                column(3, downloadButton("download_norm_PCA", "Download Clustering")),
+                                column(6, selectInput("PCA_legend_norm","Label",c("Label","Legend"),selected = "Label"))
                               ),
                               plotOutput("norm_PCA"),
                               fluidRow(
@@ -1362,7 +1400,8 @@ shinyUI(
                                        tags$head(tags$style("#norm_umap_error{color: red;
                                  font-size: 20px;
             font-style: bold;
-            }")))
+            }"))),
+                                column(6, selectInput("norm_umap_label","Label",c("Label","None"),selected = "Label"))
                               ),
                               div(
                                 plotOutput("norm_umap", height = "100%"),
@@ -1457,13 +1496,16 @@ shinyUI(
                      ),
                      tabPanel("k-means clustering",
                               fluidRow(
-                                column(4, htmlOutput("selectFC_norm"),
-                                       textOutput("filtered_region"),
-                                       tags$head(tags$style("#filtered_region{color: red;
+                                column(4, htmlOutput("selectFC_norm")),
+                                column(4, htmlOutput("selectFC_norm2"))
+                                ),
+                              textOutput("filtered_region"),
+                              tags$head(tags$style("#filtered_region{color: red;
                                  font-size: 20px;
                                  font-style: bold;
                                  }")),
-                                       htmlOutput("norm_kmeans_num"),
+                              fluidRow(
+                                column(4, htmlOutput("norm_kmeans_num"),
                                        htmlOutput("kmeans_cv"),
                                        actionButton("kmeans_start", "Start"),
                                        tags$head(tags$style("#kmeans_start{color: red;
@@ -1531,7 +1573,7 @@ shinyUI(
                                            "<br>The first column is", strong("gene name"), ".<br>", 
                                            "The second and subsequent columns do not affect the analysis.<br>", 
                                            "File names are used as", strong("group names"),".<br><br>",
-                                           img(src="input_format_enrich.png", width = 250,height = 400)), 
+                                           img(src="input_format_enrich.png", width = 400,height = 250)), 
                              placement = "right",options = list(container = "body")),
                    fluidRow(
                      column(6, selectInput("Species4", "Species", species_list, selected = "not selected")),
@@ -1776,7 +1818,20 @@ shinyUI(
                                          ),
                                          fluidRow(
                                            column(4, downloadButton("download_deg_GOIbox", "Download boxplot"))
-                                         ))
+                                         ),
+                                         bsCollapse(id="DEGlist_volcano_collapse_panel",open="up_panel",multiple = FALSE,
+                                                    bsCollapsePanel(title="up (red) list:",
+                                                                    value="up_panel",
+                                                                    downloadButton("download_uplist_volcano", "Download"),
+                                                                    dataTableOutput('uplist_volcano')
+                                                    ),
+                                                    bsCollapsePanel(title="down (blue) list:",
+                                                                    value="down_panel",
+                                                                    downloadButton("download_downlist_volcano", "Download"),
+                                                                    dataTableOutput('downlist_volcano')
+                                                    )
+                                         )
+                                         )
                               )
                             )
                           ) #sidebarLayout
@@ -1830,6 +1885,22 @@ shinyUI(
                               )
                             )
                           ) #sidebarLayout
+                 ),
+                 tabPanel("Publications",
+                          fluidRow(
+                            column(12,
+                            h2("Publications citing RNAseqChef:"),
+                            tags$ol(
+                              tags$li(HTML("L. Mwalilino, M. Yamane, K. Ishiguro, S. Usuki, M. Endoh, H. Niwa, The role of Zfp352 in the regulation of transient expression of 2‐cell specific genes in mouse embryonic stem cells. 
+                                      <b>Genes to Cells</b> (2023) <a href='https://doi.org/10.1111/gtc.13070'>https://doi.org/10.1111/gtc.13070</a>")), 
+                              tags$li(HTML("M. Horie, K. Takagane, G. Itoh, S. Kuriyama, K. Yanagihara, M. Yashiro, M. Umakoshi, A. Goto, J. Arita, M. Tanaka, Exosomes secreted by ST3GAL5 high cancer cells promote peritoneal dissemination by establishing a pre‐metastatic microenvironment. 
+                                      <b>Mol Oncol</b> (2023) <a href='https://doi.org/10.1002/1878-0261.13524'>https://doi.org/10.1002/1878-0261.13524</a>")),
+                              tags$li(HTML("K. Mine, S. Nagafuchi, S. Akazawa, N. Abiru, H. Mori, H. Kurisaki, Y. Yoshikai, H. Takahashi, K. Anzai, 
+                                           Tyk2-mediated signaling promotes the development of autoreactive CD8 + CTLs and 1 autoimmune type 1 diabetes 2 3 Affiliations, <b>bioRxiv</b> (2023) 
+                                           <a href='https://doi.org/10.1101/2023.07.14.548984'>https://doi.org/10.1101/2023.07.14.548984</a>")), 
+                            )
+                            )
+                          )
                  ),
                  tabPanel("Reference",
                           fluidRow(
@@ -1955,6 +2026,8 @@ shinyUI(
                                           1. bug regarding input format 'normalized count data + meta data'.
                                           2. bug regarding table data of k-means clustering when 'cluster order' is used."),
                                    strong("(2023/9/27) Add function for paired-sample analysis in Pair-wise DEG"),br(),
+                                   strong("(2024/1/3) Improve the visualization of the clustering analysis (PCA, MDS, and UMAP)."),br(),
+                                   strong("(2024/1/3) Add a function to select a second pair for fold change cut-off in Multi DEG and Normalized count analysis."),br(),
                             )
                           )
                  )

@@ -1,14 +1,33 @@
+## limma, 数字から始まるサンプル名によるエラー
+## multi-DEGにlimmaの追加
+## proteinIDへの対応
+## Receptor-Ligand interaction
 library(shiny)
+library(shinyBS, verbose = FALSE)
+library('shinyjs', verbose = FALSE)
 library(DT)
-library(readxl)
+library(org.Hs.eg.db)
+library(org.Mm.eg.db)
+library(org.Rn.eg.db)
+library(org.Dm.eg.db)
+library(org.Ce.eg.db)
+library(org.Xl.eg.db)
+library(AnnotationDbi)
+library(org.Bt.eg.db)
+library(org.Cf.eg.db)
+library(org.Dr.eg.db)
+library(org.Gg.eg.db)
+library(org.Mmu.eg.db)
+library(org.Pt.eg.db)
+library(org.Sc.sgd.db)
+library(org.At.tair.db)
+library(tidyverse)
 library(rstatix)
 library(multcomp)
-library(tidyverse)
 library(tools)
 library(ggpubr)
 library(venn)
 library(ggrepel)
-library(ggdendro)
 library(ggplotify)
 library(gridExtra)
 library(cowplot)
@@ -19,53 +38,26 @@ library(edgeR)
 library(IHW)
 library(qvalue)
 library(DEGreport)
-library(org.Hs.eg.db)
-library(org.Mm.eg.db)
-library(org.Rn.eg.db)
-library(org.Dm.eg.db)
-library(org.Ce.eg.db)
-library(org.Xl.eg.db)
-library(AnnotationDbi)
-library(clusterProfiler)
-library(enrichplot)
-library(DOSE)
 library(msigdbr)
-library(genefilter)
 library(ComplexHeatmap)
-library(shinyBS, verbose = FALSE)
 library(plotly,verbose=FALSE)
-library('shinyjs', verbose = FALSE)
 library(BiocManager)
-library(clusterProfiler.dplyr)
-library(dorothea)
 library(umap)
 library(biomaRt)
-library(monaLisa)
-library(GenomicRanges)
-library(BiocParallel)
-library(SummarizedExperiment)
-library(JASPAR2020)
-library(org.Bt.eg.db)
-library(org.Cf.eg.db)
-library(org.Dr.eg.db)
-library(org.Gg.eg.db)
-library(org.Mmu.eg.db)
-library(org.Pt.eg.db)
-library(org.Sc.sgd.db)
-library(org.At.tair.db)
 library(limma)
 library(colorspace)
 library(pdftools)
 library(magick)
 library(clue)
 library(ggrastr) ##devtools::install_github('VPetukhov/ggrastr')
+library(statmod)
 options(repos = BiocManager::repositories())
 file.copy("Rmd/pair_report.Rmd",file.path(tempdir(),"pair_report.Rmd"), overwrite = TRUE)
 file.copy("Rmd/pair_batch_report.Rmd",file.path(tempdir(),"pair_batch_report.Rmd"), overwrite = TRUE)
 file.copy("Rmd/3conditions_report.Rmd",file.path(tempdir(),"3conditions_report.Rmd"), overwrite = TRUE)
 file.copy("Rmd/multi_report.Rmd",file.path(tempdir(),"multi_report.Rmd"), overwrite = TRUE)
 file.copy("dds.rds",file.path(tempdir(),"dds.rds"), overwrite = TRUE)
-msigdbr_species <- msigdbr_species()$species_name
+msigdbr_species <- msigdbr::msigdbr_species()$species_name
 gene_set_list <- c("MSigDB Hallmark", "KEGG", "Reactome", "PID (Pathway Interaction Database)",
                    "BioCarta","WikiPathways", "GO biological process", 
                    "GO cellular component","GO molecular function", "Human phenotype ontology", 
@@ -92,7 +84,7 @@ read_df <- function(tmp, Species=NULL){
   }else{
     if(sum(is.element(c("csv","txt","tsv","xlsx"), tools::file_ext(tmp))) == 0) validate("Error: the file extension is in an unexpected format.")
     if(tools::file_ext(tmp) == "xlsx") {
-      df2 <- read_xlsx(tmp) 
+      df2 <- readxl::read_xlsx(tmp) 
       df2 <- as.data.frame(df2)
       df <- try(data.frame(row.names = df2[,1]),silent = T)
       if(class(df) != "try-error") {
@@ -109,7 +101,7 @@ read_df <- function(tmp, Species=NULL){
     if(tools::file_ext(tmp) == "csv") df <- try(read.csv(tmp, header=TRUE, sep = ",", row.names = 1,quote = ""))
     if(tools::file_ext(tmp) == "txt" || tools::file_ext(tmp) == "tsv") df <- try(read.table(tmp, header=TRUE, sep = "\t", row.names = 1,quote = ""))
     if(class(df) == "try-error") {
-      if(tools::file_ext(tmp) == "xlsx") df <- try(as.data.frame(read_xlsx(tmp)))
+      if(tools::file_ext(tmp) == "xlsx") df <- try(as.data.frame(readxl::read_xlsx(tmp)))
       if(tools::file_ext(tmp) == "csv") df <- try(read.csv(tmp, header=TRUE, sep = ",",quote = ""))
       if(tools::file_ext(tmp) == "txt" || tools::file_ext(tmp) == "tsv") df <- try(read.table(tmp, header=TRUE, sep = "\t",quote = ""))
       if(class(df) != "try-error") {
@@ -152,7 +144,7 @@ read_gene_list <- function(tmp){
     return(NULL)
   }else{
     if(tools::file_ext(tmp) == "xlsx") {
-      df <- try(read_xlsx(tmp))
+      df <- try(readxl::read_xlsx(tmp))
       df <- as.data.frame(df)
     }
     if(tools::file_ext(tmp) == "csv") df <- read.csv(tmp, header=TRUE, sep = ",",quote = "")
@@ -255,10 +247,10 @@ dorothea <- function(species, confidence = "recommend",type){
     spe <- "Homo sapiens"
   }
   if(confidence == "recommend"){
-  net2 <- net %>% filter(confidence != "D") %>% filter(confidence != "E")
+  net2 <- net %>% dplyr::filter(confidence != "D") %>% dplyr::filter(confidence != "E")
   }else net2 <- net
-  if(type == "DoRothEA regulon (activator)") net2 <- net2%>% filter(mor == 1)
-  if(type == "DoRothEA regulon (repressor)") net2 <- net2%>% filter(mor == -1)
+  if(type == "DoRothEA regulon (activator)") net2 <- net2 %>% dplyr::filter(mor == 1)
+  if(type == "DoRothEA regulon (repressor)") net2 <- net2 %>% dplyr::filter(mor == -1)
   my.symbols <- gsub("\\..*","", net2$target)
   gene_IDs<-AnnotationDbi::select(org(spe),keys = my.symbols,
                                   keytype = "SYMBOL",
@@ -421,7 +413,7 @@ org <- function(Species, Ortholog=NULL){
   if(Species != "not selected"){
     if(sum(is.element(no_orgDb, Species)) == 0){
     switch (Species,
-            "Mus musculus" = org <- org.Mm.eg.db,
+            "Mus musculus" = org <- org.Mm.eg.db::org.Mm.eg.db,
             "Homo sapiens" = org <- org.Hs.eg.db,
             "Rattus norvegicus" = org <- org.Rn.eg.db,
             "Xenopus laevis" = org <- org.Xl.eg.db,
@@ -530,7 +522,7 @@ PCAdata <- function(row_count, deg_norm_count){
     return(pca$rotation)
   } 
 }
-PCAplot <- function(data){
+PCAplot <- function(data,legend=NULL){
   if(length(grep("SYMBOL", colnames(data))) != 0){
     data <- data[, - which(colnames(data) == "SYMBOL")]
   }
@@ -539,7 +531,6 @@ PCAplot <- function(data){
   }
   pca <- prcomp(data, scale. = T)
   label<- colnames(data)
-  label<- gsub("\\_.+$", "", label)
   lab_x <- paste(summary(pca)$importance[2,1]*100,
                  "% of variance)", sep = "")
   lab_x <- paste("PC1 (", lab_x, sep = "")
@@ -547,39 +538,54 @@ PCAplot <- function(data){
                  "% of variance)", sep = "")
   lab_y <- paste("PC2 (", lab_y, sep = "")
   pca$rotation <- as.data.frame(pca$rotation)
+  if(!is.null(legend)) {
+    if(legend == "Legend"){
+      legend_position <- "top" 
+      label2<- NULL
+    }else{
+      legend_position <- "none"
+      label2<- label
+  }
+  }
   g1 <- ggplot(pca$rotation,aes(x=pca$rotation[,1],
                                 y=pca$rotation[,2],
-                                col=label, label = label)) +
+                                col=gsub("\\_.+$", "", label), label = label2)) +
     geom_point()+
     theme(panel.background =element_rect(fill=NA,color=NA),
           panel.border = element_rect(fill = NA)) +
-    xlab(lab_x) + ylab(lab_y) + geom_text_repel()  +
-    theme(legend.position="none", aspect.ratio=1)
+    xlab(lab_x) + ylab(lab_y) +
+    theme(legend.position=legend_position, aspect.ratio=1)+ 
+    guides(color=guide_legend(title=""))
+  if(!is.null(legend)){
+    if(legend == "Label") g1 <- g1 + geom_text_repel(show.legend = NULL)
+  }
   rho <- cor(data,method="spearman")
   d <- dist(1-rho)
   mds <- as.data.frame(cmdscale(d))
-  label<-colnames(data)
-  label<-gsub("\\_.+$", "", label)
   g2 <- ggplot(mds, aes(x = mds[,1], y = mds[,2],
-                        col = label, label = label)) +
+                        col = gsub("\\_.+$", "", label), label = label2)) +
     geom_point()+
     theme(panel.background =element_rect(fill=NA,color=NA),
           panel.border = element_rect(fill = NA)) +
     xlab("dim 1") + ylab("dim 2") +
-    geom_text_repel() + theme(legend.position="none", aspect.ratio=1)
+    theme(legend.position=legend_position, aspect.ratio=1)+ 
+    guides(color=guide_legend(title=""))
+  if(!is.null(legend)){
+    if(legend == "Label") g2 <- g2 + geom_text_repel(show.legend = NULL)
+  }
   x <- NULL
   y <- NULL
   xend <- NULL
   yend <- NULL
   data.t <- t(data)
   hc <- hclust(dist(data.t), "ward.D2")
-  dendr <- dendro_data(hc, type="rectangle")
+  dendr <- ggdendro::dendro_data(hc, type="rectangle")
   g3 <- ggplot() +
-    geom_segment(data=segment(dendr),
+    geom_segment(data=ggdendro::segment(dendr),
                  aes(x=x, y=y, xend=xend, yend=yend)) +
-    geom_text(data=label(dendr),
+    geom_text(data=ggdendro::label(dendr),
               aes(x, y, label=label, hjust=0), size=3) +
-    theme(legend.position = "none",
+    theme(legend.position = legend_position,
           axis.line.x=element_blank(),
           axis.text.x=element_blank(),
           axis.ticks.x=element_blank(),axis.ticks.y=element_blank(),
@@ -590,15 +596,25 @@ PCAplot <- function(data){
   p2 <- plot_grid(g1, g2, g3, nrow = 1)
   return(p2)
 }
-umap_plot <- function(data, n_neighbors){
+umap_plot <- function(data, n_neighbors,lab=NULL){
   umap <- umap::umap(t(data),n_neighbors = n_neighbors, random_state = 123)
   data2 <- umap$layout %>% as.data.frame()
   label<- colnames(data)
-  label<- gsub("\\_.+$", "", label)
-  p<- ggplot(data2, mapping = aes(V1,V2, color = label, label = colnames(data)))+
-    geom_point()+geom_text_repel()+ xlab("UMAP_1") + ylab("UMAP_2")+
+  if(!is.null(lab)) {
+    if(lab == "Legend"){
+      label2<- NULL
+    }else{
+      label2<- label
+    }
+  }
+  p<- ggplot(data2, mapping = aes(V1,V2, color = gsub("\\_.+$", "", label), label = label2))+
+    geom_point()+xlab("UMAP_1") + ylab("UMAP_2")+
     theme(panel.background =element_rect(fill=NA,color=NA),panel.border = element_rect(fill = NA),
-          aspect.ratio=1)
+          aspect.ratio=1)+ 
+    guides(color=guide_legend(title=""))
+  if(!is.null(lab)){
+    if(lab == "Label") p <- p + geom_text_repel(show.legend = NULL)
+  }
   return(p)
 }
 pdf_h <- function(rowlist){
@@ -920,18 +936,18 @@ cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, 
           if(Species != "not selected"){
             p <- p + ggrepel::geom_text_repel(data = labs_data2, mapping = aes(label = Unique_ID),
                                               box.padding = unit(0.35, "lines"), point.padding = unit(0.3,"lines"), 
-                                              force = 1, fontface = font.label$face,
+                                              force = 1, fontface = font.label$face,show.legend = NULL,
                                               size = font.label$size/2, color = font.label$color)
           }else{
             p <- p + ggrepel::geom_text_repel(data = labs_data2, mapping = aes(label = Row.names),
                                               box.padding = unit(0.35, "lines"), point.padding = unit(0.3,"lines"), 
-                                              force = 1, fontface = font.label$face,
+                                              force = 1, fontface = font.label$face,show.legend = NULL,
                                               size = font.label$size/2, color = font.label$color)
           }
         }else{
         p <- p + ggrepel::geom_text_repel(data = labs_data2, mapping = aes(label = Row.names),
                                           box.padding = unit(0.35, "lines"), point.padding = unit(0.3,"lines"), 
-                                          force = 1, fontface = font.label$face,
+                                          force = 1, fontface = font.label$face,show.legend = NULL,
                                           size = font.label$size/2, color = font.label$color)
         }
       } 
@@ -989,7 +1005,7 @@ cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, 
       rownames(data5) <- data5$Row.names
       data5 <- data5[,-1]
       data5 <- data5[,1: (Cond_1 + Cond_2 + Cond_3)]
-      data.z <- genescale(data5, axis=1, method="Z")
+      data.z <- genefilter::genescale(data5, axis=1, method="Z")
       ht <- as.grob(Heatmap(data.z, name = "z-score", column_order = colnames(data.z),
                             clustering_method_columns = 'ward.D2',use_raster = TRUE,
                             show_row_names = F, show_row_dend = T,column_names_side = "top"))
@@ -1077,7 +1093,7 @@ enrichment3_1 <- function(data3, data4, cnet_list2){
                 data <- rbind(data, cnet1)
               }
           }
-          if(!is.null(data)) data$GeneRatio <- parse_ratio(data$GeneRatio)
+          if(!is.null(data)) data$GeneRatio <- DOSE::parse_ratio(data$GeneRatio)
           return(data)
           incProgress()
         })
@@ -1096,11 +1112,11 @@ keggEnrichment1 <- function(data3, data4, Species, Gene_set, org, H_t2g){
             cnet_list2 <- NULL
           }else{
             H_t2g2 <- H_t2g %>% dplyr::select(gs_name, entrez_gene)
-            em <- enricher(data4$ENTREZID[data4$sig == name], TERM2GENE=H_t2g2, pvalueCutoff = 0.05)
+            em <- clusterProfiler::enricher(data4$ENTREZID[data4$sig == name], TERM2GENE=H_t2g2, pvalueCutoff = 0.05)
             if (length(as.data.frame(em)$ID) == 0) {
               cnet1 <- NULL
             } else {
-              cnet1 <- setReadable(em, org, 'ENTREZID')
+              cnet1 <- clusterProfiler::setReadable(em, org, 'ENTREZID')
               cnet_list2[[name]] = cnet1
             }
           }
@@ -1133,7 +1149,7 @@ keggEnrichment1_xenopus <- function(data3, data4, Species, Gene_set, org, org_co
             if (length(as.data.frame(em)$ID) == 0) {
               cnet1 <- NULL
             } else {
-              cnet1 <- setReadable(em, org, 'ENTREZID')
+              cnet1 <- clusterProfiler::setReadable(em, org, 'ENTREZID')
               cnet_list2[[name]] = cnet1
             }
         }
@@ -1159,7 +1175,7 @@ keggEnrichment2 <- function(data3, data4,cnet_list2){
             length(which(!is.na(unique(as.data.frame(cnet1)$qvalue))))==0) {
           c <- NULL
         } else{
-          c <- cnetplot(cnet1, cex_label_gene = 0.7, cex_label_category = 0.75,
+          c <- clusterProfiler::cnetplot(cnet1, cex_label_gene = 0.7, cex_label_category = 0.75,
                         cex_category = 0.75, colorEdge = TRUE)
           c <- try(as.grob(c + guides(edge_color = "none")))
           if(length(class(c)) == 1){
@@ -1176,7 +1192,7 @@ keggEnrichment2 <- function(data3, data4,cnet_list2){
     }
     data <- dplyr::filter(data, !is.na(Group))
     data <- dplyr::filter(data, !is.na(Description))
-    data$GeneRatio <- parse_ratio(data$GeneRatio)
+    data$GeneRatio <- DOSE::parse_ratio(data$GeneRatio)
     if ((length(data$Description) == 0) || length(which(!is.na(unique(data$qvalue))))==0) {
       d <- NULL
     } else{
@@ -1191,7 +1207,7 @@ keggEnrichment2 <- function(data3, data4,cnet_list2){
                      geom_point() +
                      scale_color_continuous(low="red", high="blue",
                                             guide=guide_colorbar(reverse=TRUE)) +
-                     scale_size(range=c(1, 6))+ theme_dose(font.size=12)+ylab(NULL)+xlab(NULL) +
+                     scale_size(range=c(1, 6))+ DOSE::theme_dose(font.size=12)+ylab(NULL)+xlab(NULL) +
                      scale_y_discrete(labels = label_wrap_gen(30)) + scale_x_discrete(position = "top"))
     }
     if (length(cnet_list) == 2){
@@ -1238,20 +1254,20 @@ GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene
   if(Species != "not selected" || is.null(Gene_set) || is.null(org)){
     if(Species %in% orgDb_list == TRUE) species <- Species else species <- Ortholog
       if(Gene_set == "MSigDB Hallmark"){
-        H_t2g <- msigdbr(species = species, category = "H") %>%
+        H_t2g <- msigdbr::msigdbr(species = species, category = "H") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description) 
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="HALLMARK_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="P53", replacement = "p53")
       }
       if(Gene_set == "KEGG"){
-        H_t2g <- msigdbr(species = species, category = "C2", subcategory = "CP:KEGG") %>%
+        H_t2g <- msigdbr::msigdbr(species = species, category = "C2", subcategory = "CP:KEGG") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="KEGG_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
       }
       if(Gene_set == "Transcription factor targets"){
-        H_t2g <- msigdbr(species = species, category = "C3")
+        H_t2g <- msigdbr::msigdbr(species = species, category = "C3")
         H_t2g <- H_t2g %>% dplyr::filter(gs_subcat == "TFT:GTRD" | gs_subcat == "TFT:TFT_Legacy") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
       }
@@ -1266,54 +1282,54 @@ GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene
         H_t2g$entrez_gene <- as.integer(H_t2g$entrez_gene)
       }
       if(Gene_set == "Reactome"){
-        H_t2g <- msigdbr(species = species, category = "C2", subcategory = "CP:REACTOME") %>%
+        H_t2g <- msigdbr::msigdbr(species = species, category = "C2", subcategory = "CP:REACTOME") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="REACTOME_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
       }
       if(Gene_set == "miRNA target"){
-        H_t2g <- msigdbr(species = species, category = "C3")
+        H_t2g <- msigdbr::msigdbr(species = species, category = "C3")
         H_t2g <- H_t2g %>% dplyr::filter(gs_subcat == "MIR:MIRDB" | gs_subcat == "MIR:MIR_Legacy") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
       }
       if(Gene_set == "GO biological process"){
-        H_t2g <- msigdbr(species = species, category = "C5", subcategory = "GO:BP") %>%
+        H_t2g <- msigdbr::msigdbr(species = species, category = "C5", subcategory = "GO:BP") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="GOBP_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
       }
       if(Gene_set == "GO cellular component"){
-        H_t2g <- msigdbr(species = species, category = "C5", subcategory = "GO:CC") %>%
+        H_t2g <- msigdbr::msigdbr(species = species, category = "C5", subcategory = "GO:CC") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="GOCC_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
       }
       if(Gene_set == "GO molecular function"){
-        H_t2g <- msigdbr(species = species, category = "C5", subcategory = "GO:MF") %>%
+        H_t2g <- msigdbr::msigdbr(species = species, category = "C5", subcategory = "GO:MF") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="GOMF_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
       }
       if(Gene_set == "Human phenotype ontology"){
-        H_t2g <- msigdbr(species = species, category = "C5", subcategory = "HPO") %>%
+        H_t2g <- msigdbr::msigdbr(species = species, category = "C5", subcategory = "HPO") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="HP_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
       }
       if(Gene_set == "WikiPathways"){
-        H_t2g <- msigdbr(species = species, category = "C2", subcategory = "CP:WIKIPATHWAYS") %>%
+        H_t2g <- msigdbr::msigdbr(species = species, category = "C2", subcategory = "CP:WIKIPATHWAYS") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="WP_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
       }
       if(Gene_set == "PID (Pathway Interaction Database)"){
-        H_t2g <- msigdbr(species = species, category = "C2", subcategory = "CP:PID") %>%
+        H_t2g <- msigdbr::msigdbr(species = species, category = "C2", subcategory = "CP:PID") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="PID_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
       }
       if(Gene_set == "BioCarta"){
-        H_t2g <- msigdbr(species = species, category = "C2", subcategory = "CP:BIOCARTA") %>%
+        H_t2g <- msigdbr::msigdbr(species = species, category = "C2", subcategory = "CP:BIOCARTA") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="BIOCARTA_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
@@ -1554,10 +1570,10 @@ enrich_viewer_forMulti2 <- function(gene_type,df, Species,Ortholog, Gene_set, or
           colnames(df) <- c("ID", "Description", "GeneRatio", "BgRatio", "pvalue", "p.adjust", " qvalue", "geneID", "Count", "Group")
           for (name in unique(data3$Group)) {
             sum <- length(data3$ENTREZID[data3$Group == name])
-            em <- enricher(data3$ENTREZID[data3$Group == name], TERM2GENE=H_t2g2, pvalueCutoff = 0.05)
+            em <- clusterProfiler::enricher(data3$ENTREZID[data3$Group == name], TERM2GENE=H_t2g2, pvalueCutoff = 0.05)
             if (length(as.data.frame(em)$ID) != 0) {
               if(length(colnames(as.data.frame(em))) == 9){
-                cnet1 <- as.data.frame(setReadable(em, org, 'ENTREZID'))
+                cnet1 <- as.data.frame(clusterProfiler::setReadable(em, org, 'ENTREZID'))
                 cnet1$Group <- paste(name, "\n","(",sum, ")",sep = "")
                 df <- rbind(df, cnet1)
               }
@@ -1565,7 +1581,7 @@ enrich_viewer_forMulti2 <- function(gene_type,df, Species,Ortholog, Gene_set, or
           }
           }
           if(length(df$ID) !=0){
-            df$GeneRatio <- parse_ratio(df$GeneRatio)
+            df$GeneRatio <- DOSE::parse_ratio(df$GeneRatio)
             return(df)
           }else return(NULL)
         })
@@ -1597,14 +1613,14 @@ enrich_viewer_forMulti2_xenopus <- function(df, Species,Ortholog, Gene_set, org,
             }
             if (length(as.data.frame(em)$ID) != 0) {
               if(length(colnames(as.data.frame(em))) == 9){
-                cnet1 <- as.data.frame(setReadable(em, org, 'ENTREZID'))
+                cnet1 <- as.data.frame(clusterProfiler::setReadable(em, org, 'ENTREZID'))
                 cnet1$Group <- paste(name, "\n","(",sum, ")",sep = "")
                 df <- rbind(df, cnet1)
               }
             }
           }
         if(length(df$ID) !=0){
-          df$GeneRatio <- parse_ratio(df$GeneRatio)
+          df$GeneRatio <- DOSE::parse_ratio(df$GeneRatio)
           return(df)
         }else return(NULL)
       })
@@ -1636,10 +1652,10 @@ enrich_gene_list <- function(data, Gene_set, H_t2g, org,org_code=NULL){
         df <- list()
         for (name in unique(data$Group)) {
           sum <- length(data$ENTREZID[data$Group == name])
-          em <- enricher(data$ENTREZID[data$Group == name], TERM2GENE=H_t2g2, pvalueCutoff = 0.05)
+          em <- clusterProfiler::enricher(data$ENTREZID[data$Group == name], TERM2GENE=H_t2g2, pvalueCutoff = 0.05)
           if (length(as.data.frame(em)$ID) != 0) {
             if(length(colnames(as.data.frame(em))) == 9){
-              cnet1 <- setReadable(em, org, 'ENTREZID')
+              cnet1 <- clusterProfiler::setReadable(em, org, 'ENTREZID')
               df[[name]] <- cnet1
             }
           }
@@ -1670,7 +1686,7 @@ enrich_gene_list_xenopus <- function(data, Gene_set, org,org_code=NULL){
           }
           if (length(as.data.frame(em)$ID) != 0) {
             if(length(colnames(as.data.frame(em))) == 9){
-              cnet1 <- setReadable(em, org, 'ENTREZID')
+              cnet1 <- clusterProfiler::setReadable(em, org, 'ENTREZID')
               df[[name]] <- cnet1
             }
           }
@@ -1738,7 +1754,7 @@ enrich_genelist <- function(data, enrich_gene_list, showCategory=5,section=NULL,
               df$Group <- factor(df$Group, levels=group_order)
               df <- df %>% dplyr::arrange(Group) 
             }
-            df$GeneRatio <- parse_ratio(df$GeneRatio)
+            df$GeneRatio <- DOSE::parse_ratio(df$GeneRatio)
             df <- dplyr::filter(df, !is.na(qvalue))
             df$Description <- gsub("_", " ", df$Description)
             df <- dplyr::mutate(df, x = paste0(Group, 1/(-log10(eval(parse(text = "qvalue"))))))
@@ -1751,7 +1767,7 @@ enrich_genelist <- function(data, enrich_gene_list, showCategory=5,section=NULL,
                             geom_point() +
                             scale_color_continuous(low="red", high="blue",
                                                    guide=guide_colorbar(reverse=TRUE)) +
-                            scale_size(range=c(1, 6))+ theme_dose(font.size=12)+ylab(NULL)+xlab(NULL)+
+                            scale_size(range=c(1, 6))+ DOSE::theme_dose(font.size=12)+ylab(NULL)+xlab(NULL)+
                             scale_y_discrete(labels = label_wrap_gen(30)) + scale_x_discrete(position = "top"))
             p <- plot_grid(p1)
             return(p)
@@ -1767,7 +1783,7 @@ cnet_global <- function(data, group, enrich_gene_list, showCategory=5){
         if(length(as.data.frame(cnet1)$ID) == 0) {
           p2 <- NULL
         }else{
-          p2 <- try(as.grob(cnetplot(cnet1,
+          p2 <- try(as.grob(clusterProfiler::cnetplot(cnet1,
                                      cex_label_gene = 0.7, cex_label_category = 0.75, showCategory = showCategory,
                                      cex_category = 0.75, colorEdge = TRUE)+ guides(edge_color = "none")))
           if(length(class(p2)) == 1){
@@ -1825,6 +1841,11 @@ getTargetSeq <- function(Species, upstream, downstream){
 MotifAnalysis <- function(data, Species, org,x){
   withProgress(message = "Motif analysis takes about 2 min per group",{
     library(TFBSTools)
+    library(monaLisa)
+    library(GenomicRanges)
+    library(BiocParallel)
+    library(SummarizedExperiment)
+    library(JASPAR2020)
     if(Species == "Mus musculus"){
       library(BSgenome.Mmusculus.UCSC.mm10)
       genome = BSgenome.Mmusculus.UCSC.mm10
@@ -1991,7 +2012,7 @@ Motifplot <- function(df2, showCategory=5,padj,data,group_order){
     geom_point() +
     scale_color_continuous(low="red", high="blue",
                            guide=guide_colorbar(reverse=TRUE)) +
-    scale_size(range=c(1, 6))+ theme_dose(font.size=15)+ylab(NULL)+xlab(NULL) +
+    scale_size(range=c(1, 6))+ DOSE::theme_dose(font.size=15)+ylab(NULL)+xlab(NULL) +
     scale_y_discrete(labels = label_wrap_gen(30)) + scale_x_discrete(position = "top")+
     theme(plot.margin=margin(l=-0.75,unit="cm"))
   
