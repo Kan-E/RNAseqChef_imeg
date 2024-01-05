@@ -128,11 +128,16 @@ read_df <- function(tmp, Species=NULL){
     if(colnames(df)[1] == "Protein.Ids"){
       df <- df %>% distinct(Genes, .keep_all = T)
       df[df$Genes == "",]$Genes <- gsub("\\_.+$", "", df[df$Genes == "",]$Protein.Ids)
-      df2 <- df[,-1:-4]
-      rownames(df2) <- df$Genes
-      df2[is.na(df2)] <- 0
-      df <- df2[!str_detect(rownames(df2), ";"),]
-      df <- df2[rownames(df2) != "",]
+      rownames(df) <- df$Genes
+      if(length(grep("Protein.Group", colnames(df))) != 0) df <- df[, - which(colnames(df) == "Protein.Group")]
+      if(length(grep("Protein.Ids", colnames(df))) != 0) df <- df[, - which(colnames(df) == "Protein.Ids")]
+      if(length(grep("Protein.Names", colnames(df))) != 0) df <- df[, - which(colnames(df) == "Protein.Names")]
+      if(length(grep("First.Protein.Description", colnames(df))) != 0) df <- df[, - which(colnames(df) == "First.Protein.Description")]
+      if(length(grep("Genes", colnames(df))) != 0) df <- df[, - which(colnames(df) == "Genes")]
+      if(length(grep("Species", colnames(df))) != 0) df <- df[, - which(colnames(df) == "Species")]
+      df[is.na(df)] <- 0
+      df <- df[!str_detect(rownames(df), ";"),]
+      df <- df[rownames(df) != "",]
     }
     }
     return(df)
