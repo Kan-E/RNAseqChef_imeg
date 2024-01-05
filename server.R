@@ -3046,12 +3046,12 @@ shinyServer(function(input, output, session) {
         colnames(table)[3] <- "expression"
         table <- na.omit(table)
         if (input$multi_data_file_type == "Row1"){
-          p <- degPlotCluster(table, time = "condition", process = TRUE)+ 
+          p <- degPlotCluster(table, time = "condition", process = TRUE, min_genes = 0)+ 
             scale_color_brewer(palette = "Set1", direction=-1)+
             theme_bw(base_size = 15)+ theme(legend.position = "none")+ theme(axis.text.x = element_text(angle = 90, hjust = 1))
         }
         else{
-          p <- degPlotCluster(table, time = "condition", color=colnames(meta)[2], process = TRUE)+ 
+          p <- degPlotCluster(table, time = "condition", color=colnames(meta)[2], process = TRUE, min_genes = 0)+ 
             scale_color_brewer(palette = "Set1", direction=-1)+
             theme_bw(base_size = 15)+ theme(legend.position = "top")+ theme(axis.text.x = element_text(angle = 90, hjust = 1))
         }
@@ -3615,12 +3615,12 @@ shinyServer(function(input, output, session) {
         table$cluster = as.integer(table$cluster)
         table<-na.omit(table)
         if (input$multi_data_file_type == "Row1"){
-          p <- try(degPlotCluster(table, time = "condition", process = TRUE)+ 
+          p <- try(degPlotCluster(table, time = "condition", process = TRUE, min_genes = 0)+ 
                      scale_color_brewer(palette = "Set1", direction=-1)+
                      theme_bw(base_size = 15)+ theme(legend.position = "none")+ theme(axis.text.x = element_text(angle = 90, hjust = 1)))
         }
         else{
-          p <- try(degPlotCluster(table, time = "condition", color=colnames(meta)[2], process = TRUE)+ 
+          p <- try(degPlotCluster(table, time = "condition", color=colnames(meta)[2], process = TRUE, min_genes = 0)+ 
                      scale_color_brewer(palette = "Set1", direction=-1)+
                      theme_bw(base_size = 15)+ theme(legend.position = "top")+ theme(axis.text.x = element_text(angle = 90, hjust = 1)))
         }
