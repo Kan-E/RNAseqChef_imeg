@@ -125,7 +125,7 @@ read_df <- function(tmp, Species=NULL){
     df[is.na(df)] <- 0
     }
     if(dim(df)[2] != 0){
-    if(colnames(df)[1] == "Protein.Ids"){
+      if(length(grep("Protein.Ids", colnames(df))) != 0){
       df <- df %>% distinct(Genes, .keep_all = T)
       df[df$Genes == "",]$Genes <- gsub("\\_.+$", "", df[df$Genes == "",]$Protein.Ids)
       rownames(df) <- df$Genes
