@@ -4021,7 +4021,12 @@ shinyServer(function(input, output, session) {
   multi_Hallmark_set_GSVA <- reactive({
     return(GeneList_for_enrichment(Species = input$Species6, Ortholog=input$Ortholog6,Biomart_archive=input$Biomart_archive6, Gene_set = input$Gene_set_GSVA, org = org6()))
   })
-  
+  output$Gene_set_GSVA <- renderUI({
+    if(input$Species6 != "Xenopus laevis" && input$Ortholog6 != "Arabidopsis thaliana" && input$Species6 != "Arabidopsis thaliana"){
+      selectInput('Gene_set_GSVA', 'Gene Set', gene_set_list)
+    }else selectInput('Gene_set_GSVA', 'Gene Set', c("KEGG", "GO biological process", 
+                                                 "GO cellular component","GO molecular function"))
+  })
   
   multi_enrichment_1_gsva <- reactive({
     if(!is.null(input$Gene_set_GSVA) && input$Species6 != "not selected"){
