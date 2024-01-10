@@ -4032,7 +4032,7 @@ shinyServer(function(input, output, session) {
     if(!is.null(input$Gene_set_GSVA) && input$Species6 != "not selected"){
       count <- multi_deg_norm_count()
       withProgress(message = "GSEA",{
-        result <- GSVA(norm_count = count,gene_set = input$Gene_set_GSVA, org = org6())
+        result <- GSVA(norm_count = count,gene_set = multi_Hallmark_set_GSVA(), org = org6())
         incProgress(1)
         return(NULL)
       })
