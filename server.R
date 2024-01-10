@@ -4014,6 +4014,39 @@ shinyServer(function(input, output, session) {
     content = function(file){write.table(multi_GSEA_table(), file, row.names = F, sep = "\t", quote = F)}
   )
   
+  # Multi GSVA-----
+  output$multi_Spe1_gsva <- renderText({
+    if(input$Species6 == "not selected") print("Please select 'Species'")
+  })
+  multi_Hallmark_set_GSVA <- reactive({
+    return(GeneList_for_enrichment(Species = input$Species6, Ortholog=input$Ortholog6,Biomart_archive=input$Biomart_archive6, Gene_set = input$Gene_set_GSVA, org = org6()))
+  })
+  
+  
+  multi_enrichment_1_gsva <- reactive({
+    if(!is.null(input$Gene_set_GSVA) && input$Species6 != "not selected"){
+      count <- multi_deg_norm_count()
+      withProgress(message = "GSEA",{
+        result <- GSVA(norm_count = count,gene_set = input$Gene_set_GSVA, org = org6())
+        incProgress(1)
+        return(NULL)
+      })
+    }
+  })
+  output$multi_GSVA_score <- DT::renderDataTable({
+    if(is.null(multi_enrichment_1_gsva)){
+      return(NULL)
+    }else{
+      multi_enrichment_1_gsva()
+    }
+  })
+  output$download_multi_GSEA_table = downloadHandler(
+    filename = function() {
+      paste(download_multi_overview_dir(), paste0(input$Gene_set_GSVA,"-GSVA_score.txt"), sep="_")
+    },
+    content = function(file){write.table(multi_enrichment_1_gsva(), file, row.names = T,col.names = F, sep = "\t", quote = F)}
+  )
+  
   #multi DEG enrichment 2--------
   multi_Hallmark_set2 <- reactive({
     return(GeneList_for_enrichment(Species = input$Species6, Ortholog=input$Ortholog6,Biomart_archive=input$Biomart_archive6, Gene_set = input$Gene_set7, org = org6()))

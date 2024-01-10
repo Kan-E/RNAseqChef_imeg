@@ -1090,6 +1090,27 @@ shinyUI(
                                                          dataTableOutput('multi_GSEA_result')
                                          )
                               )
+                     ),
+                     tabPanel("GSVA",
+                              fluidRow(
+                                column(4, htmlOutput("Gene_set_GSVA")),
+                              ),
+                              fluidRow(
+                                column(4, textOutput("multi_Spe1_gsva"),
+                                       tags$head(tags$style("#multi_Spe1_gsva{color: red;
+                                         font-size: 20px;
+                                         font-style: bold;
+                                      }")))
+                              ),
+                              bsCollapse(id="input_collapse_multi_gsva",open="gsva_score_panel",multiple = TRUE,
+                                         bsCollapsePanel(title="GSVA score:",
+                                                         value="gsva_score_panel",
+                                                         fluidRow(
+                                                           column(4, downloadButton("download_multi_GSVA_score", "Download"))
+                                                         ),
+                                                         dataTableOutput('multi_GSVA_score')
+                                         )
+                              )
                      )
                    )
                  ) # main panel
