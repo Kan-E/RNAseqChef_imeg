@@ -2183,3 +2183,24 @@ corr_plot_pair <- function(data,corr_color,GOI_x,GOI_y){
   }
   return(p)
 }
+
+
+library(GSVA)
+##ensembl IDに対応できるようにする
+GSVA <- function(norm_count, gene_set,org){
+  genesbyGeneSet <- split(gene_set$entrez_gene,gene_set$gs_name)
+  my.symbols <- rownames(norm_count)
+  gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
+                                  keytype = "SYMBOL",
+                                  columns = c("SYMBOL", "ENTREZID"))
+  colnames(gene_IDs) <- c("target", "ENTREZID")
+  gene_IDs <- gene_IDs %>% distinct(target, .keep_all = T)
+  gene_IDs <- na.omit(gene_IDs)
+  rownames(gene_IDs) <- gene_IDs$target
+  data2 <- merge(gene_IDs,norm_count,by=0)
+  rownames(data2) <- data2$ENTREZID
+  data2 <- data2[,-1:-3]
+  gsvaPar <- gsvaParam(as.matrix(data2),genesbyGeneSet)
+  gsva.score <- gsva(gsvaPar)
+  return(gsva.score)
+}

@@ -4031,10 +4031,10 @@ shinyServer(function(input, output, session) {
   multi_enrichment_1_gsva <- reactive({
     if(!is.null(input$Gene_set_GSVA) && input$Species6 != "not selected"){
       count <- multi_deg_norm_count()
-      withProgress(message = "GSEA",{
+      withProgress(message = "GSVA",{
         result <- GSVA(norm_count = count,gene_set = multi_Hallmark_set_GSVA(), org = org6())
+        return(result)
         incProgress(1)
-        return(NULL)
       })
     }
   })
