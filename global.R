@@ -1373,7 +1373,7 @@ GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene
       return(H_t2g)
   }else return(NULL)
 }
-GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL){
+GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL,gsva=FALSE){
   collist <- gsub("\\_.+$", "", colnames(data))
   collist <- unique(collist)
   rowlist <- rownames(data)
@@ -1479,11 +1479,12 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL){
   if(length(rowlist) > 200){
     p <- NULL
   }else{
+    if(gsva == FALSE) ylim = c(0, NA) else ylim = c(-1, 1)
     if (plottype == "Boxplot"){
   p <- ggpubr::ggboxplot(data, x = "sample", y = "value",
                          fill = "sample", scales = "free",
                          add = "jitter",
-                         xlab = FALSE, ylab = "Normalized_count", ylim = c(0, NA))
+                         xlab = FALSE, ylab = "Normalized_count", ylim = ylim)
     }
     if (plottype == "Barplot"){
       p <- ggbarplot(data,x = "sample", y = "value", scales = "free",
@@ -1501,13 +1502,13 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL){
       p <- ggplot(data, aes(x = sample, y = value)) + geom_boxplot(aes(fill=sample))+
         geom_line(aes(group = pair),alpha = .2) +
         geom_point() + theme_classic() + theme(legend.position = "top")+ 
-        xlab(NULL) + ylim(c(0, NA)) + ylab("Normalized_count")
+        xlab(NULL) + ylim(ylim) + ylab("Normalized_count")
       }
       if(plottype == "without boxplot"){
         p <- ggplot(data, aes(x = sample, y = value,group = pair)) + 
           geom_line() +
           geom_point(aes(color = sample)) + theme_classic() + theme(legend.position = "top")+ 
-          xlab(NULL) + ylim(c(0, NA)) + ylab("Normalized_count")+ 
+          xlab(NULL) + ylim(ylim) + ylab("Normalized_count")+ 
           scale_color_manual(values=c("#00BFC4", "#F8766D"))
       }
     }
@@ -2186,20 +2187,41 @@ corr_plot_pair <- function(data,corr_color,GOI_x,GOI_y){
 
 
 library(GSVA)
-##ensembl IDに対応できるようにする
-GSVA <- function(norm_count, gene_set,org){
+GSVA <- function(norm_count, gene_set,org,gene_type,Species,Ortholog){
   genesbyGeneSet <- split(gene_set$entrez_gene,gene_set$gs_name)
+
+  
   my.symbols <- rownames(norm_count)
-  gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
-                                  keytype = "SYMBOL",
-                                  columns = c("SYMBOL", "ENTREZID"))
-  colnames(gene_IDs) <- c("target", "ENTREZID")
-  gene_IDs <- gene_IDs %>% distinct(target, .keep_all = T)
+  if(gene_type != "SYMBOL"){
+    if(sum(is.element(no_orgDb, Species)) == 1){
+      gene_IDs <- Ortholog
+    }else{
+      if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
+      gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
+                                      keytype = key,
+                                      columns = c(key,"SYMBOL", "ENTREZID"))
+    }
+    colnames(gene_IDs) <- c("GeneID","SYMBOL", "ENTREZID")
+  }else{
+    if(sum(is.element(no_orgDb, Species)) == 1){
+      gene_IDs <- Ortholog
+      gene_IDs <- gene_IDs[,-1]
+    }else{
+      gene_IDs <- AnnotationDbi::select(org, keys = my.symbols,
+                                        keytype = "SYMBOL",
+                                        columns = c("SYMBOL","ENTREZID"))
+    }
+    colnames(gene_IDs) <- c("GeneID","ENTREZID")
+  }
+  gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
   gene_IDs <- na.omit(gene_IDs)
-  rownames(gene_IDs) <- gene_IDs$target
+  rownames(gene_IDs) <- gene_IDs$GeneID
+
   data2 <- merge(gene_IDs,norm_count,by=0)
   rownames(data2) <- data2$ENTREZID
-  data2 <- data2[,-1:-3]
+  if(gene_type != "SYMBOL") data2 <- data2[,-1:-4] else data2 <- data2[,-1:-3]
+  if(length(grep("SYMBOL", colnames(data2))) != 0) data2 <- data2[, - which(colnames(data2) == "SYMBOL")]
+  print(head(data2))
   gsvaPar <- gsvaParam(as.matrix(data2),genesbyGeneSet)
   gsva.score <- gsva(gsvaPar)
   return(gsva.score)

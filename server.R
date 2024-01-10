@@ -4023,35 +4023,299 @@ shinyServer(function(input, output, session) {
   })
   output$Gene_set_GSVA <- renderUI({
     if(input$Species6 != "Xenopus laevis" && input$Ortholog6 != "Arabidopsis thaliana" && input$Species6 != "Arabidopsis thaliana"){
-      selectInput('Gene_set_GSVA', 'Gene Set', gene_set_list)
-    }else selectInput('Gene_set_GSVA', 'Gene Set', c("KEGG", "GO biological process", 
-                                                 "GO cellular component","GO molecular function"))
+      selectInput('Gene_set_GSVA', 'Gene Set', c("",gene_set_list), selected = "")
+    }else selectInput('Gene_set_GSVA', 'Gene Set', c("","KEGG", "GO biological process", 
+                                                 "GO cellular component","GO molecular function"),selected = "")
   })
   
   multi_enrichment_1_gsva <- reactive({
-    if(!is.null(input$Gene_set_GSVA) && input$Species6 != "not selected"){
+    if(!is.null(input$Gene_set_GSVA) && input$Gene_set_GSVA != "" && input$Species6 != "not selected"){
       count <- multi_deg_norm_count()
       withProgress(message = "GSVA",{
-        result <- GSVA(norm_count = count,gene_set = multi_Hallmark_set_GSVA(), org = org6())
+        result <- GSVA(norm_count = count,gene_set = multi_Hallmark_set_GSVA(), org = org6(),
+                       gene_type=gene_type6(),Species=input$Species6,Ortholog=input$Ortholog6)
         return(result)
         incProgress(1)
       })
     }
   })
   output$multi_GSVA_score <- DT::renderDataTable({
-    if(is.null(multi_enrichment_1_gsva)){
+    if(is.null(multi_enrichment_1_gsva())){
       return(NULL)
     }else{
       multi_enrichment_1_gsva()
     }
   })
-  output$download_multi_GSEA_table = downloadHandler(
+  output$download_multi_GSVA_score = downloadHandler(
     filename = function() {
       paste(download_multi_overview_dir(), paste0(input$Gene_set_GSVA,"-GSVA_score.txt"), sep="_")
     },
     content = function(file){write.table(multi_enrichment_1_gsva(), file, row.names = T,col.names = F, sep = "\t", quote = F)}
   )
+  # Multi GSVA limma-----
+  multi_GSVA_limma <- reactive({
+      if(is.null(multi_enrichment_1_gsva())){
+        return(NULL)
+      }else{
+        count <- multi_enrichment_1_gsva()
+          collist <- gsub("\\_.+$", "", colnames(count))
+          collist <- gsub(" ", ".", collist)
+          print(collist)
+          if(is.element(TRUE, duplicated(collist)) == TRUE){
+            print("limma")
+            meta <- data.frame(condition = factor(collist))
+            design <- model.matrix(~0+collist)
+            colnames(design) <- factor(unique(collist),levels = unique(collist))
+            cont <- c()
+            for(i in 1:choose(n=length(unique(meta$condition)),k=2)){
+              contrast = paste0(as.character(unique(meta$condition)[combn(x=length(unique(meta$condition)),m=2)[1,i]]),"-",as.character(unique(meta$condition)[combn(x=length(unique(meta$condition)),m=2)[2,i]]))
+              cont <- c(cont,contrast)
+            }
+            cont.matrix <- makeContrasts(contrasts=cont, levels=design)
+            eset = new("ExpressionSet", exprs=as.matrix(count))
+            fit1 <- lmFit(eset,design)
+            fit2 <- contrasts.fit(fit1, cont.matrix)
+            fit3 <- eBayes(fit2)
+            result <- topTable(fit3,coef=1:length(cont), number = 1e12)
+            lab <- paste0("log2(",cont,")")
+            lab <- gsub("-","/",lab)
+            if(length(cont) != 1) label <- c(lab,"AveExpr","F","p_value","padj") else label <- c(lab,"AveExpr","F","p_value","padj","B")
+            colnames(result) <- label
+            print("limma")
+            return(result)
+          }
+          
+        }
+  })
+  output$multi_GSVA_limma <- DT::renderDataTable({
+    if(is.null(multi_GSVA_limma())){
+      return(NULL)
+    }else{
+      multi_GSVA_limma()
+    }
+  })
+  output$download_multi_GSVA_limma = downloadHandler(
+    filename = function() {
+      paste(download_multi_overview_dir(), paste0(input$Gene_set_GSVA,"-GSVA_differential_analysis_all_result.txt"), sep="_")
+    },
+    content = function(file){write.table(multi_GSVA_limma(), file, row.names = T,col.names = F, sep = "\t", quote = F)}
+  )
+  multi_GSVA_limma_dp <- reactive({
+    result <- multi_GSVA_limma()
+    if(!is.null(result)){
+      if(dim(result)[1] != 0){
+      res2 <- result %>% dplyr::filter(padj < input$fdr6)
+      return(res2)
+      }
+    }
+  })
+  output$multi_GSVA_limma_dp <- DT::renderDataTable({
+    if(is.null(multi_GSVA_limma_dp())){
+      return(NULL)
+    }else{
+      multi_GSVA_limma_dp()
+    }
+  })
+  output$download_multi_GSVA_limma_dp = downloadHandler(
+    filename = function() {
+      paste(download_multi_overview_dir(), paste0(input$Gene_set_GSVA,"-GSVA_differential_pathways.txt"), sep="_")
+    },
+    content = function(file){write.table(multi_GSVA_limma_dp(), file, row.names = T,col.names = F, sep = "\t", quote = F)}
+  )
+  #GSVA GOI------------------------------------------------------
+  output$GOI_multi_gsva <- renderUI({
+    if(is.null(multi_GSVA_limma_dp())){
+      return(NULL)
+    }else{
+      withProgress(message = "Preparing GOI list (about 10 sec)",{
+        selectizeInput("GOI_multi_gsva", "Pathways of interest", c(rownames(multi_GSVA_limma_dp())),multiple = TRUE, options = list(delimiter = " ", create = T))
+      })
+    }
+  })
+  output$GOIreset_multi_gsva <- renderUI({
+    actionButton("GOIreset_multi_gsva", "GOI reset")
+  })
+  observeEvent(input$GOIreset_multi_gsva, {
+    withProgress(message = "Preparing GOI list (about 10 sec)",{
+      updateSelectizeInput(session, "GOI_multi_gsva", choices = c(rownames(multi_GSVA_limma_dp())), 
+                           selected = character(0),
+                           options = list(delimiter = " ", create=TRUE, 'plugins' = list('remove_button'), persist = FALSE))
+    })
+  })
+  GOI_multi_gsva_INPUT <- reactive({
+    if(is.null(multi_GSVA_limma_dp())){
+      return(NULL)
+    }else{
+      if(input$GOI_type_multi_gsva == "ALL") return(rownames(multi_GSVA_limma_dp()))
+      if(input$GOI_type_multi_gsva == "custom") return(input$GOI_multi_gsva)
+    }
+  })
+  multi_gsva_GOIcount <- reactive({
+    count <- multi_GSVA_limma_dp()
+    count2 <- count[GOI3_INPUT(),]
+    return(count2)
+  })
   
+  multi_gsva_GOIheat <- reactive({
+    data <- multi_gsva_GOIcount()
+    if(is.null(data)){
+      ht <- NULL
+    }else{
+      ht <- GOIheatmap(data, type = input$GOI_type_multi_gsva, GOI = input$GOI_multi_gsva)
+    }
+    return(ht)
+  })
+  
+  output$multi_gsva_GOIheatmap <- renderPlot({
+    if(is.null(multi_GSVA_limma_dp())){
+      return(NULL)
+    }else{
+      if(!is.null(GOI_INPUT_multi_gsva())){
+        withProgress(message = "heatmap",{
+          suppressWarnings(print(multi_gsva_GOIheat()))
+          incProgress(1)
+        })
+      }
+    }
+  })
+  output$statistics_multi_gsva <- renderUI({
+    if(!is.null(multi_GSVA_limma_dp()) && !is.null(GOI3_INPUT_multi_gsva())){
+      data <- multi_gsva_GOIcount()
+      if(!is.null(data)){
+        collist <- gsub("\\_.+$", "", colnames(data))
+        collist <- unique(collist)
+        if(length(collist) == 2){
+          selectInput("statistics","statistics",choices = c("not_selected","Welch's t-test","Wilcoxon test"),selected="not_selected",multiple = F)
+        }else{
+          selectInput("statistics","statistics",choices = c("not_selected","TukeyHSD","Dunnet's test","Wilcoxon test"),selected="not_selected", multiple = F)
+        }
+      }}
+  })
+  output$PlotType_multi_gsva <- renderUI({
+    selectInput('PlotType', 'PlotType', c("Boxplot", "Barplot", "Errorplot"))
+  })
+  
+  statistical_analysis_goi_multi_gsva <- reactive({
+    data <- multi_gsva_GOIcount()
+    if(is.null(data) || is.null(input$statistics_multi_gsva)){
+      p <- NULL
+    }else{
+      p <- GOIboxplot(data = data,statistical_test =input$statistics_multi_gsva,plottype=input$PlotType_multi_gsva,gsva=TRUE)
+    }
+    return(p)
+  })
+  
+  multi_gsva_GOIbox <- reactive({
+    if(!is.null(statistical_analysis_goi_multi_gsva())){
+      if(input$statistics_multi_gsva == "not_selected"){
+        return(statistical_analysis_goi_multi_gsva())
+      }else return(statistical_analysis_goi_multi_gsva()[["plot"]])
+    }
+  })
+  
+  
+  output$multi_gsva_GOIboxplot <- renderPlot({
+    if(is.null(multi_GSVA_limma_dp())){
+      return(NULL)
+    }else{
+      if(!is.null(GOI3_INPUT_multi_gsva())){
+        if(length(rownames(multi_gsva_GOIcount())) >200){
+          validate("Unable to display more than 200 genes. Please adjust the threshold to narrow down the number of genes to less than 200, or utilize the 'Custom' mode.")
+        }
+        withProgress(message = "Boxplot",{
+          suppressWarnings(print(multi_gsva_GOIbox()))
+          incProgress(1)
+        })
+      }
+    }
+  })
+  
+  multi_gsva_GOIbox_statistic <- reactive({
+    if(!is.null(statistical_analysis_goi_multi_gsva())){
+      if(input$statistics_multi_gsva != "not_selected"){
+        data <- as.data.frame(statistical_analysis_goi_multi_gsva()[["statistical_test"]])
+        colnames(data)[1] <- "gene"
+        if(input$statistics_multi_gsva == "TukeyHSD" || input$statistics_multi_gsva == "Dunnet's test"){
+          data <- data[, - which(colnames(data) == "term")]
+        }else{
+          data <- data[, - which(colnames(data) == ".y.")]
+          data <- data[, - which(colnames(data) == "n1")]
+          data <- data[, - which(colnames(data) == "n2")]
+        }
+        data <- data[, - which(colnames(data) == "y.position")]
+        data <- data[, - which(colnames(data) == "groups")]
+        data <- data[, - which(colnames(data) == "xmin")]
+        data <- data[, - which(colnames(data) == "xmax")]
+        return(data)
+      }else return(NULL)}
+  })
+  
+  output$statistical_table_multi_gsva <- DT::renderDataTable({
+    if(is.null(multi_GSVA_limma_dp())){
+      return(NULL)
+    }else{
+      if(!is.null(GOI3_INPUT_multi_gsva())){
+        if(length(rownames(multi_gsva_GOIcount())) >200){
+          validate("Cannot display more than 200 pathways.")
+        }
+        multi_gsva_GOIbox_statistic()
+      }}
+  })
+  
+  output$download_statisics_multi_gsva = downloadHandler(
+    filename = function(){
+      paste0(download_multi_overview_dir(), "GOIboxplot_",input$statistics_multi_gsva,".txt")
+    },
+    content = function(file) {
+      withProgress(message = "Preparing download",{
+        write.table(multi_gsva_GOIbox_statistic(),file, row.names = F, col.names=TRUE, sep = "\t", quote = F)
+        incProgress(1)
+      })
+    }
+  )
+  
+  output$download_multi_gsva_GOIbox = downloadHandler(
+    filename = function(){
+      paste0(download_multi_overview_dir(), "gsva_boxplot.pdf")
+    },
+    content = function(file) {
+      withProgress(message = "Preparing download",{
+        data <- multi_gsva_GOIcount()
+        rowlist <- rownames(data)
+        if(input$multi_pdf_height == 0){
+          pdf_height <- pdf_h(rowlist)
+        }else pdf_height <- input$multi_pdf_height
+        if(input$multi_pdf_width == 0){
+          pdf_width <- pdf_w(rowlist)
+        }else pdf_width <- input$multi_pdf_width
+        pdf(file, height = pdf_height, width = pdf_width)
+        print(multi_gsva_GOIbox())
+        dev.off()
+        incProgress(1)
+      })
+    }
+  )
+  output$download_multi_gsva_GOIheat = downloadHandler(
+    filename = function(){
+      paste0(download_multi_overview_dir(), "GOIheatmap.pdf")
+    },
+    content = function(file) {
+      withProgress(message = "Preparing download",{
+        data <- multi_gsva_GOIcount()
+        rowlist <- rownames(data)
+        if(input$multi_pdf_height == 0){
+          pdf_height <- 10
+        }else pdf_height <- input$multi_pdf_height
+        if(input$multi_pdf_width == 0){
+          pdf_width <- 7
+        }else pdf_width <- input$multi_pdf_width
+        pdf(file, height = pdf_height, width = pdf_width)
+        print(multi_gsva_GOIheat())
+        dev.off()
+        incProgress(1)
+      })
+    }
+  )
   #multi DEG enrichment 2--------
   multi_Hallmark_set2 <- reactive({
     return(GeneList_for_enrichment(Species = input$Species6, Ortholog=input$Ortholog6,Biomart_archive=input$Biomart_archive6, Gene_set = input$Gene_set7, org = org6()))

@@ -1092,9 +1092,7 @@ shinyUI(
                               )
                      ),
                      tabPanel("GSVA",
-                              fluidRow(
-                                column(4, htmlOutput("Gene_set_GSVA")),
-                              ),
+                              htmlOutput("Gene_set_GSVA"),
                               fluidRow(
                                 column(4, textOutput("multi_Spe1_gsva"),
                                        tags$head(tags$style("#multi_Spe1_gsva{color: red;
@@ -1109,8 +1107,45 @@ shinyUI(
                                                            column(4, downloadButton("download_multi_GSVA_score", "Download"))
                                                          ),
                                                          dataTableOutput('multi_GSVA_score')
+                                         ),
+                                         bsCollapsePanel(title="Differential analysis:",
+                                                         value="gsva_limma_panel",
+                                                         fluidRow(
+                                                           column(4, downloadButton("download_multi_GSVA_limma", "Download"))
+                                                         ),
+                                                         dataTableOutput('multi_GSVA_limma')
+                                         ),
+                                         bsCollapsePanel(title="Differential pathways:",
+                                                         value="gsva_limma_panel",
+                                                         fluidRow(
+                                                           column(4, downloadButton("download_multi_GSVA_limma_dp", "Download"))
+                                                         ),
+                                                         dataTableOutput('multi_GSVA_limma_dp')
                                          )
-                              )
+                              ),
+                              fluidRow(
+                                column(4, downloadButton("download_multi_gsva_GOIheat", "Download heatmap"))
+                              ),
+                              fluidRow(
+                                column(4, 
+                                       radioButtons('GOI_type_multi_gsva','Genes:',
+                                                    c('Select all genes'="ALL",
+                                                      'Custom'="custom"
+                                                    ),selected = "ALL"),
+                                       htmlOutput("GOI_multi_gsva"), htmlOutput("GOIreset_multi_gsva")),
+                                column(8, plotOutput("multi_gsva_GOIheatmap"))
+                              ),
+                              fluidRow(
+                                column(4, htmlOutput("statistics_multi_gsva")),
+                                column(4, htmlOutput("PlotType_multi_gsva")),
+                                column(4, downloadButton("download_multi_gsva_GOIbox", "Download boxplot"))
+                              ),
+                              div(
+                                plotOutput("multi_gsva_GOIboxplot", height = "100%"),
+                                style = "height: calc(100vh  - 100px)"
+                              ),
+                              column(4, downloadButton("download_multi_gsva_statisics", "Download table")),
+                              dataTableOutput("statistical_table_multi_gsva")
                      )
                    )
                  ) # main panel
