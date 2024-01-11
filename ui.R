@@ -1128,8 +1128,8 @@ shinyUI(
                               ),
                               fluidRow(
                                 column(4, 
-                                       radioButtons('GOI_type_multi_gsva','Genes:',
-                                                    c('Select all genes'="ALL",
+                                       radioButtons('GOI_type_multi_gsva','Pathways:',
+                                                    c('Select all pathways'="ALL",
                                                       'Custom'="custom"
                                                     ),selected = "ALL"),
                                        htmlOutput("GOI_type_multi_gsva_all"),

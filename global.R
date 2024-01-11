@@ -1374,6 +1374,7 @@ GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene
   }else return(NULL)
 }
 GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL,gsva=FALSE){
+  print("GOIboxplot start")
   collist <- gsub("\\_.+$", "", colnames(data))
   collist <- unique(collist)
   rowlist <- rownames(data)
@@ -1521,6 +1522,7 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL,g
                 axis.title.y = element_text(size=15),legend.text = element_text(size=15),
                 legend.title = element_blank()))
   }
+  print("GOIboxplot end")
   if(!is.null(statistical_test) && statistical_test != "not_selected"){
     if(length(rowlist) <= 200) p <- p + stat_pvalue_manual(stat.test,hide.ns = T, size = 5)
     df <- list()
@@ -2063,7 +2065,7 @@ GOIheatmap <- function(data.z, show_row_names = TRUE, type = NULL, GOI = NULL, a
                 show_row_names = show_row_names, show_row_dend = F,column_names_side = "top",
                 row_names_gp = gpar(fontface = "italic"))
   if(!is.null(type)) {
-  if(type == "ALL" && !is.null(GOI)) {
+  if(type == "ALL" && !is.null(GOI) && all != TRUE) {
     indexes <- which(rownames(data.z) %in% GOI)
     labels <- rownames(data.z)[indexes]
     ht <- ht + rowAnnotation(

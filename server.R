@@ -4124,7 +4124,7 @@ shinyServer(function(input, output, session) {
   )
   #GSVA GOI------------------------------------------------------
   output$GOI_multi_gsva <- renderUI({
-    if(is.null(multi_GSVA_limma_dp())){
+    if(is.null(multi_GSVA_limma_dp()) && input$GOI_type_multi_gsva_all == TRUE){
       return(NULL)
     }else{
       withProgress(message = "Preparing pathways of interest list (about 10 sec)",{
@@ -4146,26 +4146,27 @@ shinyServer(function(input, output, session) {
     if(input$GOI_type_multi_gsva == "ALL"){
       radioButtons('GOI_type_multi_gsva_all','Label of heatmap:',
                    c('ALL'=TRUE,
-                     'Select pathways from list'=FALSE
-                   ),selected = TRUE)
+                     'Select pathways from the below list'=FALSE
+                   ),selected = FALSE)
     }
   })
   GOI_multi_gsva_INPUT <- reactive({
     if(is.null(multi_GSVA_limma_dp())){
       return(NULL)
     }else{
+      if(dim(multi_GSVA_limma_dp)[1] == 0) validate("There are no differential pathways. Please change FDR cut-off value.")
       if(input$GOI_type_multi_gsva == "ALL") return(rownames(multi_GSVA_limma_dp()))
       if(input$GOI_type_multi_gsva == "custom") return(input$GOI_multi_gsva)
     }
   })
   multi_gsva_GOIcount <- reactive({
     count <- multi_enrichment_1_gsva()
-    count$Row.names <- rownames(count)
     Row.names <- GOI_multi_gsva_INPUT()
     label_data <- as.data.frame(Row.names, row.names = Row.names)
-    data <- merge(count, label_data, by="Row.names")
-    rownames(data) <- data$Row.names
-    data <- data[, - which(colnames(data) == "Row.names")]
+    data <- merge(label_data,count, by=0)
+    rownames(data) <- data[,1]
+    data <- data[, -1:-2]
+    print(head(data))
     return(data)
   })
   
@@ -4198,14 +4199,14 @@ shinyServer(function(input, output, session) {
         collist <- gsub("\\_.+$", "", colnames(data))
         collist <- unique(collist)
         if(length(collist) == 2){
-          selectInput("statistics","statistics",choices = c("not_selected","Welch's t-test","Wilcoxon test"),selected="not_selected",multiple = F)
+          selectInput("statistics_multi_gsva","statistics",choices = c("not_selected","Welch's t-test","Wilcoxon test"),selected="not_selected",multiple = F)
         }else{
-          selectInput("statistics","statistics",choices = c("not_selected","TukeyHSD","Dunnet's test","Wilcoxon test"),selected="not_selected", multiple = F)
+          selectInput("statistics_multi_gsva","statistics",choices = c("not_selected","TukeyHSD","Dunnet's test","Wilcoxon test"),selected="not_selected", multiple = F)
         }
       }}
   })
   output$PlotType_multi_gsva <- renderUI({
-    selectInput('PlotType', 'PlotType', c("Boxplot", "Barplot", "Errorplot"))
+    selectInput('PlotType_multi_gsva', 'PlotType', c("Boxplot", "Barplot", "Errorplot"))
   })
   
   statistical_analysis_goi_multi_gsva <- reactive({
@@ -4220,6 +4221,7 @@ shinyServer(function(input, output, session) {
   })
   
   multi_gsva_GOIbox <- reactive({
+    print("multi_gsca_GOIbox start")
     if(!is.null(statistical_analysis_goi_multi_gsva())){
       if(input$statistics_multi_gsva == "not_selected"){
         return(statistical_analysis_goi_multi_gsva())
@@ -4229,6 +4231,7 @@ shinyServer(function(input, output, session) {
   
   
   output$multi_gsva_GOIboxplot <- renderPlot({
+    print(multi_gsva_GOIbox())
     if(is.null(multi_GSVA_limma_dp())){
       return(NULL)
     }else{
