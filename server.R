@@ -4142,6 +4142,14 @@ shinyServer(function(input, output, session) {
                            options = list(delimiter = " ", create=TRUE, 'plugins' = list('remove_button'), persist = FALSE))
     })
   })
+  output$GOI_type_multi_gsva_all <- renderUI({
+    if(input$GOI_type_multi_gsva == "ALL"){
+      radioButtons('GOI_type_multi_gsva_all','Label of heatmap:',
+                   c('ALL'=TRUE,
+                     'Select pathways from list'=FALSE
+                   ),selected = TRUE)
+    }
+  })
   GOI_multi_gsva_INPUT <- reactive({
     if(is.null(multi_GSVA_limma_dp())){
       return(NULL)
@@ -4152,11 +4160,13 @@ shinyServer(function(input, output, session) {
   })
   multi_gsva_GOIcount <- reactive({
     count <- multi_enrichment_1_gsva()
-    count2 <- count[GOI_multi_gsva_INPUT(),]
-    print(class(count2))
-    #labelの仕方をもとにもどす
-    if(length(GOI_multi_gsva_INPUT()) == 1) names(count2) <- GOI_multi_gsva_INPUT()
-    return(count2)
+    count$Row.names <- rownames(count)
+    Row.names <- GOI_multi_gsva_INPUT()
+    label_data <- as.data.frame(Row.names, row.names = Row.names)
+    data <- merge(count, label_data, by="Row.names")
+    rownames(data) <- data$Row.names
+    data <- data[, - which(colnames(data) == "Row.names")]
+    return(data)
   })
   
   multi_gsva_GOIheat <- reactive({
@@ -4164,7 +4174,7 @@ shinyServer(function(input, output, session) {
     if(is.null(data)){
       ht <- NULL
     }else{
-      ht <- GOIheatmap(data, type = input$GOI_type_multi_gsva, GOI = input$GOI_multi_gsva)
+      ht <- GOIheatmap(data, type = input$GOI_type_multi_gsva, GOI = input$GOI_multi_gsva,all=input$GOI_type_multi_gsva_all)
     }
     return(ht)
   })

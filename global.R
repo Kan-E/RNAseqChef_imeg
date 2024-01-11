@@ -2051,12 +2051,13 @@ Motifplot <- function(df2, showCategory=5,padj,data,group_order){
   }
 }
 
-GOIheatmap <- function(data.z, show_row_names = TRUE, type = NULL, GOI = NULL){
+GOIheatmap <- function(data.z, show_row_names = TRUE, type = NULL, GOI = NULL, all=FALSE){
   if(length(rownames(data.z)) <= 50) {
     if(!is.null(type)) {if(type == "ALL") show_row_names = FALSE else show_row_names = TRUE}
   }else{
     show_row_names = FALSE
   }
+  if(all == TRUE) show_row_names = TRUE
   ht <- Heatmap(data.z, name = "z-score",column_order = colnames(data.z),
                 clustering_method_columns = 'ward.D2',use_raster = TRUE,
                 show_row_names = show_row_names, show_row_dend = F,column_names_side = "top",
