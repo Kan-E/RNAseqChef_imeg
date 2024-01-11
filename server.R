@@ -4127,16 +4127,16 @@ shinyServer(function(input, output, session) {
     if(is.null(multi_GSVA_limma_dp())){
       return(NULL)
     }else{
-      withProgress(message = "Preparing GOI list (about 10 sec)",{
+      withProgress(message = "Preparing pathways of interest list (about 10 sec)",{
         selectizeInput("GOI_multi_gsva", "Pathways of interest", c(rownames(multi_GSVA_limma_dp())),multiple = TRUE, options = list(delimiter = " ", create = T))
       })
     }
   })
   output$GOIreset_multi_gsva <- renderUI({
-    actionButton("GOIreset_multi_gsva", "GOI reset")
+    actionButton("GOIreset_multi_gsva", "reset")
   })
   observeEvent(input$GOIreset_multi_gsva, {
-    withProgress(message = "Preparing GOI list (about 10 sec)",{
+    withProgress(message = "Preparing pathways of interest list (about 10 sec)",{
       updateSelectizeInput(session, "GOI_multi_gsva", choices = c(rownames(multi_GSVA_limma_dp())), 
                            selected = character(0),
                            options = list(delimiter = " ", create=TRUE, 'plugins' = list('remove_button'), persist = FALSE))
@@ -4151,8 +4151,11 @@ shinyServer(function(input, output, session) {
     }
   })
   multi_gsva_GOIcount <- reactive({
-    count <- multi_GSVA_limma_dp()
-    count2 <- count[GOI3_INPUT(),]
+    count <- multi_enrichment_1_gsva()
+    count2 <- count[GOI_multi_gsva_INPUT(),]
+    print(class(count2))
+    #labelの仕方をもとにもどす
+    if(length(GOI_multi_gsva_INPUT()) == 1) names(count2) <- GOI_multi_gsva_INPUT()
     return(count2)
   })
   
@@ -4170,7 +4173,7 @@ shinyServer(function(input, output, session) {
     if(is.null(multi_GSVA_limma_dp())){
       return(NULL)
     }else{
-      if(!is.null(GOI_INPUT_multi_gsva())){
+      if(!is.null(GOI_multi_gsva_INPUT())){
         withProgress(message = "heatmap",{
           suppressWarnings(print(multi_gsva_GOIheat()))
           incProgress(1)
@@ -4179,7 +4182,7 @@ shinyServer(function(input, output, session) {
     }
   })
   output$statistics_multi_gsva <- renderUI({
-    if(!is.null(multi_GSVA_limma_dp()) && !is.null(GOI3_INPUT_multi_gsva())){
+    if(!is.null(multi_GSVA_limma_dp()) && !is.null(GOI_multi_gsva_INPUT())){
       data <- multi_gsva_GOIcount()
       if(!is.null(data)){
         collist <- gsub("\\_.+$", "", colnames(data))
@@ -4200,6 +4203,7 @@ shinyServer(function(input, output, session) {
     if(is.null(data) || is.null(input$statistics_multi_gsva)){
       p <- NULL
     }else{
+      print(head(data))
       p <- GOIboxplot(data = data,statistical_test =input$statistics_multi_gsva,plottype=input$PlotType_multi_gsva,gsva=TRUE)
     }
     return(p)
@@ -4218,7 +4222,7 @@ shinyServer(function(input, output, session) {
     if(is.null(multi_GSVA_limma_dp())){
       return(NULL)
     }else{
-      if(!is.null(GOI3_INPUT_multi_gsva())){
+      if(!is.null(GOI_multi_gsva_INPUT())){
         if(length(rownames(multi_gsva_GOIcount())) >200){
           validate("Unable to display more than 200 genes. Please adjust the threshold to narrow down the number of genes to less than 200, or utilize the 'Custom' mode.")
         }
@@ -4254,7 +4258,7 @@ shinyServer(function(input, output, session) {
     if(is.null(multi_GSVA_limma_dp())){
       return(NULL)
     }else{
-      if(!is.null(GOI3_INPUT_multi_gsva())){
+      if(!is.null(GOI_multi_gsva_INPUT())){
         if(length(rownames(multi_gsva_GOIcount())) >200){
           validate("Cannot display more than 200 pathways.")
         }
