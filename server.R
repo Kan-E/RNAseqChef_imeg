@@ -4128,7 +4128,12 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       withProgress(message = "Preparing pathways of interest list (about 10 sec)",{
-        selectizeInput("GOI_multi_gsva", "Pathways of interest", c(rownames(multi_GSVA_limma_dp())),multiple = TRUE, options = list(delimiter = " ", create = T))
+      if(input$GOI_type_multi_gsva_all == FALSE){
+        multiple <- TRUE
+      }else if(!is.null(input$GOI_multi_gsva)){
+        if(input$GOI_type_multi_gsva_custom == "Manual") multiple <- TRUE else   multiple <- FALSE
+      }
+        selectizeInput("GOI_multi_gsva", "Pathways of interest", c(rownames(multi_GSVA_limma_dp())),multiple = multiple, options = list(delimiter = " ", create = T))
       })
     }
   })
@@ -4150,13 +4155,42 @@ shinyServer(function(input, output, session) {
                    ),selected = FALSE)
     }
   })
+  GOI_type_multi_gsva_custom <- renderUI({
+    if(input$GOI_type_multi_gsva == "custom"){
+      radioButtons('GOI_type_multi_gsva_custom','Mode:',
+                   c('Manual'="Manual",
+                     'Correlated pathways'="Correlated"
+                   ),selected = "Correlated")
+    }
+  })
   GOI_multi_gsva_INPUT <- reactive({
     if(is.null(multi_GSVA_limma_dp())){
       return(NULL)
     }else{
       if(dim(multi_GSVA_limma_dp)[1] == 0) validate("There are no differential pathways. Please change FDR cut-off value.")
       if(input$GOI_type_multi_gsva == "ALL") return(rownames(multi_GSVA_limma_dp()))
-      if(input$GOI_type_multi_gsva == "custom") return(input$GOI_multi_gsva)
+      if(input$GOI_type_multi_gsva == "custom"){
+        if(input$GOI_type_multi_gsva_custom == "Manual"){
+          return(input$GOI_multi_gsva)
+        }else{
+          data <- multi_GSVA_limma_dp()
+          df2 <- data.frame(matrix(rep(NA, 10), nrow=1))[numeric(0), ]
+          print(dim(data))
+          for(i in rownames(data)){
+            corr<-suppressWarnings(cor.test(x=as.numeric(data[input$GOI_multi_gsva,]),y=as.numeric(data[i,]),method="spearman"))
+            df <- data.frame(y_axis = i, x_axis = input$GOI_multi_gsva, statistics=corr$statistic,corr_score = corr$estimate,
+                             pvalue = corr$p.value)
+            df2 <- rbind(df2,df)
+          }
+          print(head(df2))
+          padj <- p.adjust(df2$pvalue,method="BH")
+          df2$padj <- padj
+          colnames(df2) <- c("prey","bait","statistics","corr_score","pvalue","method","padj")
+          df2 <- na.omit(df2)
+          df2 <- df2%>% dplyr::dplyr(padj < 0.05)
+          return(df2$prey)
+        }
+      } 
     }
   })
   multi_gsva_GOIcount <- reactive({

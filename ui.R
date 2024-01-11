@@ -1133,6 +1133,7 @@ shinyUI(
                                                       'Custom'="custom"
                                                     ),selected = "ALL"),
                                        htmlOutput("GOI_type_multi_gsva_all"),
+                                       htmlOutput("GOI_type_multi_gsva_custom"),
                                        htmlOutput("GOI_multi_gsva"), htmlOutput("GOIreset_multi_gsva")),
                                 column(8, plotOutput("multi_gsva_GOIheatmap"))
                               ),
