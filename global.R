@@ -1480,12 +1480,18 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL,s
   if(length(rowlist) > 200){
     p <- NULL
   }else{
-    if(ssGSEA == FALSE) ylim = c(0, NA) else ylim = c(NA, NA)
+    if(ssGSEA == FALSE) {
+      ylim = c(0, NA)
+      ylab = "Normalized_count"
+    }else {
+      ylim = c(NA, NA)
+      ylab = "ssGSEA score"
+    }
     if (plottype == "Boxplot"){
   p <- ggpubr::ggboxplot(data, x = "sample", y = "value",
                          fill = "sample", scales = "free",
                          add = "jitter",
-                         xlab = FALSE, ylab = "Normalized_count", ylim = ylim)
+                         xlab = FALSE, ylab = ylab, ylim = ylim)
     }
     if (plottype == "Barplot"){
       p <- ggbarplot(data,x = "sample", y = "value", scales = "free",
@@ -1503,13 +1509,13 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL,s
       p <- ggplot(data, aes(x = sample, y = value)) + geom_boxplot(aes(fill=sample))+
         geom_line(aes(group = pair),alpha = .2) +
         geom_point() + theme_classic() + theme(legend.position = "top")+ 
-        xlab(NULL) + ylim(ylim) + ylab("Normalized_count")
+        xlab(NULL) + ylim(ylim) + ylab(ylab)
       }
       if(plottype == "without boxplot"){
         p <- ggplot(data, aes(x = sample, y = value,group = pair)) + 
           geom_line() +
           geom_point(aes(color = sample)) + theme_classic() + theme(legend.position = "top")+ 
-          xlab(NULL) + ylim(ylim) + ylab("Normalized_count")+ 
+          xlab(NULL) + ylim(ylim) + ylab(ylab)+ 
           scale_color_manual(values=c("#00BFC4", "#F8766D"))
       }
     }
@@ -2226,6 +2232,7 @@ ssGSEA <- function(norm_count, gene_set,org,gene_type,Species,Ortholog){
   if(length(grep("SYMBOL", colnames(data2))) != 0) data2 <- data2[, - which(colnames(data2) == "SYMBOL")]
   print(head(data2))
   ssgseaPar <- ssgseaParam(as.matrix(data2),genesbyGeneSet)
+  print(ssgseaPar)
   ssgsea.score <- gsva(ssgseaPar)
   return(ssgsea.score)
 }

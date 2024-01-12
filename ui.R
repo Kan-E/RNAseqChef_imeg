@@ -44,6 +44,7 @@ shinyUI(
                  column(12,
                         br(),
                         h4("Current version (v1.1.0-beta, 2024/1/5)"),
+                        p("(2024/1/12) Fix the desplayed text about FoldChange cut-off in Multi DEG and normalized count analysis (There is no impact on the results.)."),
                         p("(2024/1/9) Fix bugs regarding the import of count data."),
                         p("(2024/1/5) Fix bugs regarding the import of count data."),
                         p("(2024/1/3) Improve the visualization of the clustering analysis (PCA, MDS, and UMAP)."),
