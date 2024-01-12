@@ -1132,7 +1132,7 @@ shinyUI(
                                        radioButtons('GOI_type_multi_ssGSEA','Pathways:',
                                                     c('Select all pathways'="ALL",
                                                       'Custom'="custom"
-                                                    ),selected = "ALL"),
+                                                    ),selected = "custom"),
                                        htmlOutput("GOI_type_multi_ssGSEA_all"),
                                        htmlOutput("GOI_type_multi_ssGSEA_custom"),
                                        htmlOutput("GOI_multi_ssGSEA"), htmlOutput("GOIreset_multi_ssGSEA")),

@@ -1385,6 +1385,7 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL,s
   data$Row.names <- as.factor(data$Row.names)
   data$sample <- factor(data$sample,levels=collist,ordered=TRUE)
   data$value <- as.numeric(data$value)
+  stat.test <-NULL
   if(!is.null(statistical_test) && statistical_test != "not_selected"){
     res <- data.frame(matrix(rep(NA, 11), nrow=1))[numeric(0), ]
     colnames(res) <- c("Gene", "group1", "group2", "term", "null.value","Std.Error","coefficients","t.value","p.adj","xmin", "xmax")
@@ -1477,17 +1478,17 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL,s
       stat.test <- stat.test3 %>% add_significance("p.adj")
     }
   }
+  stat.test$group1 <- gsub("\n"," ",stat.test$group1)
+  stat.test$group2 <- gsub("\n"," ",stat.test$group2)
   if(length(rowlist) > 200){
     p <- NULL
   }else{
     if(ssGSEA == FALSE) {
       ylim = c(0, NA)
       ylab = "Normalized_count"
-      labeller = NULL
     }else {
       ylim = c(NA, NA)
       ylab = "ssGSEA score"
-      labeller = label_wrap_gen(5)
     }
     if (plottype == "Boxplot"){
   p <- ggpubr::ggboxplot(data, x = "sample", y = "value",
@@ -1522,7 +1523,7 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL,s
       }
     }
   p <- (facet(p, facet.by = "Row.names",
-              panel.labs.background = list(fill = "transparent", color = "transparent"),labeller = labeller,
+              panel.labs.background = list(fill = "transparent", color = "transparent"),
               scales = "free", short.panel.labs = T, panel.labs.font = list(size=15, face = "italic"))+ 
           theme(axis.text.x = element_blank(),
                 panel.background = element_rect(fill = "transparent", size = 0.5),
@@ -2067,7 +2068,9 @@ GOIheatmap <- function(data.z, show_row_names = TRUE, type = NULL, GOI = NULL, a
   }else{
     show_row_names = FALSE
   }
+  if(!is.null(all)){
   if(all == TRUE) show_row_names = TRUE
+  }
   ht <- Heatmap(data.z, name = "z-score",column_order = colnames(data.z),
                 clustering_method_columns = 'ward.D2',use_raster = TRUE,
                 show_row_names = show_row_names, show_row_dend = F,column_names_side = "top",

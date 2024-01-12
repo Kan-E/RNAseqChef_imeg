@@ -4124,18 +4124,12 @@ shinyServer(function(input, output, session) {
   )
   #ssGSEA GOI------------------------------------------------------
   output$GOI_multi_ssGSEA <- renderUI({
-    if(is.null(multi_ssGSEA_limma_dp()) || input$GOI_type_multi_ssGSEA_all == TRUE){
+    if(is.null(multi_ssGSEA_limma_dp())){
       return(NULL)
     }else{
       withProgress(message = "Preparing pathways of interest list (about 10 sec)",{
-      if(input$GOI_type_multi_ssGSEA_all == FALSE){
-        multiple <- TRUE
-      }else if(!is.null(input$GOI_multi_ssGSEA)){
-        if(input$GOI_type_multi_ssGSEA_custom == "Manual") multiple <- TRUE
-        if(input$GOI_type_multi_ssGSEA_custom == "Correlated") multiple <- FALSE
-      }
-        selectizeInput("GOI_multi_ssGSEA", "Pathways of interest", c(rownames(multi_ssGSEA_limma_dp())),multiple = multiple, options = list(delimiter = " ", create = T))
-      })
+        selectizeInput("GOI_multi_ssGSEA", "Pathways of interest", c(rownames(multi_ssGSEA_limma_dp())),multiple = T, options = list(delimiter = " ", create = T))
+        })
     }
   })
   output$GOIreset_multi_ssGSEA <- renderUI({
@@ -4159,9 +4153,11 @@ shinyServer(function(input, output, session) {
   output$GOI_type_multi_ssGSEA_custom <- renderUI({
     if(input$GOI_type_multi_ssGSEA == "custom"){
       radioButtons('GOI_type_multi_ssGSEA_custom','Mode:',
-                   c('Manual'="Manual",
-                     'Correlated pathways'="Correlated"
-                   ),selected = "Correlated")
+                   c('top 10 pathways'="top10",
+                     'top 20 pathways'="top20",
+                     'top 40 pathways'="top40",
+                     'Manual'="Manual"
+                   ),selected = "top10")
     }
   })
   GOI_multi_ssGSEA_INPUT <- reactive({
@@ -4171,10 +4167,25 @@ shinyServer(function(input, output, session) {
       if(dim(multi_ssGSEA_limma_dp())[1] == 0) validate("There are no differential pathways. Please change FDR cut-off value.")
       if(input$GOI_type_multi_ssGSEA == "ALL") return(rownames(multi_ssGSEA_limma_dp()))
       if(input$GOI_type_multi_ssGSEA == "custom"){
+        if(input$GOI_type_multi_ssGSEA_custom == "top10"){
+          data <- multi_ssGSEA_limma_dp() %>% dplyr::arrange(padj) %>% head(n=10)
+          if(length(input$GOI_multi_ssGSEA) == 0) gene <- rownames(data) else gene <- unique(c(rownames(data),input$GOI_multi_ssGSEA))
+          return(gene)
+        }
+        if(input$GOI_type_multi_ssGSEA_custom == "top20"){
+          data <- multi_ssGSEA_limma_dp() %>% dplyr::arrange(padj) %>% head(n=20)
+          if(length(input$GOI_multi_ssGSEA) == 0) gene <- rownames(data) else gene <- unique(c(rownames(data),input$GOI_multi_ssGSEA))
+          return(gene)
+        }
+        if(input$GOI_type_multi_ssGSEA_custom == "top40"){
+          data <- multi_ssGSEA_limma_dp() %>% dplyr::arrange(padj) %>% head(n=40)
+          if(length(input$GOI_multi_ssGSEA) == 0) gene <- rownames(data) else gene <- unique(c(rownames(data),input$GOI_multi_ssGSEA))
+          return(gene)
+        }
         if(length(input$GOI_multi_ssGSEA) == 0) validate("")
         if(input$GOI_type_multi_ssGSEA_custom == "Manual"){
           return(input$GOI_multi_ssGSEA)
-        }else{
+        }else {
           data <- multi_ssGSEA_limma_dp()
           df2 <- data.frame(matrix(rep(NA, 10), nrow=1))[numeric(0), ]
           print(dim(data))
@@ -4202,7 +4213,6 @@ shinyServer(function(input, output, session) {
     data <- merge(label_data,count, by=0)
     rownames(data) <- data[,1]
     data <- data[, -1:-2]
-    rownames(data) <- gsub("_"," ", rownames(data))
     return(data)
   })
   
@@ -4251,7 +4261,10 @@ shinyServer(function(input, output, session) {
     if(is.null(data) || is.null(input$statistics_multi_ssGSEA)){
       p <- NULL
     }else{
-      print(head(data))
+      rownames(data) <- gsub("_"," ", rownames(data))
+      for(i in 1:length(rownames(data))){
+        rownames(data)[i] <- paste(strwrap(rownames(data)[i], width = 10),collapse = "\n")
+      }
       p <- GOIboxplot(data = data,statistical_test =input$statistics_multi_ssGSEA,plottype=input$PlotType_multi_ssGSEA,ssGSEA=TRUE)
     }
     return(p)
@@ -4316,7 +4329,7 @@ shinyServer(function(input, output, session) {
       }}
   })
   
-  output$download_statisics_multi_ssGSEA = downloadHandler(
+  output$download_multi_ssGSEA_statisics = downloadHandler(
     filename = function(){
       paste0(download_multi_overview_dir(), "GOIboxplot_",input$statistics_multi_ssGSEA,".txt")
     },
