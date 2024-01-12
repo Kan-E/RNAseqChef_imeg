@@ -2203,8 +2203,19 @@ corr_plot_pair <- function(data,corr_color,GOI_x,GOI_y){
 library(GSVA)
 ssGSEA <- function(norm_count, gene_set,org,gene_type,Species,Ortholog){
   genesbyGeneSet <- split(gene_set$entrez_gene,gene_set$gs_name)
+  gene_IDs <- geneid_convert_ssGSEA(norm_count,org,gene_type,Species,Ortholog)
+  data2 <- merge(gene_IDs,norm_count,by=0)
+  rownames(data2) <- data2$ENTREZID
+  if(gene_type != "SYMBOL") data2 <- data2[,-1:-4] else data2 <- data2[,-1:-3]
+  if(length(grep("SYMBOL", colnames(data2))) != 0) data2 <- data2[, - which(colnames(data2) == "SYMBOL")]
+  print(head(data2))
+  ssgseaPar <- ssgseaParam(as.matrix(data2),genesbyGeneSet)
+  print(ssgseaPar)
+  ssgsea.score <- gsva(ssgseaPar)
+  return(ssgsea.score)
+}
 
-  
+geneid_convert_ssGSEA <- function(norm_count,gene_type,Species,Ortholog,org){
   my.symbols <- rownames(norm_count)
   if(gene_type != "SYMBOL"){
     if(sum(is.element(no_orgDb, Species)) == 1){
@@ -2230,14 +2241,5 @@ ssGSEA <- function(norm_count, gene_set,org,gene_type,Species,Ortholog){
   gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
   gene_IDs <- na.omit(gene_IDs)
   rownames(gene_IDs) <- gene_IDs$GeneID
-
-  data2 <- merge(gene_IDs,norm_count,by=0)
-  rownames(data2) <- data2$ENTREZID
-  if(gene_type != "SYMBOL") data2 <- data2[,-1:-4] else data2 <- data2[,-1:-3]
-  if(length(grep("SYMBOL", colnames(data2))) != 0) data2 <- data2[, - which(colnames(data2) == "SYMBOL")]
-  print(head(data2))
-  ssgseaPar <- ssgseaParam(as.matrix(data2),genesbyGeneSet)
-  print(ssgseaPar)
-  ssgsea.score <- gsva(ssgseaPar)
-  return(ssgsea.score)
-}
+  return(gene_IDs)
+  }

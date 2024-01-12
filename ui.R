@@ -1148,7 +1148,14 @@ shinyUI(
                                 style = "height: calc(100vh  - 100px)"
                               ),
                               column(4, downloadButton("download_multi_ssGSEA_statisics", "Download table")),
-                              dataTableOutput("statistical_table_multi_ssGSEA")
+                              dataTableOutput("statistical_table_multi_ssGSEA"),
+                              bsCollapsePanel(title="Correlation between ssGSEA score and expression level of TFs:",
+                                              value="ssGSEA_dorothea_panel",
+                                              fluidRow(
+                                                column(4, downloadButton("download_multi_ssGSEA_dorothea", "Download"))
+                                              ),
+                                              dataTableOutput('multi_ssGSEA_dorothea')
+                              )
                      )
                    )
                  ) # main panel

@@ -4383,6 +4383,87 @@ shinyServer(function(input, output, session) {
       })
     }
   )
+  #ssGSEA dorothea---------
+  multi_ssGSEA_limma_dp_entrez <- reactive({
+    data <- multi_ssGSEA_limma_dp()
+    if(!is.null(data)){
+      gene_IDs <- geneid_convert_ssGSEA(norm_count=data,org = org6(),
+                                        gene_type=gene_type6(),Species=input$Species6,Ortholog=input$Ortholog6)
+      data2 <- merge(gene_IDs,data,by=0)
+      rownames(data2) <- data2$ENTREZID
+      data2 <- data2[,-1:-3]
+      return(data2)
+    }
+  })
+  multi_norm_count_for_ssGSEA_dorothea_entrez <- reactive({
+    count <- multi_deg_norm_count()
+    dp <- multi_ssGSEA_limma_dp_entrez()
+    if(!is.null(data) && !is.null(dp)){
+      gene_IDs <- geneid_convert_ssGSEA(norm_count=count,org = org6(),
+                                        gene_type=gene_type6(),Species=input$Species6,Ortholog=input$Ortholog6)
+      count2 <- merge(gene_IDs,norm_count,by=0)
+      rownames(count2) <- count2$ENTREZID
+      if(gene_type != "SYMBOL") count2 <- count2[,-1:-4] else count2 <- count2[,-1:-3]
+      if(length(grep("SYMBOL", colnames(count2))) != 0) count2 <- count2[, - which(colnames(count2) == "SYMBOL")]
+      
+      Row.names <- rownames(dp)
+      label_data <- as.data.frame(Row.names, row.names = Row.names)
+      count_dp <- merge(label_data,count2, by=0)
+      rownames(count_dp) <- count_dp[,1]
+      count_dp <- count_dp[, -1:-2]
+      return(count_dp)
+    }
+  })
+  
+  multi_ssGSEA_TF_cor <- reactive({
+    norm_count <- multi_norm_count_for_ssGSEA_dorothea_entrez()
+    score <- multi_ssGSEA_limma_dp_entrez()
+    if(!is.null(norm_count)){
+      df2 <- data.frame(matrix(rep(NA, 10), nrow=1))[numeric(0), ]
+      for(i in rownames(score)){
+        corr<-suppressWarnings(cor.test(x=as.numeric(norm_count[i,]),y=as.numeric(score[i,]),method="spearman"))
+        df <- data.frame(TF = i, statistics=corr$statistic,corr_score = corr$estimate,
+                         pvalue = corr$p.value)
+        df2 <- rbind(df2,df)
+      }
+      padj <- p.adjust(df2$pvalue,method="BH")
+      df2$padj <- padj
+      colnames(df2) <- c("TF","statistics","corr_score","pvalue","padj")
+      df2 <- na.omit(df2)
+      df2 <- df2%>% dplyr::arrange(-corr_score, padj) %>%
+        dplyr::mutate(rank = row_number())
+      rownames(df2) <- df2$rank
+      
+      df2$color <- "NS"
+      df2$color[df2$padj < 0.05 & df2$corr_score > 0] <- "positive_correlation"
+      df2$color[df2$padj < 0.05 & df2$corr_score < 0] <- "negative_correlation"
+      df2 <- df2 %>% dplyr::select(TF,color,everything())
+      return(df2)
+    }
+  })
+  
+  multi_ssGSEA_TF_corplot <- reactive({
+    if(!is.null(multi_ssGSEA_TF_cor())){
+      df2 <- multi_ssGSEA_TF_cor()
+        Color <- c("blue","darkgray","red")
+        df2$color <- factor(df2$color, levels = c("negative_correlation","NS", "positive_correlation"))
+        if(length(df2$prey[df2$color == "negative_correlation"]) == 0) Color <- c("darkgray","red")
+      ylab <- paste0("Spearman's correlation")
+      p <- ggplot(df2,aes(x=rank,y=corr_score,col=color))+
+        ggrastr::geom_point_rast(aes(color = color),size = 0.4)  +
+        theme_bw()+ scale_color_manual(values = Color)+
+        theme(legend.position = "top" , legend.title = element_blank(),
+              axis.text.x= ggplot2::element_text(size = 12),
+              axis.text.y= ggplot2::element_text(size = 12),
+              text = ggplot2::element_text(size = 12),
+              title = ggplot2::element_text(size = 12))  + ylab(ylab)
+      return(p)
+    }
+  })
+  output$multi_ssGSEA_dorothea <- renderPlot({
+    if(!is.null(multi_ssGSEA_TF_corplot()))
+      multi_ssGSEA_TF_corplot()
+  })
   #multi DEG enrichment 2--------
   multi_Hallmark_set2 <- reactive({
     return(GeneList_for_enrichment(Species = input$Species6, Ortholog=input$Ortholog6,Biomart_archive=input$Biomart_archive6, Gene_set = input$Gene_set7, org = org6()))
