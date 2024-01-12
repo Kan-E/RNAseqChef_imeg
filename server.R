@@ -4202,7 +4202,7 @@ shinyServer(function(input, output, session) {
     data <- merge(label_data,count, by=0)
     rownames(data) <- data[,1]
     data <- data[, -1:-2]
-    print(head(data))
+    rownames(data) <- gsub("_"," ", rownames(data))
     return(data)
   })
   

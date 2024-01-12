@@ -1483,9 +1483,11 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL,s
     if(ssGSEA == FALSE) {
       ylim = c(0, NA)
       ylab = "Normalized_count"
+      labeller = NULL
     }else {
       ylim = c(NA, NA)
       ylab = "ssGSEA score"
+      labeller = label_wrap_gen(5)
     }
     if (plottype == "Boxplot"){
   p <- ggpubr::ggboxplot(data, x = "sample", y = "value",
@@ -1520,7 +1522,7 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL,s
       }
     }
   p <- (facet(p, facet.by = "Row.names",
-              panel.labs.background = list(fill = "transparent", color = "transparent"),
+              panel.labs.background = list(fill = "transparent", color = "transparent"),labeller = labeller,
               scales = "free", short.panel.labs = T, panel.labs.font = list(size=15, face = "italic"))+ 
           theme(axis.text.x = element_blank(),
                 panel.background = element_rect(fill = "transparent", size = 0.5),
