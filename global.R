@@ -1373,7 +1373,7 @@ GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene
       return(H_t2g)
   }else return(NULL)
 }
-GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL,gsva=FALSE){
+GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL,ssGSEA=FALSE){
   print("GOIboxplot start")
   collist <- gsub("\\_.+$", "", colnames(data))
   collist <- unique(collist)
@@ -1480,7 +1480,7 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",pair=NULL,g
   if(length(rowlist) > 200){
     p <- NULL
   }else{
-    if(gsva == FALSE) ylim = c(0, NA) else ylim = c(-1, 1)
+    if(ssGSEA == FALSE) ylim = c(0, NA) else ylim = c(NA, NA)
     if (plottype == "Boxplot"){
   p <- ggpubr::ggboxplot(data, x = "sample", y = "value",
                          fill = "sample", scales = "free",
@@ -2190,7 +2190,7 @@ corr_plot_pair <- function(data,corr_color,GOI_x,GOI_y){
 
 
 library(GSVA)
-GSVA <- function(norm_count, gene_set,org,gene_type,Species,Ortholog){
+ssGSEA <- function(norm_count, gene_set,org,gene_type,Species,Ortholog){
   genesbyGeneSet <- split(gene_set$entrez_gene,gene_set$gs_name)
 
   
@@ -2225,7 +2225,7 @@ GSVA <- function(norm_count, gene_set,org,gene_type,Species,Ortholog){
   if(gene_type != "SYMBOL") data2 <- data2[,-1:-4] else data2 <- data2[,-1:-3]
   if(length(grep("SYMBOL", colnames(data2))) != 0) data2 <- data2[, - which(colnames(data2) == "SYMBOL")]
   print(head(data2))
-  gsvaPar <- gsvaParam(as.matrix(data2),genesbyGeneSet)
-  gsva.score <- gsva(gsvaPar)
-  return(gsva.score)
+  ssgseaPar <- ssgseaParam(as.matrix(data2),genesbyGeneSet)
+  ssgsea.score <- gsva(ssgseaPar)
+  return(ssgsea.score)
 }

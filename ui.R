@@ -1091,63 +1091,63 @@ shinyUI(
                                          )
                               )
                      ),
-                     tabPanel("GSVA",
-                              htmlOutput("Gene_set_GSVA"),
+                     tabPanel("ssGSEA",
+                              htmlOutput("Gene_set_ssGSEA"),
                               fluidRow(
-                                column(4, textOutput("multi_Spe1_gsva"),
-                                       tags$head(tags$style("#multi_Spe1_gsva{color: red;
+                                column(4, textOutput("multi_Spe1_ssGSEA"),
+                                       tags$head(tags$style("#multi_Spe1_ssGSEA{color: red;
                                          font-size: 20px;
                                          font-style: bold;
                                       }")))
                               ),
-                              bsCollapse(id="input_collapse_multi_gsva",open="gsva_score_panel",multiple = TRUE,
-                                         bsCollapsePanel(title="GSVA score:",
-                                                         value="gsva_score_panel",
+                              bsCollapse(id="input_collapse_multi_ssGSEA",open="ssGSEA_score_panel",multiple = TRUE,
+                                         bsCollapsePanel(title="ssGSEA score:",
+                                                         value="ssGSEA_score_panel",
                                                          fluidRow(
-                                                           column(4, downloadButton("download_multi_GSVA_score", "Download"))
+                                                           column(4, downloadButton("download_multi_ssGSEA_score", "Download"))
                                                          ),
-                                                         dataTableOutput('multi_GSVA_score')
+                                                         dataTableOutput('multi_ssGSEA_score')
                                          ),
                                          bsCollapsePanel(title="Differential analysis:",
-                                                         value="gsva_limma_panel",
+                                                         value="ssGSEA_limma_panel",
                                                          fluidRow(
-                                                           column(4, downloadButton("download_multi_GSVA_limma", "Download"))
+                                                           column(4, downloadButton("download_multi_ssGSEA_limma", "Download"))
                                                          ),
-                                                         dataTableOutput('multi_GSVA_limma')
+                                                         dataTableOutput('multi_ssGSEA_limma')
                                          ),
                                          bsCollapsePanel(title="Differential pathways:",
-                                                         value="gsva_limma_panel",
+                                                         value="ssGSEA_limma_panel",
                                                          fluidRow(
-                                                           column(4, downloadButton("download_multi_GSVA_limma_dp", "Download"))
+                                                           column(4, downloadButton("download_multi_ssGSEA_limma_dp", "Download"))
                                                          ),
-                                                         dataTableOutput('multi_GSVA_limma_dp')
+                                                         dataTableOutput('multi_ssGSEA_limma_dp')
                                          )
                               ),
                               fluidRow(
-                                column(4, downloadButton("download_multi_gsva_GOIheat", "Download heatmap"))
+                                column(4, downloadButton("download_multi_ssGSEA_GOIheat", "Download heatmap"))
                               ),
                               fluidRow(
                                 column(4, 
-                                       radioButtons('GOI_type_multi_gsva','Pathways:',
+                                       radioButtons('GOI_type_multi_ssGSEA','Pathways:',
                                                     c('Select all pathways'="ALL",
                                                       'Custom'="custom"
                                                     ),selected = "ALL"),
-                                       htmlOutput("GOI_type_multi_gsva_all"),
-                                       htmlOutput("GOI_type_multi_gsva_custom"),
-                                       htmlOutput("GOI_multi_gsva"), htmlOutput("GOIreset_multi_gsva")),
-                                column(8, plotOutput("multi_gsva_GOIheatmap"))
+                                       htmlOutput("GOI_type_multi_ssGSEA_all"),
+                                       htmlOutput("GOI_type_multi_ssGSEA_custom"),
+                                       htmlOutput("GOI_multi_ssGSEA"), htmlOutput("GOIreset_multi_ssGSEA")),
+                                column(8, plotOutput("multi_ssGSEA_GOIheatmap"))
                               ),
                               fluidRow(
-                                column(4, htmlOutput("statistics_multi_gsva")),
-                                column(4, htmlOutput("PlotType_multi_gsva")),
-                                column(4, downloadButton("download_multi_gsva_GOIbox", "Download boxplot"))
+                                column(4, htmlOutput("statistics_multi_ssGSEA")),
+                                column(4, htmlOutput("PlotType_multi_ssGSEA")),
+                                column(4, downloadButton("download_multi_ssGSEA_GOIbox", "Download boxplot"))
                               ),
                               div(
-                                plotOutput("multi_gsva_GOIboxplot", height = "100%"),
+                                plotOutput("multi_ssGSEA_GOIboxplot", height = "100%"),
                                 style = "height: calc(100vh  - 100px)"
                               ),
-                              column(4, downloadButton("download_multi_gsva_statisics", "Download table")),
-                              dataTableOutput("statistical_table_multi_gsva")
+                              column(4, downloadButton("download_multi_ssGSEA_statisics", "Download table")),
+                              dataTableOutput("statistical_table_multi_ssGSEA")
                      )
                    )
                  ) # main panel

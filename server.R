@@ -4014,50 +4014,50 @@ shinyServer(function(input, output, session) {
     content = function(file){write.table(multi_GSEA_table(), file, row.names = F, sep = "\t", quote = F)}
   )
   
-  # Multi GSVA-----
-  output$multi_Spe1_gsva <- renderText({
+  # Multi ssGSEA-----
+  output$multi_Spe1_ssGSEA <- renderText({
     if(input$Species6 == "not selected") print("Please select 'Species'")
   })
-  multi_Hallmark_set_GSVA <- reactive({
-    return(GeneList_for_enrichment(Species = input$Species6, Ortholog=input$Ortholog6,Biomart_archive=input$Biomart_archive6, Gene_set = input$Gene_set_GSVA, org = org6()))
+  multi_Hallmark_set_ssGSEA <- reactive({
+    return(GeneList_for_enrichment(Species = input$Species6, Ortholog=input$Ortholog6,Biomart_archive=input$Biomart_archive6, Gene_set = input$Gene_set_ssGSEA, org = org6()))
   })
-  output$Gene_set_GSVA <- renderUI({
+  output$Gene_set_ssGSEA <- renderUI({
     if(input$Species6 != "Xenopus laevis" && input$Ortholog6 != "Arabidopsis thaliana" && input$Species6 != "Arabidopsis thaliana"){
-      selectInput('Gene_set_GSVA', 'Gene Set', c("",gene_set_list), selected = "")
-    }else selectInput('Gene_set_GSVA', 'Gene Set', c("","KEGG", "GO biological process", 
+      selectInput('Gene_set_ssGSEA', 'Gene Set', c("",gene_set_list), selected = "")
+    }else selectInput('Gene_set_ssGSEA', 'Gene Set', c("","KEGG", "GO biological process", 
                                                  "GO cellular component","GO molecular function"),selected = "")
   })
   
-  multi_enrichment_1_gsva <- reactive({
-    if(!is.null(input$Gene_set_GSVA) && input$Gene_set_GSVA != "" && input$Species6 != "not selected"){
+  multi_enrichment_1_ssGSEA <- reactive({
+    if(!is.null(input$Gene_set_ssGSEA) && input$Gene_set_ssGSEA != "" && input$Species6 != "not selected"){
       count <- multi_deg_norm_count()
-      withProgress(message = "GSVA",{
-        result <- GSVA(norm_count = count,gene_set = multi_Hallmark_set_GSVA(), org = org6(),
+      withProgress(message = "ssGSEA",{
+        result <- ssGSEA(norm_count = count,gene_set = multi_Hallmark_set_ssGSEA(), org = org6(),
                        gene_type=gene_type6(),Species=input$Species6,Ortholog=input$Ortholog6)
         return(result)
         incProgress(1)
       })
     }
   })
-  output$multi_GSVA_score <- DT::renderDataTable({
-    if(is.null(multi_enrichment_1_gsva())){
+  output$multi_ssGSEA_score <- DT::renderDataTable({
+    if(is.null(multi_enrichment_1_ssGSEA())){
       return(NULL)
     }else{
-      multi_enrichment_1_gsva()
+      multi_enrichment_1_ssGSEA()
     }
   })
-  output$download_multi_GSVA_score = downloadHandler(
+  output$download_multi_ssGSEA_score = downloadHandler(
     filename = function() {
-      paste(download_multi_overview_dir(), paste0(input$Gene_set_GSVA,"-GSVA_score.txt"), sep="_")
+      paste(download_multi_overview_dir(), paste0(input$Gene_set_ssGSEA,"-ssGSEA_score.txt"), sep="_")
     },
-    content = function(file){write.table(multi_enrichment_1_gsva(), file, row.names = T,col.names = F, sep = "\t", quote = F)}
+    content = function(file){write.table(multi_enrichment_1_ssGSEA(), file, row.names = T,col.names = F, sep = "\t", quote = F)}
   )
-  # Multi GSVA limma-----
-  multi_GSVA_limma <- reactive({
-      if(is.null(multi_enrichment_1_gsva())){
+  # Multi ssGSEA limma-----
+  multi_ssGSEA_limma <- reactive({
+      if(is.null(multi_enrichment_1_ssGSEA())){
         return(NULL)
       }else{
-        count <- multi_enrichment_1_gsva()
+        count <- multi_enrichment_1_ssGSEA()
           collist <- gsub("\\_.+$", "", colnames(count))
           collist <- gsub(" ", ".", collist)
           print(collist)
@@ -4087,21 +4087,21 @@ shinyServer(function(input, output, session) {
           
         }
   })
-  output$multi_GSVA_limma <- DT::renderDataTable({
-    if(is.null(multi_GSVA_limma())){
+  output$multi_ssGSEA_limma <- DT::renderDataTable({
+    if(is.null(multi_ssGSEA_limma())){
       return(NULL)
     }else{
-      multi_GSVA_limma()
+      multi_ssGSEA_limma()
     }
   })
-  output$download_multi_GSVA_limma = downloadHandler(
+  output$download_multi_ssGSEA_limma = downloadHandler(
     filename = function() {
-      paste(download_multi_overview_dir(), paste0(input$Gene_set_GSVA,"-GSVA_differential_analysis_all_result.txt"), sep="_")
+      paste(download_multi_overview_dir(), paste0(input$Gene_set_ssGSEA,"-ssGSEA_differential_analysis_all_result.txt"), sep="_")
     },
-    content = function(file){write.table(multi_GSVA_limma(), file, row.names = T,col.names = F, sep = "\t", quote = F)}
+    content = function(file){write.table(multi_ssGSEA_limma(), file, row.names = T,col.names = F, sep = "\t", quote = F)}
   )
-  multi_GSVA_limma_dp <- reactive({
-    result <- multi_GSVA_limma()
+  multi_ssGSEA_limma_dp <- reactive({
+    result <- multi_ssGSEA_limma()
     if(!is.null(result)){
       if(dim(result)[1] != 0){
       res2 <- result %>% dplyr::filter(padj < input$fdr6)
@@ -4109,93 +4109,95 @@ shinyServer(function(input, output, session) {
       }
     }
   })
-  output$multi_GSVA_limma_dp <- DT::renderDataTable({
-    if(is.null(multi_GSVA_limma_dp())){
+  output$multi_ssGSEA_limma_dp <- DT::renderDataTable({
+    if(is.null(multi_ssGSEA_limma_dp())){
       return(NULL)
     }else{
-      multi_GSVA_limma_dp()
+      multi_ssGSEA_limma_dp()
     }
   })
-  output$download_multi_GSVA_limma_dp = downloadHandler(
+  output$download_multi_ssGSEA_limma_dp = downloadHandler(
     filename = function() {
-      paste(download_multi_overview_dir(), paste0(input$Gene_set_GSVA,"-GSVA_differential_pathways.txt"), sep="_")
+      paste(download_multi_overview_dir(), paste0(input$Gene_set_ssGSEA,"-ssGSEA_differential_pathways.txt"), sep="_")
     },
-    content = function(file){write.table(multi_GSVA_limma_dp(), file, row.names = T,col.names = F, sep = "\t", quote = F)}
+    content = function(file){write.table(multi_ssGSEA_limma_dp(), file, row.names = T,col.names = F, sep = "\t", quote = F)}
   )
-  #GSVA GOI------------------------------------------------------
-  output$GOI_multi_gsva <- renderUI({
-    if(is.null(multi_GSVA_limma_dp()) && input$GOI_type_multi_gsva_all == TRUE){
+  #ssGSEA GOI------------------------------------------------------
+  output$GOI_multi_ssGSEA <- renderUI({
+    if(is.null(multi_ssGSEA_limma_dp()) || input$GOI_type_multi_ssGSEA_all == TRUE){
       return(NULL)
     }else{
       withProgress(message = "Preparing pathways of interest list (about 10 sec)",{
-      if(input$GOI_type_multi_gsva_all == FALSE){
+      if(input$GOI_type_multi_ssGSEA_all == FALSE){
         multiple <- TRUE
-      }else if(!is.null(input$GOI_multi_gsva)){
-        if(input$GOI_type_multi_gsva_custom == "Manual") multiple <- TRUE else   multiple <- FALSE
+      }else if(!is.null(input$GOI_multi_ssGSEA)){
+        if(input$GOI_type_multi_ssGSEA_custom == "Manual") multiple <- TRUE
+        if(input$GOI_type_multi_ssGSEA_custom == "Correlated") multiple <- FALSE
       }
-        selectizeInput("GOI_multi_gsva", "Pathways of interest", c(rownames(multi_GSVA_limma_dp())),multiple = multiple, options = list(delimiter = " ", create = T))
+        selectizeInput("GOI_multi_ssGSEA", "Pathways of interest", c(rownames(multi_ssGSEA_limma_dp())),multiple = multiple, options = list(delimiter = " ", create = T))
       })
     }
   })
-  output$GOIreset_multi_gsva <- renderUI({
-    actionButton("GOIreset_multi_gsva", "reset")
+  output$GOIreset_multi_ssGSEA <- renderUI({
+    actionButton("GOIreset_multi_ssGSEA", "reset")
   })
-  observeEvent(input$GOIreset_multi_gsva, {
+  observeEvent(input$GOIreset_multi_ssGSEA, {
     withProgress(message = "Preparing pathways of interest list (about 10 sec)",{
-      updateSelectizeInput(session, "GOI_multi_gsva", choices = c(rownames(multi_GSVA_limma_dp())), 
+      updateSelectizeInput(session, "GOI_multi_ssGSEA", choices = c(rownames(multi_ssGSEA_limma_dp())), 
                            selected = character(0),
                            options = list(delimiter = " ", create=TRUE, 'plugins' = list('remove_button'), persist = FALSE))
     })
   })
-  output$GOI_type_multi_gsva_all <- renderUI({
-    if(input$GOI_type_multi_gsva == "ALL"){
-      radioButtons('GOI_type_multi_gsva_all','Label of heatmap:',
+  output$GOI_type_multi_ssGSEA_all <- renderUI({
+    if(input$GOI_type_multi_ssGSEA == "ALL"){
+      radioButtons('GOI_type_multi_ssGSEA_all','Label of heatmap:',
                    c('ALL'=TRUE,
                      'Select pathways from the below list'=FALSE
                    ),selected = FALSE)
     }
   })
-  GOI_type_multi_gsva_custom <- renderUI({
-    if(input$GOI_type_multi_gsva == "custom"){
-      radioButtons('GOI_type_multi_gsva_custom','Mode:',
+  output$GOI_type_multi_ssGSEA_custom <- renderUI({
+    if(input$GOI_type_multi_ssGSEA == "custom"){
+      radioButtons('GOI_type_multi_ssGSEA_custom','Mode:',
                    c('Manual'="Manual",
                      'Correlated pathways'="Correlated"
                    ),selected = "Correlated")
     }
   })
-  GOI_multi_gsva_INPUT <- reactive({
-    if(is.null(multi_GSVA_limma_dp())){
+  GOI_multi_ssGSEA_INPUT <- reactive({
+    if(is.null(multi_ssGSEA_limma_dp())){
       return(NULL)
     }else{
-      if(dim(multi_GSVA_limma_dp)[1] == 0) validate("There are no differential pathways. Please change FDR cut-off value.")
-      if(input$GOI_type_multi_gsva == "ALL") return(rownames(multi_GSVA_limma_dp()))
-      if(input$GOI_type_multi_gsva == "custom"){
-        if(input$GOI_type_multi_gsva_custom == "Manual"){
-          return(input$GOI_multi_gsva)
+      if(dim(multi_ssGSEA_limma_dp())[1] == 0) validate("There are no differential pathways. Please change FDR cut-off value.")
+      if(input$GOI_type_multi_ssGSEA == "ALL") return(rownames(multi_ssGSEA_limma_dp()))
+      if(input$GOI_type_multi_ssGSEA == "custom"){
+        if(length(input$GOI_multi_ssGSEA) == 0) validate("")
+        if(input$GOI_type_multi_ssGSEA_custom == "Manual"){
+          return(input$GOI_multi_ssGSEA)
         }else{
-          data <- multi_GSVA_limma_dp()
+          data <- multi_ssGSEA_limma_dp()
           df2 <- data.frame(matrix(rep(NA, 10), nrow=1))[numeric(0), ]
           print(dim(data))
           for(i in rownames(data)){
-            corr<-suppressWarnings(cor.test(x=as.numeric(data[input$GOI_multi_gsva,]),y=as.numeric(data[i,]),method="spearman"))
-            df <- data.frame(y_axis = i, x_axis = input$GOI_multi_gsva, statistics=corr$statistic,corr_score = corr$estimate,
+            corr<-suppressWarnings(cor.test(x=as.numeric(data[input$GOI_multi_ssGSEA,]),y=as.numeric(data[i,]),method="spearman"))
+            df <- data.frame(y_axis = i, x_axis = input$GOI_multi_ssGSEA, statistics=corr$statistic,corr_score = corr$estimate,
                              pvalue = corr$p.value)
             df2 <- rbind(df2,df)
           }
           print(head(df2))
           padj <- p.adjust(df2$pvalue,method="BH")
           df2$padj <- padj
-          colnames(df2) <- c("prey","bait","statistics","corr_score","pvalue","method","padj")
+          colnames(df2) <- c("prey","bait","statistics","corr_score","pvalue","padj")
           df2 <- na.omit(df2)
-          df2 <- df2%>% dplyr::dplyr(padj < 0.05)
+          df2 <- df2%>% dplyr::filter(pvalue < 0.05)
           return(df2$prey)
         }
       } 
     }
   })
-  multi_gsva_GOIcount <- reactive({
-    count <- multi_enrichment_1_gsva()
-    Row.names <- GOI_multi_gsva_INPUT()
+  multi_ssGSEA_GOIcount <- reactive({
+    count <- multi_enrichment_1_ssGSEA()
+    Row.names <- GOI_multi_ssGSEA_INPUT()
     label_data <- as.data.frame(Row.names, row.names = Row.names)
     data <- merge(label_data,count, by=0)
     rownames(data) <- data[,1]
@@ -4204,89 +4206,90 @@ shinyServer(function(input, output, session) {
     return(data)
   })
   
-  multi_gsva_GOIheat <- reactive({
-    data <- multi_gsva_GOIcount()
+  multi_ssGSEA_GOIheat <- reactive({
+    data <- multi_ssGSEA_GOIcount()
+    data <- genefilter::genescale(data,axis=1, method="Z")
     if(is.null(data)){
       ht <- NULL
     }else{
-      ht <- GOIheatmap(data, type = input$GOI_type_multi_gsva, GOI = input$GOI_multi_gsva,all=input$GOI_type_multi_gsva_all)
+      ht <- GOIheatmap(data, type = input$GOI_type_multi_ssGSEA, GOI = input$GOI_multi_ssGSEA,all=input$GOI_type_multi_ssGSEA_all)
     }
     return(ht)
   })
   
-  output$multi_gsva_GOIheatmap <- renderPlot({
-    if(is.null(multi_GSVA_limma_dp())){
+  output$multi_ssGSEA_GOIheatmap <- renderPlot({
+    if(is.null(multi_ssGSEA_limma_dp())){
       return(NULL)
     }else{
-      if(!is.null(GOI_multi_gsva_INPUT())){
+      if(!is.null(GOI_multi_ssGSEA_INPUT())){
         withProgress(message = "heatmap",{
-          suppressWarnings(print(multi_gsva_GOIheat()))
+          suppressWarnings(print(multi_ssGSEA_GOIheat()))
           incProgress(1)
         })
       }
     }
   })
-  output$statistics_multi_gsva <- renderUI({
-    if(!is.null(multi_GSVA_limma_dp()) && !is.null(GOI_multi_gsva_INPUT())){
-      data <- multi_gsva_GOIcount()
+  output$statistics_multi_ssGSEA <- renderUI({
+    if(!is.null(multi_ssGSEA_limma_dp()) && !is.null(GOI_multi_ssGSEA_INPUT())){
+      data <- multi_ssGSEA_GOIcount()
       if(!is.null(data)){
         collist <- gsub("\\_.+$", "", colnames(data))
         collist <- unique(collist)
         if(length(collist) == 2){
-          selectInput("statistics_multi_gsva","statistics",choices = c("not_selected","Welch's t-test","Wilcoxon test"),selected="not_selected",multiple = F)
+          selectInput("statistics_multi_ssGSEA","statistics",choices = c("not_selected","Welch's t-test","Wilcoxon test"),selected="not_selected",multiple = F)
         }else{
-          selectInput("statistics_multi_gsva","statistics",choices = c("not_selected","TukeyHSD","Dunnet's test","Wilcoxon test"),selected="not_selected", multiple = F)
+          selectInput("statistics_multi_ssGSEA","statistics",choices = c("not_selected","TukeyHSD","Dunnet's test","Wilcoxon test"),selected="not_selected", multiple = F)
         }
       }}
   })
-  output$PlotType_multi_gsva <- renderUI({
-    selectInput('PlotType_multi_gsva', 'PlotType', c("Boxplot", "Barplot", "Errorplot"))
+  output$PlotType_multi_ssGSEA <- renderUI({
+    selectInput('PlotType_multi_ssGSEA', 'PlotType', c("Boxplot", "Barplot", "Errorplot"))
   })
   
-  statistical_analysis_goi_multi_gsva <- reactive({
-    data <- multi_gsva_GOIcount()
-    if(is.null(data) || is.null(input$statistics_multi_gsva)){
+  statistical_analysis_goi_multi_ssGSEA <- reactive({
+    data <- multi_ssGSEA_GOIcount()
+    if(is.null(data) || is.null(input$statistics_multi_ssGSEA)){
       p <- NULL
     }else{
       print(head(data))
-      p <- GOIboxplot(data = data,statistical_test =input$statistics_multi_gsva,plottype=input$PlotType_multi_gsva,gsva=TRUE)
+      p <- GOIboxplot(data = data,statistical_test =input$statistics_multi_ssGSEA,plottype=input$PlotType_multi_ssGSEA,ssGSEA=TRUE)
     }
     return(p)
   })
   
-  multi_gsva_GOIbox <- reactive({
+  multi_ssGSEA_GOIbox <- reactive({
     print("multi_gsca_GOIbox start")
-    if(!is.null(statistical_analysis_goi_multi_gsva())){
-      if(input$statistics_multi_gsva == "not_selected"){
-        return(statistical_analysis_goi_multi_gsva())
-      }else return(statistical_analysis_goi_multi_gsva()[["plot"]])
+    if(!is.null(statistical_analysis_goi_multi_ssGSEA())){
+      if(input$statistics_multi_ssGSEA == "not_selected"){
+        return(statistical_analysis_goi_multi_ssGSEA())
+      }else return(statistical_analysis_goi_multi_ssGSEA()[["plot"]])
     }
   })
   
   
-  output$multi_gsva_GOIboxplot <- renderPlot({
-    print(multi_gsva_GOIbox())
-    if(is.null(multi_GSVA_limma_dp())){
+  output$multi_ssGSEA_GOIboxplot <- renderPlot({
+    print(multi_ssGSEA_GOIbox())
+    if(is.null(multi_ssGSEA_limma_dp())){
       return(NULL)
     }else{
-      if(!is.null(GOI_multi_gsva_INPUT())){
-        if(length(rownames(multi_gsva_GOIcount())) >200){
+      if(!is.null(GOI_multi_ssGSEA_INPUT())){
+        if(length(rownames(multi_ssGSEA_GOIcount())) >200){
           validate("Unable to display more than 200 genes. Please adjust the threshold to narrow down the number of genes to less than 200, or utilize the 'Custom' mode.")
         }
         withProgress(message = "Boxplot",{
-          suppressWarnings(print(multi_gsva_GOIbox()))
+          suppressWarnings(print(multi_ssGSEA_GOIbox()))
           incProgress(1)
         })
       }
     }
   })
   
-  multi_gsva_GOIbox_statistic <- reactive({
-    if(!is.null(statistical_analysis_goi_multi_gsva())){
-      if(input$statistics_multi_gsva != "not_selected"){
-        data <- as.data.frame(statistical_analysis_goi_multi_gsva()[["statistical_test"]])
+  multi_ssGSEA_GOIbox_statistic <- reactive({
+    if(!is.null(statistical_analysis_goi_multi_ssGSEA())){
+      if(input$statistics_multi_ssGSEA != "not_selected"){
+        data <- as.data.frame(statistical_analysis_goi_multi_ssGSEA()[["statistical_test"]])
         colnames(data)[1] <- "gene"
-        if(input$statistics_multi_gsva == "TukeyHSD" || input$statistics_multi_gsva == "Dunnet's test"){
+        if(input$statistics_multi_ssGSEA == "TukeyHSD" || input$statistics_multi_ssGSEA == "Dunnet's test"){
           data <- data[, - which(colnames(data) == "term")]
         }else{
           data <- data[, - which(colnames(data) == ".y.")]
@@ -4301,37 +4304,37 @@ shinyServer(function(input, output, session) {
       }else return(NULL)}
   })
   
-  output$statistical_table_multi_gsva <- DT::renderDataTable({
-    if(is.null(multi_GSVA_limma_dp())){
+  output$statistical_table_multi_ssGSEA <- DT::renderDataTable({
+    if(is.null(multi_ssGSEA_limma_dp())){
       return(NULL)
     }else{
-      if(!is.null(GOI_multi_gsva_INPUT())){
-        if(length(rownames(multi_gsva_GOIcount())) >200){
+      if(!is.null(GOI_multi_ssGSEA_INPUT())){
+        if(length(rownames(multi_ssGSEA_GOIcount())) >200){
           validate("Cannot display more than 200 pathways.")
         }
-        multi_gsva_GOIbox_statistic()
+        multi_ssGSEA_GOIbox_statistic()
       }}
   })
   
-  output$download_statisics_multi_gsva = downloadHandler(
+  output$download_statisics_multi_ssGSEA = downloadHandler(
     filename = function(){
-      paste0(download_multi_overview_dir(), "GOIboxplot_",input$statistics_multi_gsva,".txt")
+      paste0(download_multi_overview_dir(), "GOIboxplot_",input$statistics_multi_ssGSEA,".txt")
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        write.table(multi_gsva_GOIbox_statistic(),file, row.names = F, col.names=TRUE, sep = "\t", quote = F)
+        write.table(multi_ssGSEA_GOIbox_statistic(),file, row.names = F, col.names=TRUE, sep = "\t", quote = F)
         incProgress(1)
       })
     }
   )
   
-  output$download_multi_gsva_GOIbox = downloadHandler(
+  output$download_multi_ssGSEA_GOIbox = downloadHandler(
     filename = function(){
-      paste0(download_multi_overview_dir(), "gsva_boxplot.pdf")
+      paste0(download_multi_overview_dir(), "ssGSEA_boxplot.pdf")
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        data <- multi_gsva_GOIcount()
+        data <- multi_ssGSEA_GOIcount()
         rowlist <- rownames(data)
         if(input$multi_pdf_height == 0){
           pdf_height <- pdf_h(rowlist)
@@ -4340,19 +4343,19 @@ shinyServer(function(input, output, session) {
           pdf_width <- pdf_w(rowlist)
         }else pdf_width <- input$multi_pdf_width
         pdf(file, height = pdf_height, width = pdf_width)
-        print(multi_gsva_GOIbox())
+        print(multi_ssGSEA_GOIbox())
         dev.off()
         incProgress(1)
       })
     }
   )
-  output$download_multi_gsva_GOIheat = downloadHandler(
+  output$download_multi_ssGSEA_GOIheat = downloadHandler(
     filename = function(){
       paste0(download_multi_overview_dir(), "GOIheatmap.pdf")
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        data <- multi_gsva_GOIcount()
+        data <- multi_ssGSEA_GOIcount()
         rowlist <- rownames(data)
         if(input$multi_pdf_height == 0){
           pdf_height <- 10
@@ -4361,7 +4364,7 @@ shinyServer(function(input, output, session) {
           pdf_width <- 7
         }else pdf_width <- input$multi_pdf_width
         pdf(file, height = pdf_height, width = pdf_width)
-        print(multi_gsva_GOIheat())
+        print(multi_ssGSEA_GOIheat())
         dev.off()
         incProgress(1)
       })
