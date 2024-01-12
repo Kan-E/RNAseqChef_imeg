@@ -2814,13 +2814,13 @@ shinyServer(function(input, output, session) {
       if(length(input$selectFC) == 2 && length(input$selectFC_2) == 2){
         print(paste0("The number of genes after the filtration (fdr < ", input$fdr6,", 
                      basemean > ",input$basemean6,", |log2(", 
-                     input$selectFC[1],"/", input$selectFC[2],")| > ", input$fc6,", |log2(",
-                     input$selectFC_2[1],"/", input$selectFC_2[2],")| > ", input$fc6,"): ", 
+                     input$selectFC[1],"/", input$selectFC[2],")| > ", log2(input$fc6),", |log2(",
+                     input$selectFC_2[1],"/", input$selectFC_2[2],")| > ", log2(input$fc6),"): ", 
                      length(multi_pattern1()$gene)))
       }else if(length(input$selectFC) == 2 && length(input$selectFC_2) != 2){
         print(paste0("The number of genes after the filtration (fdr < ", input$fdr6,", 
                      basemean > ",input$basemean6,", |log2(", 
-                     input$selectFC[1],"/", input$selectFC[2],")| > ", input$fc6,"): ", 
+                     input$selectFC[1],"/", input$selectFC[2],")| > ", log2(input$fc6),"): ", 
                      length(multi_pattern1()$gene)))
       }else if(length(input$selectFC) != 2 && length(input$selectFC_2) != 2){
         print(paste0("The number of genes after the filtration (fdr < ", input$fdr6,", 
@@ -3281,13 +3281,13 @@ shinyServer(function(input, output, session) {
       if(length(input$selectFC2) == 2 && length(input$selectFC2_2) == 2){
         print(paste0("The number of genes after the filtration (fdr < ", input$fdr6,", 
                      basemean > ",input$basemean6,", |log2(", 
-                     input$selectFC2[1],"/", input$selectFC2[2],")| > ", input$fc6,", |log2(",
-                     input$selectFC2_2[1],"/", input$selectFC2_2[2],")| > ", input$fc6,"): ", 
+                     input$selectFC2[1],"/", input$selectFC2[2],")| > ", log2(input$fc6),", |log2(",
+                     input$selectFC2_2[1],"/", input$selectFC2_2[2],")| > ", log2(input$fc6),"): ", 
                      length(rownames(multi_deg_count1()))))
       }else if(length(input$selectFC2) == 2 && length(input$selectFC2_2) != 2){
         print(paste0("The number of genes after the filtration (fdr < ", input$fdr6,", 
                      basemean > ",input$basemean6,", |log2(", 
-                     input$selectFC2[1],"/", input$selectFC2[2],")| > ", input$fc6,"): ", 
+                     input$selectFC2[1],"/", input$selectFC2[2],")| > ", log2(input$fc6),"): ", 
                      length(rownames(multi_deg_count1()))))
       }else if(length(input$selectFC2) != 2 && length(input$selectFC2_2) != 2){
         print(paste0("The number of genes after the filtration (fdr < ", input$fdr6,", 
@@ -7348,16 +7348,16 @@ shinyServer(function(input, output, session) {
     }else{ 
       if(length(input$selectFC_norm) == 2 && length(input$selectFC_norm2) == 2){
       print(paste0("The number of genes after the filtration (basemean > ", input$basemean3,", |log2(", 
-                   input$selectFC_norm[1],"/", input$selectFC_norm[2],")| > ", input$fc3,", |log2(",
-                   input$selectFC_norm2[1],"/", input$selectFC_norm2[2],")| > ", input$fc3,"): ", 
+                   input$selectFC_norm[1],"/", input$selectFC_norm[2],")| > ", log2(input$fc3),", |log2(",
+                   input$selectFC_norm2[1],"/", input$selectFC_norm2[2],")| > ", log2(input$fc3),"): ", 
                    length(rownames(d_norm_count_matrix_cutofff_fc()))))
       }else if(length(input$selectFC_norm) == 2 && length(input$selectFC_norm2) != 2){
         print(paste0("The number of genes after the filtration (basemean > ", input$basemean3,", |log2(", 
-                     input$selectFC_norm[1],"/", input$selectFC_norm[2],")| > ", input$fc3,"): ", 
+                     input$selectFC_norm[1],"/", input$selectFC_norm[2],")| > ", log2(input$fc3),"): ", 
                      length(rownames(d_norm_count_matrix_cutofff_fc()))))
       }else if(length(input$selectFC_norm) != 2 && length(input$selectFC_norm2) == 2){
         print(paste0("The number of genes after the filtration (basemean > ", input$basemean3,", |log2(",
-                     input$selectFC_norm2[1],"/", input$selectFC_norm2[2],")| > ", input$fc3,"): ", 
+                     input$selectFC_norm2[1],"/", input$selectFC_norm2[2],")| > ", log2(input$fc3),"): ", 
                      length(rownames(d_norm_count_matrix_cutofff_fc()))))
       }else if(length(input$selectFC_norm) != 2 && length(input$selectFC_norm2) != 2){
         print(paste0("The number of genes after the filtration (basemean > ", input$basemean3,"): ", 
