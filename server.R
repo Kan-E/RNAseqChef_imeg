@@ -4104,7 +4104,7 @@ shinyServer(function(input, output, session) {
     result <- multi_ssGSEA_limma()
     if(!is.null(result)){
       if(dim(result)[1] != 0){
-      res2 <- result %>% dplyr::filter(padj < input$fdr6)
+      res2 <- result %>% dplyr::filter(padj < input$ssGSEA_fdr)
       return(res2)
       }
     }
@@ -4386,12 +4386,27 @@ shinyServer(function(input, output, session) {
   #ssGSEA dorothea---------
   multi_ssGSEA_limma_dp_entrez <- reactive({
     data <- multi_ssGSEA_limma_dp()
+    write.table(data,file = "ssGSEA_dp.txt",row.names = T,col.names = F,sep = "\t",quote = F)
+    if(input$Gene_set_ssGSEA != "DoRothEA regulon (activator)" && 
+       input$Gene_set_ssGSEA != "DoRothEA regulon (repressor)") validate("You have to select the 'DoRothEA regulon' from the 'Gene sets' list.")
     if(!is.null(data)){
-      gene_IDs <- geneid_convert_ssGSEA(norm_count=data,org = org6(),
+      score <- multi_enrichment_1_ssGSEA()
+      print(head(score))
+      print(data["E2f1",])
+      Row.names <- rownames(data)
+      label_data <- as.data.frame(Row.names, row.names = Row.names)
+      score_dp <- merge(label_data,score, by=0)
+      rownames(score_dp) <- score_dp[,1]
+      score_dp <- score_dp[, -1:-2]
+      print(score_dp["E2f1",])
+      gene_IDs <- geneid_convert_ssGSEA(norm_count=score_dp,org = org6(),
                                         gene_type=gene_type6(),Species=input$Species6,Ortholog=input$Ortholog6)
-      data2 <- merge(gene_IDs,data,by=0)
+      data2 <- merge(gene_IDs,score_dp,by=0)
       rownames(data2) <- data2$ENTREZID
       data2 <- data2[,-1:-3]
+      print("score")
+      print(dim(data2))
+      print(data2["242705",])
       return(data2)
     }
   })
@@ -4401,9 +4416,9 @@ shinyServer(function(input, output, session) {
     if(!is.null(data) && !is.null(dp)){
       gene_IDs <- geneid_convert_ssGSEA(norm_count=count,org = org6(),
                                         gene_type=gene_type6(),Species=input$Species6,Ortholog=input$Ortholog6)
-      count2 <- merge(gene_IDs,norm_count,by=0)
+      count2 <- merge(gene_IDs,count,by=0)
       rownames(count2) <- count2$ENTREZID
-      if(gene_type != "SYMBOL") count2 <- count2[,-1:-4] else count2 <- count2[,-1:-3]
+      if(gene_type6() != "SYMBOL") count2 <- count2[,-1:-4] else count2 <- count2[,-1:-3]
       if(length(grep("SYMBOL", colnames(count2))) != 0) count2 <- count2[, - which(colnames(count2) == "SYMBOL")]
       
       Row.names <- rownames(dp)
@@ -4411,6 +4426,9 @@ shinyServer(function(input, output, session) {
       count_dp <- merge(label_data,count2, by=0)
       rownames(count_dp) <- count_dp[,1]
       count_dp <- count_dp[, -1:-2]
+      print("count")
+      print(dim(count_dp))
+      
       return(count_dp)
     }
   })
@@ -4419,26 +4437,41 @@ shinyServer(function(input, output, session) {
     norm_count <- multi_norm_count_for_ssGSEA_dorothea_entrez()
     score <- multi_ssGSEA_limma_dp_entrez()
     if(!is.null(norm_count)){
-      df2 <- data.frame(matrix(rep(NA, 10), nrow=1))[numeric(0), ]
+      df2 <- data.frame(matrix(rep(NA, 4), nrow=1))[numeric(0), ]
       for(i in rownames(score)){
-        corr<-suppressWarnings(cor.test(x=as.numeric(norm_count[i,]),y=as.numeric(score[i,]),method="spearman"))
+        corr<-suppressWarnings(try(cor.test(x=as.numeric(norm_count[i,]),y=as.numeric(score[i,]),method="spearman")))
+        if(class(corr) != "try-error"){
         df <- data.frame(TF = i, statistics=corr$statistic,corr_score = corr$estimate,
                          pvalue = corr$p.value)
         df2 <- rbind(df2,df)
+        }
       }
-      padj <- p.adjust(df2$pvalue,method="BH")
-      df2$padj <- padj
-      colnames(df2) <- c("TF","statistics","corr_score","pvalue","padj")
+      colnames(df2) <- c("ENTREZID","statistics","corr_score","pvalue")
       df2 <- na.omit(df2)
-      df2 <- df2%>% dplyr::arrange(-corr_score, padj) %>%
+      print(head(df2))
+      df2 <- df2%>% dplyr::arrange(-corr_score, pvalue) %>%
         dplyr::mutate(rank = row_number())
       rownames(df2) <- df2$rank
       
-      df2$color <- "NS"
-      df2$color[df2$padj < 0.05 & df2$corr_score > 0] <- "positive_correlation"
-      df2$color[df2$padj < 0.05 & df2$corr_score < 0] <- "negative_correlation"
-      df2 <- df2 %>% dplyr::select(TF,color,everything())
-      return(df2)
+      my.symbols <- df2$ENTREZID
+        if(sum(is.element(no_orgDb, input$Species6)) == 1){
+          gene_IDs <- input$Ortholog6
+          gene_IDs <- gene_IDs[,-1]
+        }else{
+          gene_IDs <- AnnotationDbi::select(org6(), keys = my.symbols,
+                                            keytype = "ENTREZID",
+                                            columns = c("ENTREZID","SYMBOL"))
+        }
+        colnames(gene_IDs) <- c("ENTREZID","TF")
+      gene_IDs <- gene_IDs %>% distinct(TF, .keep_all = T)
+      gene_IDs <- na.omit(gene_IDs)
+      data2 <- merge(gene_IDs,df2,by="ENTREZID")
+      data2$ssGSEAscore_vs_Expression <- "NS"
+      data2$ssGSEAscore_vs_Expression[data2$pvalue < 0.05 & data2$corr_score > 0] <- "positive_correlation"
+      data2$ssGSEAscore_vs_Expression[data2$pvalue < 0.05 & data2$corr_score < 0] <- "negative_correlation"
+      data2 <- data2 %>% dplyr::select(TF,ENTREZID,ssGSEAscore_vs_Expression,everything())
+      data2 <- data2%>% dplyr::arrange(-corr_score, pvalue)
+      return(data2)
     }
   })
   
@@ -4446,11 +4479,11 @@ shinyServer(function(input, output, session) {
     if(!is.null(multi_ssGSEA_TF_cor())){
       df2 <- multi_ssGSEA_TF_cor()
         Color <- c("blue","darkgray","red")
-        df2$color <- factor(df2$color, levels = c("negative_correlation","NS", "positive_correlation"))
-        if(length(df2$prey[df2$color == "negative_correlation"]) == 0) Color <- c("darkgray","red")
+        df2$ssGSEAscore_vs_Expression <- factor(df2$ssGSEAscore_vs_Expression, levels = c("negative_correlation","NS", "positive_correlation"))
+        if(length(df2$TF[df2$ssGSEAscore_vs_Expression == "negative_correlation"]) == 0) Color <- c("darkgray","red")
       ylab <- paste0("Spearman's correlation")
-      p <- ggplot(df2,aes(x=rank,y=corr_score,col=color))+
-        ggrastr::geom_point_rast(aes(color = color),size = 0.4)  +
+      p <- ggplot(df2,aes(x=rank,y=corr_score,col=ssGSEAscore_vs_Expression))+
+        ggrastr::geom_point_rast(aes(color = ssGSEAscore_vs_Expression),size = 0.4)  +
         theme_bw()+ scale_color_manual(values = Color)+
         theme(legend.position = "top" , legend.title = element_blank(),
               axis.text.x= ggplot2::element_text(size = 12),
@@ -4463,6 +4496,10 @@ shinyServer(function(input, output, session) {
   output$multi_ssGSEA_dorothea <- renderPlot({
     if(!is.null(multi_ssGSEA_TF_corplot()))
       multi_ssGSEA_TF_corplot()
+  })
+  output$multi_ssGSEA_dorothea_table <-DT::renderDataTable({
+    if(!is.null(multi_ssGSEA_TF_corplot()))
+      multi_ssGSEA_TF_cor()
   })
   #multi DEG enrichment 2--------
   multi_Hallmark_set2 <- reactive({

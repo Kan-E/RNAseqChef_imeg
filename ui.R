@@ -1129,8 +1129,9 @@ shinyUI(
                               ),
                               fluidRow(
                                 column(4, 
+                                       numericInput("ssGSEA_fdr","FDR cut-off value",value = 0.01,max = 1,min = 0,step = 0.0001),
                                        radioButtons('GOI_type_multi_ssGSEA','Pathways:',
-                                                    c('Select all pathways'="ALL",
+                                                    c('Select all differential pathways'="ALL",
                                                       'Custom'="custom"
                                                     ),selected = "custom"),
                                        htmlOutput("GOI_type_multi_ssGSEA_all"),
@@ -1149,12 +1150,16 @@ shinyUI(
                               ),
                               column(4, downloadButton("download_multi_ssGSEA_statisics", "Download table")),
                               dataTableOutput("statistical_table_multi_ssGSEA"),
+                              bsCollapse(id="input_collapse_multi_ssGSEA_dorothea",multiple = TRUE,
                               bsCollapsePanel(title="Correlation between ssGSEA score and expression level of TFs:",
                                               value="ssGSEA_dorothea_panel",
                                               fluidRow(
                                                 column(4, downloadButton("download_multi_ssGSEA_dorothea", "Download"))
                                               ),
-                                              dataTableOutput('multi_ssGSEA_dorothea')
+                                              plotOutput('multi_ssGSEA_dorothea'),
+                                              downloadButton("download_multi_ssGSEA_dorothea_table", "Download"),
+                                              dataTableOutput('multi_ssGSEA_dorothea_table')
+                              )
                               )
                      )
                    )

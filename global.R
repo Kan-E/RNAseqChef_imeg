@@ -1258,6 +1258,7 @@ enrich_for_table <- function(data, H_t2g, Gene_set){
 GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene_list,Biomart_archive){
   if(Species != "not selected" || is.null(Gene_set) || is.null(org)){
     if(Species %in% orgDb_list == TRUE) species <- Species else species <- Ortholog
+    H_t2g <- NULL
       if(Gene_set == "MSigDB Hallmark"){
         H_t2g <- msigdbr::msigdbr(species = species, category = "H") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description) 
@@ -1275,16 +1276,6 @@ GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene
         H_t2g <- msigdbr::msigdbr(species = species, category = "C3")
         H_t2g <- H_t2g %>% dplyr::filter(gs_subcat == "TFT:GTRD" | gs_subcat == "TFT:TFT_Legacy") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
-      }
-      if(Gene_set == "DoRothEA regulon (activator)"){
-        H_t2g <- as_tibble(dorothea(species = species, type = "DoRothEA regulon (activator)")) %>%
-          dplyr::select(gs_name, entrez_gene, confidence)
-        H_t2g$entrez_gene <- as.integer(H_t2g$entrez_gene)
-      }
-      if(Gene_set == "DoRothEA regulon (repressor)"){
-        H_t2g <- as_tibble(dorothea(species = species, type = "DoRothEA regulon (repressor)")) %>%
-          dplyr::select(gs_name, entrez_gene, confidence)
-        H_t2g$entrez_gene <- as.integer(H_t2g$entrez_gene)
       }
       if(Gene_set == "Reactome"){
         H_t2g <- msigdbr::msigdbr(species = species, category = "C2", subcategory = "CP:REACTOME") %>%
@@ -1369,6 +1360,16 @@ GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene
       H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="_jak", replacement = "_JAK")
       H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="_stat", replacement = "_STAT")
       H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="_nfkb", replacement = "_NFkB")
+      if(Gene_set == "DoRothEA regulon (activator)"){
+        H_t2g <- as_tibble(dorothea(species = species, type = "DoRothEA regulon (activator)")) %>%
+          dplyr::select(gs_name, entrez_gene, confidence)
+        H_t2g$entrez_gene <- as.integer(H_t2g$entrez_gene)
+      }
+      if(Gene_set == "DoRothEA regulon (repressor)"){
+        H_t2g <- as_tibble(dorothea(species = species, type = "DoRothEA regulon (repressor)")) %>%
+          dplyr::select(gs_name, entrez_gene, confidence)
+        H_t2g$entrez_gene <- as.integer(H_t2g$entrez_gene)
+      }
       print(head(H_t2g))
       return(H_t2g)
   }else return(NULL)
@@ -2203,7 +2204,31 @@ corr_plot_pair <- function(data,corr_color,GOI_x,GOI_y){
 library(GSVA)
 ssGSEA <- function(norm_count, gene_set,org,gene_type,Species,Ortholog){
   genesbyGeneSet <- split(gene_set$entrez_gene,gene_set$gs_name)
-  gene_IDs <- geneid_convert_ssGSEA(norm_count,org,gene_type,Species,Ortholog)
+  my.symbols <- rownames(norm_count)
+  if(gene_type != "SYMBOL"){
+    if(sum(is.element(no_orgDb, Species)) == 1){
+      gene_IDs <- Ortholog
+    }else{
+      if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
+      gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
+                                      keytype = key,
+                                      columns = c(key,"SYMBOL", "ENTREZID"))
+    }
+    colnames(gene_IDs) <- c("GeneID","SYMBOL", "ENTREZID")
+  }else{
+    if(sum(is.element(no_orgDb, Species)) == 1){
+      gene_IDs <- Ortholog
+      gene_IDs <- gene_IDs[,-1]
+    }else{
+      gene_IDs <- AnnotationDbi::select(org, keys = my.symbols,
+                                        keytype = "SYMBOL",
+                                        columns = c("SYMBOL","ENTREZID"))
+    }
+    colnames(gene_IDs) <- c("GeneID","ENTREZID")
+  }
+  gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
+  gene_IDs <- na.omit(gene_IDs)
+  rownames(gene_IDs) <- gene_IDs$GeneID
   data2 <- merge(gene_IDs,norm_count,by=0)
   rownames(data2) <- data2$ENTREZID
   if(gene_type != "SYMBOL") data2 <- data2[,-1:-4] else data2 <- data2[,-1:-3]
@@ -2238,8 +2263,9 @@ geneid_convert_ssGSEA <- function(norm_count,gene_type,Species,Ortholog,org){
     }
     colnames(gene_IDs) <- c("GeneID","ENTREZID")
   }
-  gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
   gene_IDs <- na.omit(gene_IDs)
+  gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
   rownames(gene_IDs) <- gene_IDs$GeneID
+
   return(gene_IDs)
   }
