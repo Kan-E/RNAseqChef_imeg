@@ -4391,17 +4391,20 @@ shinyServer(function(input, output, session) {
   })
   multi_ssGSEA_df_selected_id <- reactive({
     data <- multi_ssGSEA_limma_dp()
-    if(!is.null(data)){
-      score <- multi_enrichment_1_ssGSEA() %>% dplyr::filter(row.names(.) == input$selectssGSEA_contribute_pathway)
+    if(!is.null(data) && !is.null(input$selectssGSEA_contribute_pathway)){
+      print(head(multi_enrichment_1_ssGSEA()))
+      score <- multi_enrichment_1_ssGSEA() %>% 
+        as.data.frame() %>%
+        dplyr::filter(row.names(.) == input$selectssGSEA_contribute_pathway)
       return(score)
     }
   })
   multi_norm_count_for_ssGSEA_selected_id <- reactive({
     count <- multi_deg_norm_count()
-    dp <- multi_ssGSEA_limma_dp_entrez()
+    dp <- multi_ssGSEA_df_selected_id()
     if(!is.null(data) && !is.null(dp)){
       geneset <- multi_Hallmark_set_ssGSEA() %>% dplyr::filter(gs_name == input$selectssGSEA_contribute_pathway)
-      my.symbols <- geneset$entrez_gene
+      my.symbols <- as.character(geneset$entrez_gene)
       if(gene_type6() != "SYMBOL"){
         if(sum(is.element(no_orgDb, input$Species6)) == 1){
           gene_IDs <- input$Ortholog6
@@ -4424,12 +4427,14 @@ shinyServer(function(input, output, session) {
         colnames(gene_IDs) <- c("ENTREZID","GeneID")
       }
       gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
+      rownames(gene_IDs) <- gene_IDs$GeneID
+      count2 <- merge(gene_IDs, count, by = 0)
+      rownames(count2) <- count2$GeneID
+      if(gene_type6() != "SYMBOL") count2 <- count2[,-1:-4] else count2 <- count2[,-1:-3]
+      if(length(grep("SYMBOL", colnames(count2))) != 0) count2 <- count2[, - which(colnames(count2) == "SYMBOL")]
+      print(dim(count2))
       
-      count <- count[gene_IDs$GeneID,]
-      count <- na.omit(count)
-      print(dim(count))
-      
-      return(count)
+      return(count2)
     }
   })
   
@@ -4438,9 +4443,10 @@ shinyServer(function(input, output, session) {
     score <- multi_ssGSEA_df_selected_id()
     print("score")
     print(score)
+    print(head(norm_count))
     if(!is.null(norm_count)){
       df2 <- data.frame(matrix(rep(NA, 4), nrow=1))[numeric(0), ]
-      for(i in rownames(score)){
+      for(i in rownames(norm_count)){
         corr<-suppressWarnings(try(cor.test(x=as.numeric(score[1,]),y=as.numeric(norm_count[i,]),method="spearman")))
         if(class(corr) != "try-error"){
         df <- data.frame(Gene = i, statistics=corr$statistic,corr_score = corr$estimate,
@@ -4455,41 +4461,78 @@ shinyServer(function(input, output, session) {
         dplyr::mutate(rank = row_number())
       rownames(df2) <- df2$rank
       
-      data2$ssGSEAscore_vs_Expression <- "NS"
-      data2$ssGSEAscore_vs_Expression[data2$pvalue < 0.05 & data2$corr_score > 0] <- "positive_correlation"
-      data2$ssGSEAscore_vs_Expression[data2$pvalue < 0.05 & data2$corr_score < 0] <- "negative_correlation"
-      data2 <- data2 %>% dplyr::select(Gene,ssGSEAscore_vs_Expression,everything())
-      data2 <- data2%>% dplyr::arrange(-corr_score, pvalue)
-      return(data2)
+      df2$ssGSEAscore_vs_Expression <- "NS"
+      df2$ssGSEAscore_vs_Expression[df2$pvalue < 0.05 & df2$corr_score > 0] <- "positive_correlation"
+      df2$ssGSEAscore_vs_Expression[df2$pvalue < 0.05 & df2$corr_score < 0] <- "negative_correlation"
+      df2 <- df2 %>% dplyr::select(Gene,ssGSEAscore_vs_Expression,everything())
+      df2 <- df2%>% dplyr::arrange(-corr_score, pvalue)
+      return(df2)
     }
   })
-  
+  multi_ssGSEA_contribute_cor_count <- reactive({
+    if(!is.null(multi_ssGSEA_contribute_cor())){
+      norm_count <- multi_norm_count_for_ssGSEA_selected_id()
+      data <- multi_ssGSEA_contribute_cor() %>% 
+        dplyr::filter(ssGSEAscore_vs_Expression == "positive_correlation")
+      rownames(data) <- data$Gene
+      count <- merge(data, norm_count, by=0)
+      rownames(count) <- count$Gene
+      count <- count[,-1:-7]
+      head(count)
+      return(count)
+    }
+  })
   multi_ssGSEA_contribute_corplot <- reactive({
-    if(!is.null(multi_ssGSEA_contibute_cor())){
-      df2 <- multi_ssGSEA_contribute_cor()
-        Color <- c("blue","darkgray","red")
-        df2$ssGSEAscore_vs_Expression <- factor(df2$ssGSEAscore_vs_Expression, levels = c("negative_correlation","NS", "positive_correlation"))
-        if(length(df2$TF[df2$ssGSEAscore_vs_Expression == "negative_correlation"]) == 0) Color <- c("darkgray","red")
-      ylab <- paste0("Spearman's correlation")
-      p <- ggplot(df2,aes(x=rank,y=corr_score,col=ssGSEAscore_vs_Expression))+
-        ggrastr::geom_point_rast(aes(color = ssGSEAscore_vs_Expression),size = 0.4)  +
-        theme_bw()+ scale_color_manual(values = Color)+
-        theme(legend.position = "top" , legend.title = element_blank(),
-              axis.text.x= ggplot2::element_text(size = 12),
-              axis.text.y= ggplot2::element_text(size = 12),
-              text = ggplot2::element_text(size = 12),
-              title = ggplot2::element_text(size = 12))  + ylab(ylab)
+    if(!is.null(multi_ssGSEA_contribute_cor_count())){
+      data <- multi_ssGSEA_contribute_cor_count()
+      rownames(data) <- gsub("_"," ", rownames(data))
+      for(i in 1:length(rownames(data))){
+        rownames(data)[i] <- paste(strwrap(rownames(data)[i], width = 10),collapse = "\n")
+      }
+      p <- GOIboxplot(data = data)
       return(p)
     }
   })
-  output$multi_ssGSEA_contibute <- renderPlot({
-    if(!is.null(multi_ssGSEA_contibute_corplot()))
-      multi_ssGSEA_contibute_corplot()
+  output$multi_ssGSEA_contribute <- renderPlot({
+    if(!is.null(multi_ssGSEA_contribute_corplot()))
+      multi_ssGSEA_contribute_corplot()
   })
-  output$multi_ssGSEA_contibute_table <-DT::renderDataTable({
-    if(!is.null(multi_ssGSEA_contibute_corplot()))
-      multi_ssGSEA_contibute_cor()
+  output$multi_ssGSEA_contribute_table <-DT::renderDataTable({
+    if(!is.null(multi_ssGSEA_contribute_corplot()))
+      multi_ssGSEA_contribute_cor()
   })
+  output$download_multi_ssGSEA_contribute = downloadHandler(
+    filename = function(){
+      paste0(download_multi_overview_dir(), "ssGSEAcontributed_",input$selectssGSEA_contribute_pathway,".pdf")
+    },
+    content = function(file) {
+      withProgress(message = "Preparing download",{
+        data <- multi_ssGSEA_contribute_cor_count()
+        rowlist <- rownames(data)
+        if(input$multi_pdf_height == 0){
+          pdf_height <- pdf_h(rowlist)
+        }else pdf_height <- input$multi_pdf_height
+        if(input$multi_pdf_width == 0){
+          pdf_width <- pdf_w(rowlist)
+        }else pdf_width <- input$multi_pdf_width
+        pdf(file, height = pdf_height, width = pdf_width)
+        print(multi_ssGSEA_contribute_corplot())
+        dev.off()
+        incProgress(1)
+      })
+    }
+  )
+  output$download_multi_ssGSEA_contribute_table = downloadHandler(
+    filename = function(){
+      paste0(download_multi_overview_dir(), "ssGSEAcontributed_",input$selectssGSEA_contribute_pathway,".txt")
+    },
+    content = function(file) {
+      withProgress(message = "Preparing download",{
+        write.table(multi_ssGSEA_contribute_cor(),file, row.names = F, col.names=TRUE, sep = "\t", quote = F)
+        incProgress(1)
+      })
+    }
+  )
   #ssGSEA dorothea---------
   multi_ssGSEA_limma_dp_entrez <- reactive({
     data <- multi_ssGSEA_limma_dp()
@@ -4581,22 +4624,27 @@ shinyServer(function(input, output, session) {
       return(data2)
     }
   })
-  
+  multi_ssGSEA_TF_cor_count <- reactive({
+    if(!is.null(multi_ssGSEA_TF_cor())){
+      norm_count <- multi_deg_norm_count()
+      data <- multi_ssGSEA_TF_cor() %>% 
+        dplyr::filter(ssGSEAscore_vs_Expression == "positive_correlation")
+      rownames(data) <- data$TF
+      count <- merge(data, norm_count, by=0)
+      rownames(count) <- count$TF
+      count <- count[,-1:-8]
+      head(count)
+      return(count)
+    }
+  })
   multi_ssGSEA_TF_corplot <- reactive({
     if(!is.null(multi_ssGSEA_TF_cor())){
-      df2 <- multi_ssGSEA_TF_cor()
-      Color <- c("blue","darkgray","red")
-      df2$ssGSEAscore_vs_Expression <- factor(df2$ssGSEAscore_vs_Expression, levels = c("negative_correlation","NS", "positive_correlation"))
-      if(length(df2$TF[df2$ssGSEAscore_vs_Expression == "negative_correlation"]) == 0) Color <- c("darkgray","red")
-      ylab <- paste0("Spearman's correlation")
-      p <- ggplot(df2,aes(x=rank,y=corr_score,col=ssGSEAscore_vs_Expression))+
-        ggrastr::geom_point_rast(aes(color = ssGSEAscore_vs_Expression),size = 0.4)  +
-        theme_bw()+ scale_color_manual(values = Color)+
-        theme(legend.position = "top" , legend.title = element_blank(),
-              axis.text.x= ggplot2::element_text(size = 12),
-              axis.text.y= ggplot2::element_text(size = 12),
-              text = ggplot2::element_text(size = 12),
-              title = ggplot2::element_text(size = 12))  + ylab(ylab)
+      data <- multi_ssGSEA_TF_cor_count()
+      rownames(data) <- gsub("_"," ", rownames(data))
+      for(i in 1:length(rownames(data))){
+        rownames(data)[i] <- paste(strwrap(rownames(data)[i], width = 10),collapse = "\n")
+      }
+      p <- GOIboxplot(data = data)
       return(p)
     }
   })
@@ -4608,6 +4656,38 @@ shinyServer(function(input, output, session) {
     if(!is.null(multi_ssGSEA_TF_corplot()))
       multi_ssGSEA_TF_cor()
   })
+  output$download_multi_ssGSEA_dorothea = downloadHandler(
+    filename = function(){
+      paste0(download_multi_overview_dir(), "ssGSEAscore_vsExpression_level.pdf")
+    },
+    content = function(file) {
+      withProgress(message = "Preparing download",{
+        data <- multi_ssGSEA_TF_cor_count()
+        rowlist <- rownames(data)
+        if(input$multi_pdf_height == 0){
+          pdf_height <- pdf_h(rowlist)
+        }else pdf_height <- input$multi_pdf_height
+        if(input$multi_pdf_width == 0){
+          pdf_width <- pdf_w(rowlist)
+        }else pdf_width <- input$multi_pdf_width
+        pdf(file, height = pdf_height, width = pdf_width)
+        print(multi_ssGSEA_TF_corplot())
+        dev.off()
+        incProgress(1)
+      })
+    }
+  )
+  output$download_multi_ssGSEA_dorothea_table = downloadHandler(
+    filename = function(){
+      paste0(download_multi_overview_dir(), "ssGSEAscore_vsExpression_level.txt")
+    },
+    content = function(file) {
+      withProgress(message = "Preparing download",{
+        write.table(multi_ssGSEA_TF_cor(),file, row.names = F, col.names=TRUE, sep = "\t", quote = F)
+        incProgress(1)
+      })
+    }
+  )
   #multi DEG enrichment 2--------
   multi_Hallmark_set2 <- reactive({
     return(GeneList_for_enrichment(Species = input$Species6, Ortholog=input$Ortholog6,Biomart_archive=input$Biomart_archive6, Gene_set = input$Gene_set7, org = org6()))

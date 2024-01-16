@@ -1157,7 +1157,10 @@ shinyUI(
                                                          fluidRow(
                                                            column(4, downloadButton("download_multi_ssGSEA_contribute", "Download"))
                                                          ),
-                                                         plotOutput('multi_ssGSEA_contribute'),
+                                                         div(
+                                                           plotOutput("multi_ssGSEA_contribute", height = "100%"),
+                                                           style = "height: calc(100vh  - 100px)"
+                                                         ),
                                                          downloadButton("download_multi_ssGSEA_contribute_table", "Download"),
                                                          dataTableOutput('multi_ssGSEA_contribute_table')
                                          ),
