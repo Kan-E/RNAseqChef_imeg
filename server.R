@@ -4383,6 +4383,113 @@ shinyServer(function(input, output, session) {
       })
     }
   )
+  #ssGSEA contribute---------
+  output$selectssGSEA_contribute_pathway <- renderUI({
+    if(!is.null(multi_ssGSEA_limma_dp())){
+      selectInput("selectssGSEA_contribute_pathway","Select pathway of interest",rownames(multi_ssGSEA_limma_dp()),selected = "")
+    }
+  })
+  multi_ssGSEA_df_selected_id <- reactive({
+    data <- multi_ssGSEA_limma_dp()
+    if(!is.null(data)){
+      score <- multi_enrichment_1_ssGSEA() %>% dplyr::filter(row.names(.) == input$selectssGSEA_contribute_pathway)
+      return(score)
+    }
+  })
+  multi_norm_count_for_ssGSEA_selected_id <- reactive({
+    count <- multi_deg_norm_count()
+    dp <- multi_ssGSEA_limma_dp_entrez()
+    if(!is.null(data) && !is.null(dp)){
+      geneset <- multi_Hallmark_set_ssGSEA() %>% dplyr::filter(gs_name == input$selectssGSEA_contribute_pathway)
+      my.symbols <- geneset$entrez_gene
+      if(gene_type6() != "SYMBOL"){
+        if(sum(is.element(no_orgDb, input$Species6)) == 1){
+          gene_IDs <- input$Ortholog6
+        }else{
+          if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
+          gene_IDs<-AnnotationDbi::select(org6(),keys = my.symbols,
+                                          keytype = "ENTREZID",
+                                          columns = c("ENTREZID",key,"SYMBOL"))
+        }
+        colnames(gene_IDs) <- c("ENTREZID","GeneID","SYMBOL")
+      }else{
+        if(sum(is.element(no_orgDb, input$Species6)) == 1){
+          gene_IDs <- input$Ortholog6
+          gene_IDs <- gene_IDs[,-1]
+        }else{
+          gene_IDs <- AnnotationDbi::select(org6(), keys = my.symbols,
+                                            keytype = "ENTREZID",
+                                            columns = c("ENTREZID","SYMBOL"))
+        }
+        colnames(gene_IDs) <- c("ENTREZID","GeneID")
+      }
+      gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
+      
+      count <- count[gene_IDs$GeneID,]
+      count <- na.omit(count)
+      print(dim(count))
+      
+      return(count)
+    }
+  })
+  
+  multi_ssGSEA_contribute_cor <- reactive({
+    norm_count <- multi_norm_count_for_ssGSEA_selected_id()
+    score <- multi_ssGSEA_df_selected_id()
+    print("score")
+    print(score)
+    if(!is.null(norm_count)){
+      df2 <- data.frame(matrix(rep(NA, 4), nrow=1))[numeric(0), ]
+      for(i in rownames(score)){
+        corr<-suppressWarnings(try(cor.test(x=as.numeric(score[1,]),y=as.numeric(norm_count[i,]),method="spearman")))
+        if(class(corr) != "try-error"){
+        df <- data.frame(Gene = i, statistics=corr$statistic,corr_score = corr$estimate,
+                         pvalue = corr$p.value)
+        df2 <- rbind(df2,df)
+        }
+      }
+      colnames(df2) <- c("Gene","statistics","corr_score","pvalue")
+      df2 <- na.omit(df2)
+      print(head(df2))
+      df2 <- df2%>% dplyr::arrange(-corr_score, pvalue) %>%
+        dplyr::mutate(rank = row_number())
+      rownames(df2) <- df2$rank
+      
+      data2$ssGSEAscore_vs_Expression <- "NS"
+      data2$ssGSEAscore_vs_Expression[data2$pvalue < 0.05 & data2$corr_score > 0] <- "positive_correlation"
+      data2$ssGSEAscore_vs_Expression[data2$pvalue < 0.05 & data2$corr_score < 0] <- "negative_correlation"
+      data2 <- data2 %>% dplyr::select(Gene,ssGSEAscore_vs_Expression,everything())
+      data2 <- data2%>% dplyr::arrange(-corr_score, pvalue)
+      return(data2)
+    }
+  })
+  
+  multi_ssGSEA_contribute_corplot <- reactive({
+    if(!is.null(multi_ssGSEA_contibute_cor())){
+      df2 <- multi_ssGSEA_contribute_cor()
+        Color <- c("blue","darkgray","red")
+        df2$ssGSEAscore_vs_Expression <- factor(df2$ssGSEAscore_vs_Expression, levels = c("negative_correlation","NS", "positive_correlation"))
+        if(length(df2$TF[df2$ssGSEAscore_vs_Expression == "negative_correlation"]) == 0) Color <- c("darkgray","red")
+      ylab <- paste0("Spearman's correlation")
+      p <- ggplot(df2,aes(x=rank,y=corr_score,col=ssGSEAscore_vs_Expression))+
+        ggrastr::geom_point_rast(aes(color = ssGSEAscore_vs_Expression),size = 0.4)  +
+        theme_bw()+ scale_color_manual(values = Color)+
+        theme(legend.position = "top" , legend.title = element_blank(),
+              axis.text.x= ggplot2::element_text(size = 12),
+              axis.text.y= ggplot2::element_text(size = 12),
+              text = ggplot2::element_text(size = 12),
+              title = ggplot2::element_text(size = 12))  + ylab(ylab)
+      return(p)
+    }
+  })
+  output$multi_ssGSEA_contibute <- renderPlot({
+    if(!is.null(multi_ssGSEA_contibute_corplot()))
+      multi_ssGSEA_contibute_corplot()
+  })
+  output$multi_ssGSEA_contibute_table <-DT::renderDataTable({
+    if(!is.null(multi_ssGSEA_contibute_corplot()))
+      multi_ssGSEA_contibute_cor()
+  })
   #ssGSEA dorothea---------
   multi_ssGSEA_limma_dp_entrez <- reactive({
     data <- multi_ssGSEA_limma_dp()
@@ -4439,11 +4546,11 @@ shinyServer(function(input, output, session) {
     if(!is.null(norm_count)){
       df2 <- data.frame(matrix(rep(NA, 4), nrow=1))[numeric(0), ]
       for(i in rownames(score)){
-        corr<-suppressWarnings(try(cor.test(x=as.numeric(norm_count[i,]),y=as.numeric(score[i,]),method="spearman")))
+        corr<-suppressWarnings(try(cor.test(x=as.numeric(score[i,]),y=as.numeric(norm_count[i,]),method="spearman")))
         if(class(corr) != "try-error"){
-        df <- data.frame(TF = i, statistics=corr$statistic,corr_score = corr$estimate,
-                         pvalue = corr$p.value)
-        df2 <- rbind(df2,df)
+          df <- data.frame(TF = i, statistics=corr$statistic,corr_score = corr$estimate,
+                           pvalue = corr$p.value)
+          df2 <- rbind(df2,df)
         }
       }
       colnames(df2) <- c("ENTREZID","statistics","corr_score","pvalue")
@@ -4454,15 +4561,15 @@ shinyServer(function(input, output, session) {
       rownames(df2) <- df2$rank
       
       my.symbols <- df2$ENTREZID
-        if(sum(is.element(no_orgDb, input$Species6)) == 1){
-          gene_IDs <- input$Ortholog6
-          gene_IDs <- gene_IDs[,-1]
-        }else{
-          gene_IDs <- AnnotationDbi::select(org6(), keys = my.symbols,
-                                            keytype = "ENTREZID",
-                                            columns = c("ENTREZID","SYMBOL"))
-        }
-        colnames(gene_IDs) <- c("ENTREZID","TF")
+      if(sum(is.element(no_orgDb, input$Species6)) == 1){
+        gene_IDs <- input$Ortholog6
+        gene_IDs <- gene_IDs[,-1]
+      }else{
+        gene_IDs <- AnnotationDbi::select(org6(), keys = my.symbols,
+                                          keytype = "ENTREZID",
+                                          columns = c("ENTREZID","SYMBOL"))
+      }
+      colnames(gene_IDs) <- c("ENTREZID","TF")
       gene_IDs <- gene_IDs %>% distinct(TF, .keep_all = T)
       gene_IDs <- na.omit(gene_IDs)
       data2 <- merge(gene_IDs,df2,by="ENTREZID")
@@ -4478,9 +4585,9 @@ shinyServer(function(input, output, session) {
   multi_ssGSEA_TF_corplot <- reactive({
     if(!is.null(multi_ssGSEA_TF_cor())){
       df2 <- multi_ssGSEA_TF_cor()
-        Color <- c("blue","darkgray","red")
-        df2$ssGSEAscore_vs_Expression <- factor(df2$ssGSEAscore_vs_Expression, levels = c("negative_correlation","NS", "positive_correlation"))
-        if(length(df2$TF[df2$ssGSEAscore_vs_Expression == "negative_correlation"]) == 0) Color <- c("darkgray","red")
+      Color <- c("blue","darkgray","red")
+      df2$ssGSEAscore_vs_Expression <- factor(df2$ssGSEAscore_vs_Expression, levels = c("negative_correlation","NS", "positive_correlation"))
+      if(length(df2$TF[df2$ssGSEAscore_vs_Expression == "negative_correlation"]) == 0) Color <- c("darkgray","red")
       ylab <- paste0("Spearman's correlation")
       p <- ggplot(df2,aes(x=rank,y=corr_score,col=ssGSEAscore_vs_Expression))+
         ggrastr::geom_point_rast(aes(color = ssGSEAscore_vs_Expression),size = 0.4)  +

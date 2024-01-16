@@ -1151,15 +1151,25 @@ shinyUI(
                               column(4, downloadButton("download_multi_ssGSEA_statisics", "Download table")),
                               dataTableOutput("statistical_table_multi_ssGSEA"),
                               bsCollapse(id="input_collapse_multi_ssGSEA_dorothea",multiple = TRUE,
-                              bsCollapsePanel(title="Correlation between ssGSEA score and expression level of TFs:",
-                                              value="ssGSEA_dorothea_panel",
-                                              fluidRow(
-                                                column(4, downloadButton("download_multi_ssGSEA_dorothea", "Download"))
-                                              ),
-                                              plotOutput('multi_ssGSEA_dorothea'),
-                                              downloadButton("download_multi_ssGSEA_dorothea_table", "Download"),
-                                              dataTableOutput('multi_ssGSEA_dorothea_table')
-                              )
+                                         bsCollapsePanel(title="Highly contributed genes:",
+                                                         value="ssGSEA_contribute_panel",
+                                                         htmlOutput("selectssGSEA_contribute_pathway"),
+                                                         fluidRow(
+                                                           column(4, downloadButton("download_multi_ssGSEA_contribute", "Download"))
+                                                         ),
+                                                         plotOutput('multi_ssGSEA_contribute'),
+                                                         downloadButton("download_multi_ssGSEA_contribute_table", "Download"),
+                                                         dataTableOutput('multi_ssGSEA_contribute_table')
+                                         ),
+                                         bsCollapsePanel(title="Correlation between ssGSEA score and expression level of TFs:",
+                                                         value="ssGSEA_dorothea_panel",
+                                                         fluidRow(
+                                                           column(4, downloadButton("download_multi_ssGSEA_dorothea", "Download"))
+                                                         ),
+                                                         plotOutput('multi_ssGSEA_dorothea'),
+                                                         downloadButton("download_multi_ssGSEA_dorothea_table", "Download"),
+                                                         dataTableOutput('multi_ssGSEA_dorothea_table')
+                                         )
                               )
                      )
                    )

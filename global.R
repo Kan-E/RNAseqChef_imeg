@@ -1318,12 +1318,6 @@ GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="WP_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
       }
-      if(Gene_set == "PID (Pathway Interaction Database)"){
-        H_t2g <- msigdbr::msigdbr(species = species, category = "C2", subcategory = "CP:PID") %>%
-          dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
-        H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="PID_", replacement = "")
-        H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
-      }
       if(Gene_set == "BioCarta"){
         H_t2g <- msigdbr::msigdbr(species = species, category = "C2", subcategory = "CP:BIOCARTA") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
@@ -1369,6 +1363,12 @@ GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene
         H_t2g <- as_tibble(dorothea(species = species, type = "DoRothEA regulon (repressor)")) %>%
           dplyr::select(gs_name, entrez_gene, confidence)
         H_t2g$entrez_gene <- as.integer(H_t2g$entrez_gene)
+      }
+      if(Gene_set == "PID (Pathway Interaction Database)"){
+        H_t2g <- msigdbr::msigdbr(species = species, category = "C2", subcategory = "CP:PID") %>%
+          dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
+        H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="PID_", replacement = "")
+        H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="PATHWAY", replacement = "pathway")
       }
       print(head(H_t2g))
       return(H_t2g)
