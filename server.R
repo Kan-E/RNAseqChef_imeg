@@ -414,7 +414,7 @@ shinyServer(function(input, output, session) {
           contrast <- c("con", unique(collist))
           res <- results(dds,  contrast = contrast)
           if(input$FDR_method == "IHW") {
-            ihw_res <- ihw(pvalue ~ baseMean,  data=as.data.frame(res), alpha = 0.1)
+            ihw_res <- IHW::ihw(pvalue ~ baseMean,  data=as.data.frame(res), alpha = 0.1)
             res$padj <- IHW::as.data.frame(ihw_res)$adj_pvalue
           }
           if(input$FDR_method == "Qvalue") {
@@ -437,7 +437,7 @@ shinyServer(function(input, output, session) {
           if(input$paired_sample == "Yes") res <- res[,-3]
           qvalue <- qvalue::qvalue(res$PValue)
           res$padj <- qvalue$qvalues
-          ihw_res <- try(ihw(PValue ~ 2^logCPM,  data=res, alpha = 0.1))
+          ihw_res <- try(IHW::ihw(PValue ~ 2^logCPM,  data=res, alpha = 0.1))
           if(class(ihw_res) == "try-error"){
             res$ihw_padj <- NA
           }else{
@@ -1955,7 +1955,7 @@ shinyServer(function(input, output, session) {
           contrast <- c("con", unique(collist))
           res <- results(dds,  contrast = contrast)
           if(input$FDR_method == "IHW") {
-            ihw_res <- ihw(pvalue ~ baseMean,  data=as.data.frame(res), alpha = 0.1)
+            ihw_res <- IHW::ihw(pvalue ~ baseMean,  data=as.data.frame(res), alpha = 0.1)
             res$padj <- IHW::as.data.frame(ihw_res)$adj_pvalue
           }
           if(input$FDR_method == "Qvalue") {
@@ -1971,7 +1971,7 @@ shinyServer(function(input, output, session) {
           res <- as.data.frame(topTags(result, n = nrow(count)))
           qvalue <- qvalue::qvalue(res$PValue)
           res$padj <- qvalue$qvalues
-          ihw_res <- try(ihw(PValue ~ 2^logCPM,  data=res, alpha = 0.1))
+          ihw_res <- try(IHW::ihw(PValue ~ 2^logCPM,  data=res, alpha = 0.1))
           if(class(ihw_res) == "try-error"){
             res$ihw_padj <- NA
           }else{
@@ -2655,7 +2655,7 @@ shinyServer(function(input, output, session) {
           fc_matrix <- merge(fc_matrix, matrix, by="gene")
         }
         if(input$FDR_method6 == "IHW") {
-          ihw_res <- ihw(pvalue ~ baseMean,  data=as.data.frame(res), alpha = 0.1)
+          ihw_res <- IHW::ihw(pvalue ~ baseMean,  data=as.data.frame(res), alpha = 0.1)
           res$padj <- IHW::as.data.frame(ihw_res)$adj_pvalue
         }
         if(input$FDR_method6 == "Qvalue") {
@@ -4077,8 +4077,7 @@ shinyServer(function(input, output, session) {
             fit2 <- contrasts.fit(fit1, cont.matrix)
             fit3 <- eBayes(fit2)
             result <- topTable(fit3,coef=1:length(cont), number = 1e12)
-            lab <- paste0("log2(",cont,")")
-            lab <- gsub("-","/",lab)
+            lab <- cont
             if(length(cont) != 1) label <- c(lab,"AveExpr","F","p_value","padj") else label <- c(lab,"AveExpr","F","p_value","padj","B")
             colnames(result) <- label
             print("limma")

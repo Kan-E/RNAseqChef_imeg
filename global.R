@@ -35,7 +35,6 @@ library(DESeq2)
 library(EBSeq)
 library(ggnewscale)
 library(edgeR)
-library(IHW)
 library(qvalue)
 library(DEGreport)
 library(msigdbr)
@@ -167,7 +166,9 @@ read_gene_list <- function(tmp){
   }
 }
 anno_rep <- function(row){
-  if(!str_detect(colnames(row)[1], "_1")){
+  if(!str_detect(colnames(row)[1], "_1") && !str_detect(colnames(row)[1], "_2") &&
+     !str_detect(colnames(row)[1], "_3") && !str_detect(colnames(row)[1], "_rep1") && 
+     !str_detect(colnames(row)[1], "_rep2") && !str_detect(colnames(row)[1], "_rep3")){
     colnames(row) <- gsub("\\.[0-9]+$", "", colnames(row))
     name_list <- colnames(row) %>% sort()
     row <- row %>% dplyr::select(all_of(name_list)) 
@@ -187,7 +188,8 @@ anno_rep_meta <- function(meta){
   if(is.null(meta)) {
     return(NULL)
   }else{
-  if(!str_detect(meta[1,1], "_1")){
+  if(!str_detect(meta[1,1], "_1") && !str_detect(meta[1,1], "_2") && !str_detect(meta[1,1], "_3") && 
+     !str_detect(meta[1,1], "_rep1") && !str_detect(meta[1,1], "_rep2") && !str_detect(meta[1,1], "_rep3")){
     meta[,1] <- gsub("\\.[0-9]+$", "", meta[,1])
     if(colnames(meta)[1] != "characteristics"){
     if(length(grep("characteristics", colnames(meta))) != 0){
@@ -1945,9 +1947,13 @@ MotifRegion <- function(data, target_motif, Species, x){
     genome = BSgenome.Hsapiens.UCSC.hg19
   }
   df <- data.frame(GeneID = data[,1], Group = data[,2])
+  target_motif$Group <- gsub(" ", "\n", target_motif$Group)
   name <- gsub("\\\n.+$", "", target_motif$Group)
+  print(head(target_motif))
   data <- dplyr::filter(df, Group %in% name)
   my.symbols <- data$GeneID
+  print(head(data))
+  print(head(my.symbols))
   if(str_detect(my.symbols[1], "ENS") || str_detect(my.symbols[1], "FBgn") ||
      str_detect(my.symbols[1], "^AT.G")){
     if(sum(is.element(no_orgDb, Species)) == 1){
