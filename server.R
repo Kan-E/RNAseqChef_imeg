@@ -4019,7 +4019,34 @@ shinyServer(function(input, output, session) {
     if(input$Species6 == "not selected") print("Please select 'Species'")
   })
   multi_Hallmark_set_ssGSEA <- reactive({
-    return(GeneList_for_enrichment(Species = input$Species6, Ortholog=input$Ortholog6,Biomart_archive=input$Biomart_archive6, Gene_set = input$Gene_set_ssGSEA, org = org6()))
+    gene_set <- GeneList_for_enrichment(Species = input$Species6, Ortholog=input$Ortholog6,Biomart_archive=input$Biomart_archive6, Gene_set = input$Gene_set_ssGSEA, org = org6())
+    my.symbols <- as.character(gene_set$entrez_gene)
+    if(gene_type6() != "SYMBOL"){
+      if(sum(is.element(no_orgDb, input$Species6)) == 1){
+        gene_IDs <- input$Ortholog6
+      }else{
+        if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
+        gene_IDs<-AnnotationDbi::select(org6(),keys = my.symbols,
+                                        keytype = "ENTREZID",
+                                        columns = c("ENTREZID",key,"SYMBOL"))
+      }
+      colnames(gene_IDs) <- c("entrez_gene","GeneID","SYMBOL")
+    }else{
+      if(sum(is.element(no_orgDb, input$Species6)) == 1){
+        gene_IDs <- input$Ortholog6
+        gene_IDs <- gene_IDs[,-1]
+      }else{
+        gene_IDs <- AnnotationDbi::select(org6(), keys = my.symbols,
+                                          keytype = "ENTREZID",
+                                          columns = c("ENTREZID","SYMBOL"))
+      }
+      colnames(gene_IDs) <- c("entrez_gene","GeneID")
+    }
+    gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
+    gene_set <- merge(gene_set,gene_IDs, by="entrez_gene")
+    gene_set <- gene_set %>% distinct(GeneID, .keep_all = T)
+    print(head(gene_set))
+    return(gene_set)
   })
   output$Gene_set_ssGSEA <- renderUI({
     if(input$Species6 != "Xenopus laevis" && input$Ortholog6 != "Arabidopsis thaliana" && input$Species6 != "Arabidopsis thaliana"){
@@ -4400,45 +4427,27 @@ shinyServer(function(input, output, session) {
   })
   multi_norm_count_for_ssGSEA_selected_id <- reactive({
     count <- multi_deg_norm_count()
+    if(length(grep("SYMBOL", colnames(count))) != 0) count <- count[, - which(colnames(count) == "SYMBOL")]
     dp <- multi_ssGSEA_df_selected_id()
     if(!is.null(data) && !is.null(dp)){
       geneset <- multi_Hallmark_set_ssGSEA() %>% dplyr::filter(gs_name == input$selectssGSEA_contribute_pathway)
-      my.symbols <- as.character(geneset$entrez_gene)
-      if(gene_type6() != "SYMBOL"){
-        if(sum(is.element(no_orgDb, input$Species6)) == 1){
-          gene_IDs <- input$Ortholog6
-        }else{
-          if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-          gene_IDs<-AnnotationDbi::select(org6(),keys = my.symbols,
-                                          keytype = "ENTREZID",
-                                          columns = c("ENTREZID",key,"SYMBOL"))
-        }
-        colnames(gene_IDs) <- c("ENTREZID","GeneID","SYMBOL")
-      }else{
-        if(sum(is.element(no_orgDb, input$Species6)) == 1){
-          gene_IDs <- input$Ortholog6
-          gene_IDs <- gene_IDs[,-1]
-        }else{
-          gene_IDs <- AnnotationDbi::select(org6(), keys = my.symbols,
-                                            keytype = "ENTREZID",
-                                            columns = c("ENTREZID","SYMBOL"))
-        }
-        colnames(gene_IDs) <- c("ENTREZID","GeneID")
-      }
-      gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
-      rownames(gene_IDs) <- gene_IDs$GeneID
-      count2 <- merge(gene_IDs, count, by = 0)
+      rownames(geneset) <- geneset$GeneID
+      print(head(geneset))
+      print(head(count))
+      count2 <- merge(geneset, count, by = 0)
       rownames(count2) <- count2$GeneID
-      if(gene_type6() != "SYMBOL") count2 <- count2[,-1:-4] else count2 <- count2[,-1:-3]
-      if(length(grep("SYMBOL", colnames(count2))) != 0) count2 <- count2[, - which(colnames(count2) == "SYMBOL")]
+      if(input$Gene_set_ssGSEA == "DoRothEA regulon (activator)" || 
+        input$Gene_set_ssGSEA == "DoRothEA regulon (repressor)") num <- -1 else num <- 0
+      count2 <- count2[,-1:-(6+num)]
       print(dim(count2))
-      
+      print(head(count2))
       return(count2)
     }
   })
   
   multi_ssGSEA_contribute_cor <- reactive({
-    norm_count <- multi_norm_count_for_ssGSEA_selected_id()
+    count <- multi_norm_count_for_ssGSEA_selected_id()
+    if(length(grep("SYMBOL", colnames(count))) != 0) norm_count <- count[, - which(colnames(count) == "SYMBOL")] else norm_count <- count
     score <- multi_ssGSEA_df_selected_id()
     print("score")
     print(score)
@@ -4448,12 +4457,20 @@ shinyServer(function(input, output, session) {
       for(i in rownames(norm_count)){
         corr<-suppressWarnings(try(cor.test(x=as.numeric(score[1,]),y=as.numeric(norm_count[i,]),method="spearman")))
         if(class(corr) != "try-error"){
+          if(length(grep("SYMBOL", colnames(count))) != 0){
+            symbol <- count %>% dplyr::filter(row.names(.) == i)
+            df <- data.frame(Gene = i, statistics=corr$statistic,corr_score = corr$estimate,
+                             pvalue = corr$p.value, UniqueID = paste0(i,"-",symbol$SYMBOL))
+          }else{
         df <- data.frame(Gene = i, statistics=corr$statistic,corr_score = corr$estimate,
                          pvalue = corr$p.value)
+          }
         df2 <- rbind(df2,df)
         }
       }
-      colnames(df2) <- c("Gene","statistics","corr_score","pvalue")
+      label <- c("Gene","statistics","corr_score","pvalue")
+      if(length(grep("SYMBOL", colnames(count))) != 0) label <- c(label,"Unique_ID")
+      colnames(df2) <- label
       df2 <- na.omit(df2)
       print(head(df2))
       df2 <- df2%>% dplyr::arrange(-corr_score, pvalue) %>%
@@ -4476,7 +4493,9 @@ shinyServer(function(input, output, session) {
       rownames(data) <- data$Gene
       count <- merge(data, norm_count, by=0)
       rownames(count) <- count$Gene
+      if(length(grep("SYMBOL", colnames(count))) != 0) rownames(count) <- count$Unique_ID
       count <- count[,-1:-7]
+      if(length(grep("SYMBOL", colnames(count))) != 0) count <- count[,-1]
       head(count)
       return(count)
     }
@@ -4535,27 +4554,34 @@ shinyServer(function(input, output, session) {
   #ssGSEA dorothea---------
   multi_ssGSEA_limma_dp_entrez <- reactive({
     data <- multi_ssGSEA_limma_dp()
-    write.table(data,file = "ssGSEA_dp.txt",row.names = T,col.names = F,sep = "\t",quote = F)
     if(input$Gene_set_ssGSEA != "DoRothEA regulon (activator)" && 
        input$Gene_set_ssGSEA != "DoRothEA regulon (repressor)") validate("You have to select the 'DoRothEA regulon' from the 'Gene sets' list.")
     if(!is.null(data)){
       score <- multi_enrichment_1_ssGSEA()
       print(head(score))
-      print(data["E2f1",])
       Row.names <- rownames(data)
       label_data <- as.data.frame(Row.names, row.names = Row.names)
+      print(head(label_data))
       score_dp <- merge(label_data,score, by=0)
       rownames(score_dp) <- score_dp[,1]
       score_dp <- score_dp[, -1:-2]
-      print(score_dp["E2f1",])
+      print("score_dp")
+     print(head(score_dp)) 
       gene_IDs <- geneid_convert_ssGSEA(norm_count=score_dp,org = org6(),
                                         gene_type=gene_type6(),Species=input$Species6,Ortholog=input$Ortholog6)
-      data2 <- merge(gene_IDs,score_dp,by=0)
-      rownames(data2) <- data2$ENTREZID
+      print("gene_IDs")
+      print(head(gene_IDs))
+      if(gene_type6() != "SYMBOL"){
+        score_dp$SYMBOL <- rownames(score_dp)
+        data2 <- merge(gene_IDs,score_dp,by="SYMBOL")
+      }else{
+        data2 <- merge(gene_IDs,score_dp,by=0)
+      }
+      rownames(data2) <- data2$GeneID
       data2 <- data2[,-1:-3]
-      print("score")
-      print(dim(data2))
-      print(data2["242705",])
+      if(length(grep("SYMBOL", colnames(data2))) != 0) data2 <- data2[, - which(colnames(data2) == "SYMBOL")]
+print("data2")
+      print(head(data2))
       return(data2)
     }
   })
@@ -4563,16 +4589,9 @@ shinyServer(function(input, output, session) {
     count <- multi_deg_norm_count()
     dp <- multi_ssGSEA_limma_dp_entrez()
     if(!is.null(data) && !is.null(dp)){
-      gene_IDs <- geneid_convert_ssGSEA(norm_count=count,org = org6(),
-                                        gene_type=gene_type6(),Species=input$Species6,Ortholog=input$Ortholog6)
-      count2 <- merge(gene_IDs,count,by=0)
-      rownames(count2) <- count2$ENTREZID
-      if(gene_type6() != "SYMBOL") count2 <- count2[,-1:-4] else count2 <- count2[,-1:-3]
-      if(length(grep("SYMBOL", colnames(count2))) != 0) count2 <- count2[, - which(colnames(count2) == "SYMBOL")]
-      
       Row.names <- rownames(dp)
       label_data <- as.data.frame(Row.names, row.names = Row.names)
-      count_dp <- merge(label_data,count2, by=0)
+      count_dp <- merge(label_data,count, by=0)
       rownames(count_dp) <- count_dp[,1]
       count_dp <- count_dp[, -1:-2]
       print("count")
@@ -4583,44 +4602,41 @@ shinyServer(function(input, output, session) {
   })
   
   multi_ssGSEA_TF_cor <- reactive({
-    norm_count <- multi_norm_count_for_ssGSEA_dorothea_entrez()
+    count <- multi_norm_count_for_ssGSEA_dorothea_entrez()
+    if(length(grep("SYMBOL", colnames(count))) != 0) norm_count <- count[, - which(colnames(count) == "SYMBOL")] else norm_count <- count
     score <- multi_ssGSEA_limma_dp_entrez()
     if(!is.null(norm_count)){
       df2 <- data.frame(matrix(rep(NA, 4), nrow=1))[numeric(0), ]
       for(i in rownames(score)){
         corr<-suppressWarnings(try(cor.test(x=as.numeric(score[i,]),y=as.numeric(norm_count[i,]),method="spearman")))
         if(class(corr) != "try-error"){
+          if(length(grep("SYMBOL", colnames(count))) != 0){
+            symbol <- count %>% dplyr::filter(row.names(.) == i)
+            df <- data.frame(TF = i, statistics=corr$statistic,corr_score = corr$estimate,
+                             pvalue = corr$p.value, UniqueID = paste0(i,"-",symbol$SYMBOL))
+          }else{
           df <- data.frame(TF = i, statistics=corr$statistic,corr_score = corr$estimate,
                            pvalue = corr$p.value)
+          }
           df2 <- rbind(df2,df)
         }
       }
-      colnames(df2) <- c("ENTREZID","statistics","corr_score","pvalue")
+      label <- c("TF","statistics","corr_score","pvalue")
+      if(length(grep("SYMBOL", colnames(count))) != 0) label <- c(label,"Unique_ID")
+      colnames(df2) <- label
       df2 <- na.omit(df2)
       print(head(df2))
       df2 <- df2%>% dplyr::arrange(-corr_score, pvalue) %>%
         dplyr::mutate(rank = row_number())
       rownames(df2) <- df2$rank
       
-      my.symbols <- df2$ENTREZID
-      if(sum(is.element(no_orgDb, input$Species6)) == 1){
-        gene_IDs <- input$Ortholog6
-        gene_IDs <- gene_IDs[,-1]
-      }else{
-        gene_IDs <- AnnotationDbi::select(org6(), keys = my.symbols,
-                                          keytype = "ENTREZID",
-                                          columns = c("ENTREZID","SYMBOL"))
-      }
-      colnames(gene_IDs) <- c("ENTREZID","TF")
-      gene_IDs <- gene_IDs %>% distinct(TF, .keep_all = T)
-      gene_IDs <- na.omit(gene_IDs)
-      data2 <- merge(gene_IDs,df2,by="ENTREZID")
-      data2$ssGSEAscore_vs_Expression <- "NS"
-      data2$ssGSEAscore_vs_Expression[data2$pvalue < 0.05 & data2$corr_score > 0] <- "positive_correlation"
-      data2$ssGSEAscore_vs_Expression[data2$pvalue < 0.05 & data2$corr_score < 0] <- "negative_correlation"
-      data2 <- data2 %>% dplyr::select(TF,ENTREZID,ssGSEAscore_vs_Expression,everything())
-      data2 <- data2%>% dplyr::arrange(-corr_score, pvalue)
-      return(data2)
+      
+      df2$ssGSEAscore_vs_Expression <- "NS"
+      df2$ssGSEAscore_vs_Expression[df2$pvalue < 0.05 & df2$corr_score > 0] <- "positive_correlation"
+      df2$ssGSEAscore_vs_Expression[df2$pvalue < 0.05 & df2$corr_score < 0] <- "negative_correlation"
+      df2 <- df2 %>% dplyr::select(TF,ssGSEAscore_vs_Expression,everything())
+      df2 <- df2%>% dplyr::arrange(-corr_score, pvalue)
+      return(df2)
     }
   })
   multi_ssGSEA_TF_cor_count <- reactive({
@@ -4631,8 +4647,13 @@ shinyServer(function(input, output, session) {
       rownames(data) <- data$TF
       count <- merge(data, norm_count, by=0)
       rownames(count) <- count$TF
-      count <- count[,-1:-8]
-      head(count)
+      if(length(grep("SYMBOL", colnames(count))) != 0) rownames(count) <- count$Unique_ID
+      count <- count[,-1:-7]
+      if(length(grep("SYMBOL", colnames(count))) != 0){
+        count <- count[,-1]
+        count <- count[, - which(colnames(count) == "SYMBOL")]
+      }
+      print(head(count))
       return(count)
     }
   })

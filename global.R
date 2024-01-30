@@ -2209,39 +2209,10 @@ corr_plot_pair <- function(data,corr_color,GOI_x,GOI_y){
 
 library(GSVA)
 ssGSEA <- function(norm_count, gene_set,org,gene_type,Species,Ortholog){
-  genesbyGeneSet <- split(gene_set$entrez_gene,gene_set$gs_name)
-  my.symbols <- rownames(norm_count)
-  if(gene_type != "SYMBOL"){
-    if(sum(is.element(no_orgDb, Species)) == 1){
-      gene_IDs <- Ortholog
-    }else{
-      if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-      gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
-                                      keytype = key,
-                                      columns = c(key,"SYMBOL", "ENTREZID"))
-    }
-    colnames(gene_IDs) <- c("GeneID","SYMBOL", "ENTREZID")
-  }else{
-    if(sum(is.element(no_orgDb, Species)) == 1){
-      gene_IDs <- Ortholog
-      gene_IDs <- gene_IDs[,-1]
-    }else{
-      gene_IDs <- AnnotationDbi::select(org, keys = my.symbols,
-                                        keytype = "SYMBOL",
-                                        columns = c("SYMBOL","ENTREZID"))
-    }
-    colnames(gene_IDs) <- c("GeneID","ENTREZID")
-  }
-  gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
-  gene_IDs <- na.omit(gene_IDs)
-  rownames(gene_IDs) <- gene_IDs$GeneID
-  data2 <- merge(gene_IDs,norm_count,by=0)
-  rownames(data2) <- data2$ENTREZID
-  if(gene_type != "SYMBOL") data2 <- data2[,-1:-4] else data2 <- data2[,-1:-3]
-  if(length(grep("SYMBOL", colnames(data2))) != 0) data2 <- data2[, - which(colnames(data2) == "SYMBOL")]
-  print(head(data2))
-  ssgseaPar <- ssgseaParam(as.matrix(data2),genesbyGeneSet)
-  print(ssgseaPar)
+  genesbyGeneSet <- split(gene_set$GeneID,gene_set$gs_name)
+  if(length(grep("SYMBOL", colnames(norm_count))) != 0) norm_count <- norm_count[, - which(colnames(norm_count) == "SYMBOL")]
+  
+  ssgseaPar <- ssgseaParam(as.matrix(norm_count),genesbyGeneSet)
   ssgsea.score <- gsva(ssgseaPar)
   return(ssgsea.score)
 }
@@ -2254,10 +2225,10 @@ geneid_convert_ssGSEA <- function(norm_count,gene_type,Species,Ortholog,org){
     }else{
       if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
       gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
-                                      keytype = key,
-                                      columns = c(key,"SYMBOL", "ENTREZID"))
+                                      keytype = "SYMBOL",
+                                      columns = c("SYMBOL",key, "ENTREZID"))
     }
-    colnames(gene_IDs) <- c("GeneID","SYMBOL", "ENTREZID")
+    colnames(gene_IDs) <- c("SYMBOL","GeneID", "ENTREZID")
   }else{
     if(sum(is.element(no_orgDb, Species)) == 1){
       gene_IDs <- Ortholog
