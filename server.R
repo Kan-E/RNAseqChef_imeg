@@ -466,12 +466,11 @@ shinyServer(function(input, output, session) {
                 fit <- lmFit(eset, design)
                 if(input$limma_trend == TRUE) fit2 <- eBayes(fit,trend = TRUE,robust = input$regression_mode)
                 if(input$limma_trend == FALSE) fit2 <- eBayes(fit,trend = FALSE,robust = input$regression_mode)
-                print(fit)
                 res <- topTable(fit,coef = dim(design)[2], number = 1e12)
               }
             }else{
               design <- model.matrix(~0+collist)
-              colnames(design) <- unique(collist)
+              colnames(design) <- gsub("^collist","",colnames(design))
               fit <- lmFit(eset, design)
               comparisons <-  paste(unique(collist)[1],"-",unique(collist)[2],sep="")
               cont.matrix <- makeContrasts(contrasts=comparisons, levels=design)
@@ -512,7 +511,6 @@ shinyServer(function(input, output, session) {
           })
         }
         res <- as.data.frame(res)
-        print(gene_type1())
         if(input$Species != "not selected") res <- ensembl2symbol(gene_type=gene_type1(),data = res, input$Species,Ortholog=ortholog1(),org = org1())
         return(res)
       }
@@ -1001,7 +999,6 @@ shinyServer(function(input, output, session) {
         data$padj[data$padj == 0] <- 10^(-300)
         data <- na.omit(data)
         max <- ceiling(max(-log10(data$padj)))
-        print(max)
         sliderInput("yrange","Y_axis range:",min = 0, max= max+1, step = 1,
                     value = max)
       }else{
@@ -1158,24 +1155,18 @@ shinyServer(function(input, output, session) {
         count <- count[, - which(colnames(count) == "SYMBOL")]
       }
     }
-    print(head(count))
     collist <- factor(gsub("\\_.+$", "", colnames(count)))
     vec <- c()
     for (i in 1:length(unique(collist))) {
       num <- length(collist[collist == unique(collist)[i]])
       vec <- c(vec, num)
     }
-    print(collist)
-    print(vec)
     Cond_1 <- vec[1]
     Cond_2 <- vec[2]
     data2 <- pair_GOI_count()
     if(is.null(data2)){
       ht <- NULL
     }else{
-      print(head(data2))
-      print(Cond_1)
-      print(Cond_2)
       data.z <- genefilter::genescale(data2[,8:(7 + Cond_1 + Cond_2)], axis=1, method="Z")
       ht <- GOIheatmap(data.z)
     }
@@ -1626,7 +1617,6 @@ shinyServer(function(input, output, session) {
           }
         }
         incProgress(1)
-        print(df)
         return(df)
       })
     }else{return(NULL)}
@@ -1989,7 +1979,7 @@ shinyServer(function(input, output, session) {
             count <- log(count + 1,2)
             eset = new("ExpressionSet", exprs=as.matrix(count))
             design <- model.matrix(~0+collist)
-            colnames(design) <- unique(collist)
+            colnames(design) <- gsub("^collist","",colnames(design))
             fit <- lmFit(eset, design)
             comparisons <-  paste(unique(collist)[1],"-",unique(collist)[2],sep="")
             cont.matrix <- makeContrasts(contrasts=comparisons, levels=design)
@@ -2194,11 +2184,8 @@ shinyServer(function(input, output, session) {
           Row.names <- NULL
           log2FoldChange <- NULL
           value <- NULL
-          print(head(data))
-          print(head(count))
           data <- merge(data,count, by=0)
           Type <- input$DEG_method
-          print(head(data))
           data <- dplyr::filter(data, apply(data[,8:(7 + Cond_1 + Cond_2)],1,mean) > input$basemean)
           
           if(input$Species != "not selected"){
@@ -2318,7 +2305,6 @@ shinyServer(function(input, output, session) {
           Cond_2 <- vec[2]
           data2 <- as.data.frame(data_degcount2_batch()[[name]])
           colnames(data2) <- sub(paste0(name,"."), "", colnames(data2))
-          print(head(data2))
           up_all <- dplyr::filter(data2, log2FoldChange > 0)
           rownames(up_all) <- up_all$Row.names
           up_all <- up_all[,8:(7 + Cond_1 + Cond_2)]
@@ -2677,15 +2663,20 @@ shinyServer(function(input, output, session) {
           collist <- gsub("\\_.+$", "", colnames(count))
           collist <- gsub(" ", ".", collist)
           count <- log(count + 1,2)
-          print(collist)
           if(is.element(TRUE, duplicated(collist)) == TRUE){
               print("limma")
+            if (input$multi_data_file_type == "Row1"){
               meta <- data.frame(condition = factor(collist))
-              design <- model.matrix(~0+collist)
-              colnames(design) <- factor(unique(collist),levels = unique(collist))
-              cont <- c()
-              for(i in 1:choose(n=length(unique(meta$condition)),k=2)){
-                contrast = paste0(as.character(unique(meta$condition)[combn(x=length(unique(meta$condition)),m=2)[1,i]]),"-",as.character(unique(meta$condition)[combn(x=length(unique(meta$condition)),m=2)[2,i]]))
+              pair <- collist
+            }else {
+              meta <- data.frame(condition=factor(meta[,1]), type=factor(meta[,2]))
+              pair <- paste0(meta$condition,meta$type)
+            }
+            design <- model.matrix(~0+pair)
+            colnames(design) <- factor(gsub("^pair","",colnames(design)),levels = unique(pair))
+            cont <- c()
+              for(i in 1:choose(n=length(unique(pair)),k=2)){
+                contrast = paste0(as.character(unique(pair)[combn(x=length(unique(pair)),m=2)[1,i]]),"-",as.character(unique(pair)[combn(x=length(unique(pair)),m=2)[2,i]]))
                 cont <- c(cont,contrast)
               }
               cont.matrix <- makeContrasts(contrasts=cont, levels=design)
@@ -2699,7 +2690,6 @@ shinyServer(function(input, output, session) {
               lab <- gsub("-","/",lab)
               if(length(cont) != 1) label <- c(lab,"AveExpr","F","p_value","padj") else label <- c(lab,"AveExpr","F","p_value","padj","B")
               colnames(result) <- label
-              print("limma")
             return(result)
           }
           
@@ -2841,13 +2831,25 @@ shinyServer(function(input, output, session) {
                                      Ortholog=ortholog6(),data = res, org = org6(),merge=FALSE)
           return(gene_IDs)
         }
-      }else{ return(NULL) }
+      }
     }
   })
   
   multi_select <- reactive({
-    dds <- multi_dds()
-    return(unique(dds$meta))
+    if(input$DEG_method_multi == "DESeq2") pair <- multi_dds()$meta else{
+      count <- multi_d_row_count_matrix()
+      meta <- multi_metadata()
+      collist <- gsub("\\_.+$", "", colnames(count))
+      collist <- gsub(" ", ".", collist)
+        if (input$multi_data_file_type == "Row1"){
+          meta <- data.frame(condition = factor(collist))
+          pair <- collist
+        }else {
+          meta <- data.frame(condition=factor(meta[,1]), type=factor(meta[,2]))
+          pair <- paste0(meta$condition,meta$type)
+        }
+    }
+    return(unique(pair))
   })
   
   output$selectFC <- renderUI({
@@ -2986,7 +2988,6 @@ shinyServer(function(input, output, session) {
           rld_mat <- log(count + 1,2)
         }
         cluster_rlog <- rld_mat[clustering_sig_genes$gene, ]
-        print(head(cluster_rlog))
         return(cluster_rlog)
       })
     }
@@ -3325,7 +3326,6 @@ shinyServer(function(input, output, session) {
             rownames(res) <- res$Row.names
           }else{
             res <- results(dds, contrast = c("meta", as.character(input$selectFC2[1]),as.character(input$selectFC2[2])))
-            print(head(res))
             res <- res %>%
               as.data.frame() %>%
               dplyr::filter(abs(log2FoldChange) > log2(input$fc6)) %>%
@@ -3337,7 +3337,6 @@ shinyServer(function(input, output, session) {
             
             if(length(input$selectFC2_2) == 2){
               res2 <- results(dds, contrast = c("meta", as.character(input$selectFC2_2[1]),as.character(input$selectFC2_2[2])))
-              print(head(res2))
               res2 <- res2 %>%
                 as.data.frame() %>%
                 dplyr::filter(abs(log2FoldChange) > log2(input$fc6)) %>%
@@ -3404,7 +3403,6 @@ shinyServer(function(input, output, session) {
       rownames(data2) <- data2$Row.names
       data2<- data2[,-1]
       data2 <- data2[,1:length(collist)]
-      print(dim(data2))
       return(data2)
     }
   })
@@ -4087,12 +4085,10 @@ shinyServer(function(input, output, session) {
         count <- multi_enrichment_1_ssGSEA()
           collist <- gsub("\\_.+$", "", colnames(count))
           collist <- gsub(" ", ".", collist)
-          print(collist)
           if(is.element(TRUE, duplicated(collist)) == TRUE){
-            print("limma")
             meta <- data.frame(condition = factor(collist))
             design <- model.matrix(~0+collist)
-            colnames(design) <- factor(unique(collist),levels = unique(collist))
+            colnames(design) <- factor(gsub("^collist","",colnames(design)),levels = unique(collist))
             cont <- c()
             for(i in 1:choose(n=length(unique(meta$condition)),k=2)){
               contrast = paste0(as.character(unique(meta$condition)[combn(x=length(unique(meta$condition)),m=2)[1,i]]),"-",as.character(unique(meta$condition)[combn(x=length(unique(meta$condition)),m=2)[2,i]]))
@@ -4107,7 +4103,6 @@ shinyServer(function(input, output, session) {
             lab <- cont
             if(length(cont) != 1) label <- c(lab,"AveExpr","F","p_value","padj") else label <- c(lab,"AveExpr","F","p_value","padj","B")
             colnames(result) <- label
-            print("limma")
             return(result)
           }
           
@@ -4214,14 +4209,12 @@ shinyServer(function(input, output, session) {
         }else {
           data <- multi_ssGSEA_limma_dp()
           df2 <- data.frame(matrix(rep(NA, 10), nrow=1))[numeric(0), ]
-          print(dim(data))
           for(i in rownames(data)){
             corr<-suppressWarnings(cor.test(x=as.numeric(data[input$GOI_multi_ssGSEA,]),y=as.numeric(data[i,]),method="spearman"))
             df <- data.frame(y_axis = i, x_axis = input$GOI_multi_ssGSEA, statistics=corr$statistic,corr_score = corr$estimate,
                              pvalue = corr$p.value)
             df2 <- rbind(df2,df)
           }
-          print(head(df2))
           padj <- p.adjust(df2$pvalue,method="BH")
           df2$padj <- padj
           colnames(df2) <- c("prey","bait","statistics","corr_score","pvalue","padj")
@@ -4307,7 +4300,6 @@ shinyServer(function(input, output, session) {
   
   
   output$multi_ssGSEA_GOIboxplot <- renderPlot({
-    print(multi_ssGSEA_GOIbox())
     if(is.null(multi_ssGSEA_limma_dp())){
       return(NULL)
     }else{
@@ -4432,15 +4424,11 @@ shinyServer(function(input, output, session) {
     if(!is.null(data) && !is.null(dp)){
       geneset <- multi_Hallmark_set_ssGSEA() %>% dplyr::filter(gs_name == input$selectssGSEA_contribute_pathway)
       rownames(geneset) <- geneset$GeneID
-      print(head(geneset))
-      print(head(count))
       count2 <- merge(geneset, count, by = 0)
       rownames(count2) <- count2$GeneID
       if(input$Gene_set_ssGSEA == "DoRothEA regulon (activator)" || 
         input$Gene_set_ssGSEA == "DoRothEA regulon (repressor)") num <- -1 else num <- 0
       count2 <- count2[,-1:-(6+num)]
-      print(dim(count2))
-      print(head(count2))
       return(count2)
     }
   })
@@ -4449,9 +4437,6 @@ shinyServer(function(input, output, session) {
     count <- multi_norm_count_for_ssGSEA_selected_id()
     if(length(grep("SYMBOL", colnames(count))) != 0) norm_count <- count[, - which(colnames(count) == "SYMBOL")] else norm_count <- count
     score <- multi_ssGSEA_df_selected_id()
-    print("score")
-    print(score)
-    print(head(norm_count))
     if(!is.null(norm_count)){
       df2 <- data.frame(matrix(rep(NA, 4), nrow=1))[numeric(0), ]
       for(i in rownames(norm_count)){
@@ -4472,7 +4457,6 @@ shinyServer(function(input, output, session) {
       if(length(grep("SYMBOL", colnames(count))) != 0) label <- c(label,"Unique_ID")
       colnames(df2) <- label
       df2 <- na.omit(df2)
-      print(head(df2))
       df2 <- df2%>% dplyr::arrange(-corr_score, pvalue) %>%
         dplyr::mutate(rank = row_number())
       rownames(df2) <- df2$rank
@@ -4558,19 +4542,13 @@ shinyServer(function(input, output, session) {
        input$Gene_set_ssGSEA != "DoRothEA regulon (repressor)") validate("You have to select the 'DoRothEA regulon' from the 'Gene sets' list.")
     if(!is.null(data)){
       score <- multi_enrichment_1_ssGSEA()
-      print(head(score))
       Row.names <- rownames(data)
       label_data <- as.data.frame(Row.names, row.names = Row.names)
-      print(head(label_data))
       score_dp <- merge(label_data,score, by=0)
       rownames(score_dp) <- score_dp[,1]
       score_dp <- score_dp[, -1:-2]
-      print("score_dp")
-     print(head(score_dp)) 
       gene_IDs <- geneid_convert_ssGSEA(norm_count=score_dp,org = org6(),
                                         gene_type=gene_type6(),Species=input$Species6,Ortholog=input$Ortholog6)
-      print("gene_IDs")
-      print(head(gene_IDs))
       if(gene_type6() != "SYMBOL"){
         score_dp$SYMBOL <- rownames(score_dp)
         data2 <- merge(gene_IDs,score_dp,by="SYMBOL")
@@ -4580,8 +4558,6 @@ shinyServer(function(input, output, session) {
       rownames(data2) <- data2$GeneID
       data2 <- data2[,-1:-3]
       if(length(grep("SYMBOL", colnames(data2))) != 0) data2 <- data2[, - which(colnames(data2) == "SYMBOL")]
-print("data2")
-      print(head(data2))
       return(data2)
     }
   })
@@ -4594,9 +4570,6 @@ print("data2")
       count_dp <- merge(label_data,count, by=0)
       rownames(count_dp) <- count_dp[,1]
       count_dp <- count_dp[, -1:-2]
-      print("count")
-      print(dim(count_dp))
-      
       return(count_dp)
     }
   })
@@ -4625,7 +4598,6 @@ print("data2")
       if(length(grep("SYMBOL", colnames(count))) != 0) label <- c(label,"Unique_ID")
       colnames(df2) <- label
       df2 <- na.omit(df2)
-      print(head(df2))
       df2 <- df2%>% dplyr::arrange(-corr_score, pvalue) %>%
         dplyr::mutate(rank = row_number())
       rownames(df2) <- df2$rank
@@ -4653,7 +4625,6 @@ print("data2")
         count <- count[,-1]
         count <- count[, - which(colnames(count) == "SYMBOL")]
       }
-      print(head(count))
       return(count)
     }
   })
@@ -6176,7 +6147,6 @@ print("data2")
           data3 <- merge(data3, data, by="Row.names")
         }
       }
-      print(head(data3))
       return(brushedPoints(data3, input$plot1_brush_cond3,xvar = "FC_x",yvar="FC_y"))
     }
   })

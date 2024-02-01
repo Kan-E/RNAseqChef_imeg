@@ -37,13 +37,15 @@ shinyUI(
                fluidRow(
                  column(12,
                         br(),br(),
-                        h1(strong("RNAseqChef"),align="center"),br(),
+                        h1(strong("RNAseqChef-beta"),align="center"),br(),
                         p("RNAseqChef, an RNA-seq data controller highlighting gene expression features, is a web-based application for automated, systematic, and integrated RNA-seq differential expression analysis.",
                           align="center"),br(),br(),style={'background-color:beige;font-size: 16px;'},
                  ),
                  column(12,
                         br(),
-                        h4("Current version (v1.1.0-beta, 2024/1/5)"),
+                        h4("Current version (v1.1.0-beta, 2024/2/1)"),
+                        p("(2024/2/1) Add a limma method for the normalized count analysis in Multi DEG."),
+                        p("(2024/2/1) Add an ssGSEA function in Multi DEG."),
                         p("(2024/1/12) Fix the desplayed text about FoldChange cut-off in Multi DEG and normalized count analysis (There is no impact on the results.)."),
                         p("(2024/1/9) Fix bugs regarding the import of count data."),
                         p("(2024/1/5) Fix bugs regarding the import of count data."),
@@ -84,8 +86,8 @@ shinyUI(
                  # sidebar---------------------------------
                  sidebarPanel(
                    radioButtons('data_file_type','Input:',
-                                c('Raw_count_matrix'="Row1",
-                                  'Option: Raw_count_matrix + Metadata'="Row2",
+                                c('Count_matrix'="Row1",
+                                  'Option: Count_matrix + Metadata'="Row2",
                                   'Option: Batch mode (not displayed in the output panel)'="Row11"
                                 ),selected = "Row1"),
                    conditionalPanel(condition="input.data_file_type=='Row1'",
@@ -255,7 +257,7 @@ shinyUI(
                      type = "tabs",
                      tabPanel("Input Data",
                               bsCollapse(id="input_collapse_panel",open="Row_count_panel",multiple = FALSE,
-                                         bsCollapsePanel(title="Raw_count_matrix:",
+                                         bsCollapsePanel(title="Count_matrix:",
                                                          value="Row_count_panel",
                                                          dataTableOutput('Row_count_matrix')
                                          ),
@@ -263,7 +265,7 @@ shinyUI(
                                                          value="Metadata_panel",
                                                          dataTableOutput('Metadata')
                                          ),
-                                         bsCollapsePanel(title="Defined_raw_count_matrix:",
+                                         bsCollapsePanel(title="Defined_count_matrix:",
                                                          value="D_row_count_matrix_panel",
                                                          conditionalPanel(condition="input.data_file_type!='Row11'",
                                                                           selectizeInput("sample_order", "Select samples:", choices = "", multiple = T),
@@ -698,13 +700,13 @@ shinyUI(
                  # sidebar---------------------------------
                  sidebarPanel(
                    radioButtons('multi_data_file_type','Input:',
-                                c('Raw_count_matrix (One-factor multi-condition)'="Row1",
-                                  'Raw_count_matrix + metadata (Two-factor multi-condition)'="Row2"
+                                c('Count_matrix (One-factor multi-condition)'="Row1",
+                                  'Count_matrix + metadata (Two-factor multi-condition)'="Row2"
                                 ),selected = "Row1"),
                    conditionalPanel(condition="input.multi_data_file_type=='Row1'",
                                     fileInput("multi_file1",
                                               strong(
-                                                span("Select a raw count matrix file"),
+                                                span("Select a count matrix file"),
                                                 span(icon("info-circle"), id = "icon8", 
                                                      options = list(template = popoverTempate))
                                               ),
@@ -719,7 +721,7 @@ shinyUI(
                    conditionalPanel(condition="input.multi_data_file_type=='Row2'",
                                     fileInput("multi_file2",
                                               strong(
-                                                span("Select a raw count matrix file"),
+                                                span("Select a count matrix file"),
                                                 span(icon("info-circle"), id = "icon9", 
                                                      options = list(template = popoverTempate))
                                               ),
@@ -737,8 +739,17 @@ shinyUI(
                                                             img(src="input_format_multi.png", width = 400,height = 400)),
                                               placement = "right",options = list(container = "body")),
                    ),
-                   radioButtons('DEG_method_multi','DEG analysis method:',
-                                c('DESeq2'="DESeq2"),selected = "DESeq2"),
+                   radioButtons('DEG_method_multi',
+                                strong(
+                                  span("DEG analysis method:"),
+                                  span(icon("info-circle"), id = "icon_multi_DEG", 
+                                       options = list(template = popoverTempate))
+                                ),
+                                c('DESeq2 for raw count'="DESeq2",'limma for normalized count'="limma"),selected = "DESeq2"),
+                   bsPopover("icon_multi_DEG", "DEG analysis method:", 
+                             content=paste("DESeq2 is for ", strong("RNA-seq raw count data"), ".<br>", 
+                                           "Limma is for normalized count data, such as ", strong("CPM (RPM)")," and ", strong("proteomics data"), " (normalized protein abandunce).<br><br>"),
+                             placement = "right",options = list(container = "body")),
                    conditionalPanel(condition="input.DEG_method_multi=='limma'",
                                     fluidRow(
                                       column(6, radioButtons("limma_trend_multi","Trend",
@@ -837,7 +848,7 @@ shinyUI(
                      type = "tabs",
                      tabPanel("Input Data",
                               bsCollapse(id="multi_input_collapse_panel",open="multi_Row_count_panel",multiple = TRUE,
-                                         bsCollapsePanel(title="Raw_count_matrix:",
+                                         bsCollapsePanel(title="Count_matrix:",
                                                          value="multi_Row_count_panel",
                                                          dataTableOutput('multi_Row_count_matrix')
                                          ),
@@ -845,7 +856,7 @@ shinyUI(
                                                          value="multi_Metadata_panel",
                                                          dataTableOutput('multi_Metadata')
                                          ),
-                                         bsCollapsePanel(title="Defined_raw_count_matrix:",
+                                         bsCollapsePanel(title="Defined_count_matrix:",
                                                          value="multi_d_Row_count_panel",
                                                          dataTableOutput('multi_d_Row_count_matrix')
                                          )
@@ -2059,6 +2070,8 @@ shinyUI(
   (UCSC version hg19, based on GRCh37.p13)_. R package version 1.4.3.",br(),
                                    "Tan, G., and Lenhard, B. (2016). TFBSTools: an R/bioconductor package for transcription factor
   binding site analysis. Bioinformatics 32, 1555-1556.",br(),
+                                   "Hänzelmann, S., Castelo, R. and Guinney, A. GSVA: gene set variation analysis for
+  microarray and RNA-seq data. BMC Bioinformatics, 14:7, 2013."
                                    )
                           )
                  ),
@@ -2114,6 +2127,8 @@ shinyUI(
                                    strong("(2023/9/27) Add function for paired-sample analysis in Pair-wise DEG"),br(),
                                    strong("(2024/1/3) Improve the visualization of the clustering analysis (PCA, MDS, and UMAP)."),br(),
                                    strong("(2024/1/3) Add a function to select a second pair for fold change cut-off in Multi DEG and Normalized count analysis."),br(),
+                                   strong("(2024/2/1) Add a limma method for the normalized count analysis in Multi DEG."),br(),
+                                   strong("(2024/2/1) Add an ssGSEA function in Multi DEG."),br(),
                             )
                           )
                  )
