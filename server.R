@@ -3813,15 +3813,30 @@ shinyServer(function(input, output, session) {
   multi_enrich_pairFC <- reactive({
     count <- multi_d_row_count_matrix()
     meta <- multi_metadata()
-    dds <- multi_dds()
-    if(is.null(dds) || length(input$selectEnrich_pair) != 2){
+    if(length(input$selectEnrich_pair) != 2){
       return(NULL)
     }else{
-      if (input$multi_data_file_type == "Row1"){
-        collist <- gsub("\\_.+$", "", colnames(count))
-        meta <- data.frame(condition = factor(collist))
-      }else meta <- data.frame(condition=factor(meta[,1]), type=factor(meta[,2]))
-      res <- results(dds, contrast = c("meta", as.character(input$selectEnrich_pair[1]),as.character(input$selectEnrich_pair[2])))
+      if(input$DEG_method_multi == "DESeq2"){
+        dds <- multi_dds()
+        if (input$multi_data_file_type == "Row1"){
+          collist <- gsub("\\_.+$", "", colnames(count))
+          meta <- data.frame(condition = factor(collist))
+        }else meta <- data.frame(condition=factor(meta[,1]), type=factor(meta[,2]))
+        res <- results(dds, contrast = c("meta", as.character(input$selectEnrich_pair[1]),as.character(input$selectEnrich_pair[2])))
+      }else{
+        res <- multi_deg_result()
+        cond1 <- input$selectEnrich_pair[1]
+        cond2 <- input$selectEnrich_pair[2]
+        log2fc_1 <- paste0("log2(",cond1,"/",cond2,")")
+        log2fc_2 <- paste0("log2(",cond2,"/",cond1,")")
+        log2FoldChange <- try(dplyr::select(res, .data[[log2fc_1]]))
+        if(class(log2FoldChange) == "try-error") {
+          log2FoldChange <- try(dplyr::select(res, .data[[log2fc_2]]))
+          log2FoldChange <-  -1* log2FoldChange
+        }
+        colnames(log2FoldChange)[1] <- "log2FoldChange"
+        res$log2FoldChange <- log2FoldChange
+      }
       sig_res_LRT <- res %>% 
         data.frame()%>%
         rownames_to_column(var="Row.names")
@@ -3867,7 +3882,10 @@ shinyServer(function(input, output, session) {
       data <- multi_enrich_pairFC()
       count <- multi_deg_norm_count()
       data <- na.omit(data)
-      geneList <- data$log2FoldChange
+      if(input$DEG_method_multi == "DESeq2") geneList <- data$log2FoldChange else {
+        data <- data %>% dplyr::filter(log2FoldChange != 0)
+        geneList <- data$log2FoldChange$log2FoldChange
+        }
       names(geneList) = as.character(data$ENTREZID)
       geneList <- sort(geneList, decreasing = TRUE)
       withProgress(message = "GSEA",{
