@@ -4086,12 +4086,18 @@ shinyServer(function(input, output, session) {
           collist <- gsub("\\_.+$", "", colnames(count))
           collist <- gsub(" ", ".", collist)
           if(is.element(TRUE, duplicated(collist)) == TRUE){
-            meta <- data.frame(condition = factor(collist))
-            design <- model.matrix(~0+collist)
-            colnames(design) <- factor(gsub("^collist","",colnames(design)),levels = unique(collist))
+            if (input$multi_data_file_type == "Row1"){
+              meta <- data.frame(condition = factor(collist))
+              pair <- collist
+            }else {
+              meta <- data.frame(condition=factor(meta[,1]), type=factor(meta[,2]))
+              pair <- paste0(meta$condition,meta$type)
+            }
+            design <- model.matrix(~0+pair)
+            colnames(design) <- factor(gsub("^pair","",colnames(design)),levels = unique(pair))
             cont <- c()
-            for(i in 1:choose(n=length(unique(meta$condition)),k=2)){
-              contrast = paste0(as.character(unique(meta$condition)[combn(x=length(unique(meta$condition)),m=2)[1,i]]),"-",as.character(unique(meta$condition)[combn(x=length(unique(meta$condition)),m=2)[2,i]]))
+            for(i in 1:choose(n=length(unique(pair)),k=2)){
+              contrast = paste0(as.character(unique(pair)[combn(x=length(unique(pair)),m=2)[1,i]]),"-",as.character(unique(pair)[combn(x=length(unique(pair)),m=2)[2,i]]))
               cont <- c(cont,contrast)
             }
             cont.matrix <- makeContrasts(contrasts=cont, levels=design)
