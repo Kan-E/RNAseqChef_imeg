@@ -4090,6 +4090,7 @@ shinyServer(function(input, output, session) {
               meta <- data.frame(condition = factor(collist))
               pair <- collist
             }else {
+              meta <- multi_metadata()
               meta <- data.frame(condition=factor(meta[,1]), type=factor(meta[,2]))
               pair <- paste0(meta$condition,meta$type)
             }
