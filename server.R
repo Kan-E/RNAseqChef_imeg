@@ -4595,7 +4595,7 @@ shinyServer(function(input, output, session) {
     filename = function() {
       paste(download_multi_overview_dir(), paste0(input$Gene_set_ssGSEA,"-ssGSEA_score.txt"), sep="_")
     },
-    content = function(file){write.table(multi_enrichment_1_ssGSEA(), file, row.names = T,col.names = F, sep = "\t", quote = F)}
+    content = function(file){write.table(multi_enrichment_1_ssGSEA(), file, row.names = T,col.names = NA, sep = "\t", quote = F)}
   )
   # Multi ssGSEA limma-----
   multi_ssGSEA_limma <- reactive({
@@ -4647,7 +4647,7 @@ shinyServer(function(input, output, session) {
     filename = function() {
       paste(download_multi_overview_dir(), paste0(input$Gene_set_ssGSEA,"-ssGSEA_differential_analysis_all_result.txt"), sep="_")
     },
-    content = function(file){write.table(multi_ssGSEA_limma(), file, row.names = T,col.names = F, sep = "\t", quote = F)}
+    content = function(file){write.table(multi_ssGSEA_limma(), file, row.names = T,col.names = NA, sep = "\t", quote = F)}
   )
   multi_ssGSEA_limma_dp <- reactive({
     result <- multi_ssGSEA_limma()
@@ -4669,7 +4669,7 @@ shinyServer(function(input, output, session) {
     filename = function() {
       paste(download_multi_overview_dir(), paste0(input$Gene_set_ssGSEA,"-ssGSEA_differential_pathways.txt"), sep="_")
     },
-    content = function(file){write.table(multi_ssGSEA_limma_dp(), file, row.names = T,col.names = F, sep = "\t", quote = F)}
+    content = function(file){write.table(multi_ssGSEA_limma_dp(), file, row.names = T,col.names = NA, sep = "\t", quote = F)}
   )
   #ssGSEA GOI------------------------------------------------------
   output$GOI_multi_ssGSEA <- renderUI({
@@ -4800,7 +4800,7 @@ shinyServer(function(input, output, session) {
       }}
   })
   output$PlotType_multi_ssGSEA <- renderUI({
-    selectInput('PlotType_multi_ssGSEA', 'PlotType', c("Boxplot", "Barplot", "Errorplot"))
+    selectInput('PlotType_multi_ssGSEA', 'PlotType', c("Boxplot", "Barplot", "Violin plot","Errorplot"))
   })
   
   statistical_analysis_goi_multi_ssGSEA <- reactive({
@@ -5008,6 +5008,7 @@ shinyServer(function(input, output, session) {
       if(length(grep("SYMBOL", colnames(count))) != 0) rownames(count) <- count$Unique_ID
       count <- count[,-1:-7]
       if(length(grep("SYMBOL", colnames(count))) != 0) count <- count[,-1]
+      count <- count[, - which(colnames(count) == "SYMBOL")]
       head(count)
       return(count)
     }
@@ -5015,7 +5016,7 @@ shinyServer(function(input, output, session) {
   multi_ssGSEA_contribute_corplot <- reactive({
     if(!is.null(multi_ssGSEA_contribute_cor_count())){
       data <- multi_ssGSEA_contribute_cor_count()
-      rownames(data) <- gsub("_"," ", rownames(data))
+      rownames(data) <- gsub("-","- ", rownames(data))
       for(i in 1:length(rownames(data))){
         rownames(data)[i] <- paste(strwrap(rownames(data)[i], width = 10),collapse = "\n")
       }
@@ -5159,7 +5160,7 @@ shinyServer(function(input, output, session) {
   multi_ssGSEA_TF_corplot <- reactive({
     if(!is.null(multi_ssGSEA_TF_cor())){
       data <- multi_ssGSEA_TF_cor_count()
-      rownames(data) <- gsub("_"," ", rownames(data))
+      rownames(data) <- gsub("-","- ", rownames(data))
       for(i in 1:length(rownames(data))){
         rownames(data)[i] <- paste(strwrap(rownames(data)[i], width = 10),collapse = "\n")
       }
@@ -6072,7 +6073,8 @@ shinyServer(function(input, output, session) {
       }
       return(dds)
     }else{
-      withProgress(message = "EBSeq multiple comparison test takes 5 - 10 minutes",{
+      if(input$EBSeq_mode == TRUE) time <- "a few" else time <- "5 - 10"
+      withProgress(message = paste0("EBSeq multiple comparison test takes ",time," minutes"),{
         count <- d_row_count_matrix2()
         collist <- gsub("\\_.+$", "", colnames(count))
         if(length(unique(collist)) == 3){
@@ -6087,10 +6089,13 @@ shinyServer(function(input, output, session) {
           Sizes <- MedianNorm(count)
           NormMat <- GetNormalizedMat(count, Sizes)
           patterns <- GetPatterns(conditions)
+          rownames(patterns) <- tolower(rownames(patterns))
           eename <- rownames(patterns)[which(rowSums(patterns) == length(unique(collist)))]
           stopifnot(length(eename) == 1)
           MultiOut <- NULL
-          MultiOut <- EBMultiTest(Data = count, NgVector = ngvector, Conditions = conditions, AllParti = patterns, sizeFactors = Sizes, maxround = 5)
+          MultiOut <- EBMultiTest(Data = count, NgVector = ngvector, fast=input$EBSeq_mode,
+                                  Conditions = conditions, AllParti = patterns,
+                                  sizeFactors = Sizes, maxround = 5)
           stopifnot(!is.null(MultiOut))
           return(MultiOut)
         }
@@ -6116,17 +6121,18 @@ shinyServer(function(input, output, session) {
         conditions <- as.factor(rep(paste("C", 1:length(unique(collist)), sep=""), times = vec))
         Sizes <- MedianNorm(count)
         patterns <- GetPatterns(conditions)
+        rownames(patterns) <- tolower(rownames(patterns))
         eename <- rownames(patterns)[which(rowSums(patterns) == length(unique(collist)))]
         MultiOut <- MultiOut()
         MultiPP <- GetMultiPP(MultiOut)
         PP <- as.data.frame(MultiPP$PP)
+        colnames(PP) <- tolower(colnames(PP))
         pos <- which(names(PP) == eename)
         probs <- rowSums(PP[,-pos])
         results <- cbind(PP, MultiPP$MAP[rownames(PP)], probs)
         colnames(results) <- c(colnames(PP), "MAP", "PPDE")
         ord <- order(results[,"PPDE"], decreasing = TRUE)
         results <- results[ord,]
-        MultiFC <- GetMultiFC(MultiOut)
         res <- as.data.frame(results)
         
         if(input$Species2 != "not selected"){
@@ -6159,17 +6165,18 @@ shinyServer(function(input, output, session) {
         conditions <- as.factor(rep(paste("C", 1:length(unique(collist)), sep=""), times = vec))
         Sizes <- MedianNorm(count)
         patterns <- GetPatterns(conditions)
+        rownames(patterns) <- tolower(rownames(patterns))
         eename <- rownames(patterns)[which(rowSums(patterns) == length(unique(collist)))]
         MultiOut <- MultiOut()
         MultiPP <- GetMultiPP(MultiOut)
         PP <- as.data.frame(MultiPP$PP)
+        colnames(PP) <- tolower(colnames(PP))
         pos <- which(names(PP) == eename)
         probs <- rowSums(PP[,-pos])
         results <- cbind(PP, MultiPP$MAP[rownames(PP)], probs)
         colnames(results) <- c(colnames(PP), "MAP", "PPDE")
         ord <- order(results[,"PPDE"], decreasing = TRUE)
         results <- results[ord,]
-        MultiFC <- GetMultiFC(MultiOut)
         res <- MultiPP$Pattern
         return(as.data.frame(res))
       }
@@ -6192,18 +6199,27 @@ shinyServer(function(input, output, session) {
         conditions <- as.factor(rep(paste("C", 1:length(unique(collist)), sep=""), times = vec))
         Sizes <- MedianNorm(count)
         patterns <- GetPatterns(conditions)
+        rownames(patterns) <- tolower(rownames(patterns))
         eename <- rownames(patterns)[which(rowSums(patterns) == length(unique(collist)))]
         MultiOut <- MultiOut()
         MultiPP <- GetMultiPP(MultiOut)
         PP <- as.data.frame(MultiPP$PP)
+        colnames(PP) <- tolower(colnames(PP))
         pos <- which(names(PP) == eename)
         probs <- rowSums(PP[,-pos])
         results <- cbind(PP, MultiPP$MAP[rownames(PP)], probs)
         colnames(results) <- c(colnames(PP), "MAP", "PPDE")
         ord <- order(results[,"PPDE"], decreasing = TRUE)
         results <- results[ord,]
-        MultiFC <- GetMultiFC(MultiOut)
-        res <- MultiFC$CondMeans[ord,]
+        if(input$EBSeq_mode == TRUE) {
+          MultiFC <- GetMultiFC(MultiOut)
+          res <- MultiFC$CondMeans[ord,]
+          rownames(res) <- rownames(results)
+          }else {
+            res <- v1_GetMultiFC(MultiOut,collist=collist,count=d_row_count_matrix2(),
+                                     EBSeq_mode = input$EBSeq_mode)
+            res <- res[rownames(results),]
+          }
         return(as.data.frame(res))
       }
     }

@@ -15,7 +15,7 @@ shinyUI(
     tags$head(
         includeScript("navAppend.js")
       ),
-    tags$head(includeHTML(("google-analytics.html"))),
+
     tags$style(
       type = 'text/css',
       HTML(
@@ -543,10 +543,6 @@ shinyUI(
                                                             ), 
                                               placement = "right",options = list(container = "body")),
                    ),
-                   radioButtons("EBSeq_mode","EBSeq",
-                                c('v2 (recommend)'=TRUE,
-                                  'v1 (<= RNAseqChef v.1.1.0)'=FALSE),
-                                selected = TRUE),
                    radioButtons('Level_cond3','Level:',
                                 c('Gene level'="gene_level",
                                   'Transcript level'="transcript_level"
