@@ -7123,10 +7123,10 @@ shinyServer(function(input, output, session) {
     return(no_org_ID(count = norm_count_input(),Species = input$Species3,Ortholog = input$Ortholog3,Biomart_archive=input$Biomart_archive3))
   })
   isoform3 <- reactive({
-    return(isoform_ID(count = norm_count_input(),Species = input$Species3,Ortholog = input$Ortholog3,Biomart_archive=input$Biomart_archive3,RNA_type=input$Level_norm))
+    return(isoform_ID(count = norm_count_input(),Species = input$Species3,Ortholog = input$Ortholog3,Biomart_archive=input$Biomart_archive3,RNA_type=input$Level_cond3))
   })
   gene_type3 <- reactive({
-    return(gene_type(my.symbols=rownames(norm_count_input()),org=org3(),Species=input$Species3,RNA_type=input$Level_norm))
+    return(gene_type(my.symbols=rownames(norm_count_input()),org=org3(),Species=input$Species3,RNA_type=input$Level_cond3))
   })
   org_code3 <- reactive({
     return(org_code(Species = input$Species3, Ortholog= input$Ortholog3))
@@ -9230,6 +9230,9 @@ shinyServer(function(input, output, session) {
   org4 <- reactive({
     return(org(Species = input$Species4,Ortholog = input$Ortholog4))
   })
+  isoform4 <- reactive({
+    return(isoform_ID(gene_list = enrich_input(),Species = input$Species4,Ortholog = input$Ortholog4,Biomart_archive=input$Biomart_archive4,RNA_type=input$Level_enrich))
+  })
   ortholog4 <- reactive({
     return(no_org_ID(gene_list = enrich_input(),Species = input$Species4,Ortholog = input$Ortholog4,Biomart_archive=input$Biomart_archive4))
   })
@@ -9338,6 +9341,7 @@ shinyServer(function(input, output, session) {
   
   
   enrich_viewer1 <- reactive({
+    print(head(isoform4()))
     return(gene_list_convert_for_enrichment(gene_type=gene_type4(),data= enrich_input(), org=org4(),Species = input$Species4,Ortholog=ortholog4(),Isoform=isoform4()))
   })
   
