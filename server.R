@@ -6053,7 +6053,7 @@ shinyServer(function(input, output, session) {
       if(input$Species2 != "not selected") {
         if(gene_type2() != "SYMBOL"){
           gene_IDs <- ensembl2symbol(gene_type=gene_type2(),data = res,Species=input$Species2,
-                                     Ortholog=ortholog2(),Isoform=isoform2(),Isoform=isoform2(),org = org2(),merge=FALSE,rowname=FALSE)
+                                     Ortholog=ortholog2(),Isoform=isoform2(),org = org2(),merge=FALSE,rowname=FALSE)
           return(gene_IDs)
         }
       }else{ return(NULL) }
@@ -7123,10 +7123,10 @@ shinyServer(function(input, output, session) {
     return(no_org_ID(count = norm_count_input(),Species = input$Species3,Ortholog = input$Ortholog3,Biomart_archive=input$Biomart_archive3))
   })
   isoform3 <- reactive({
-    return(isoform_ID(count = norm_count_input(),Species = input$Species3,Ortholog = input$Ortholog3,Biomart_archive=input$Biomart_archive3,RNA_type=input$Level_cond3))
+    return(isoform_ID(count = norm_count_input(),Species = input$Species3,Ortholog = input$Ortholog3,Biomart_archive=input$Biomart_archive3,RNA_type=input$Level_norm))
   })
   gene_type3 <- reactive({
-    return(gene_type(my.symbols=rownames(norm_count_input()),org=org3(),Species=input$Species3,RNA_type=input$Level_cond3))
+    return(gene_type(my.symbols=rownames(norm_count_input()),org=org3(),Species=input$Species3,RNA_type=input$Level_norm))
   })
   org_code3 <- reactive({
     return(org_code(Species = input$Species3, Ortholog= input$Ortholog3))
