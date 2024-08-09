@@ -5,10 +5,10 @@ account: imeg-ku
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 10863141
-bundleId: 8205039
+bundleId: 8964569
 url: https://imeg-ku.shinyapps.io/RNAseqChef_imeg_test/
-when: 1706755358.10662
-lastSyncTime: 1706755358.10664
+when: 1723190924.93158
+lastSyncTime: 1723190924.9316
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: Dockerfile|Dockerfile_arm|docs/_config.yml|docs/index.html|LICENSE.md|README.md|shiny-server.conf|data|manual_figure
+ignoredFiles: Dockerfile|Dockerfile_arm|docs/_config.yml|docs/index.html|LICENSE.md|old/global.R|old/server.R|old/ui.R|README.md|shiny-server.conf|data|manual_figure

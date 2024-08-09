@@ -43,7 +43,14 @@ shinyUI(
                  ),
                  column(12,
                         br(),
-                        h4("Current version (v1.1.0-beta, 2024/2/1)"),
+                        h4("Current version (v1.1.1-beta, 2024/8/9)"),
+                        p("(2024/8/9) Add a function for transcript-level analysis."),
+                        p("(2024/8/9) Add a pre-filter function for limma and edgeR."),
+                        p("(2024/8/9) Add a function for gene extraction using 'Gene set' in the Normalized count analysis."),
+                        p("(2024/8/9) Fix bugs regarding the cnet plot."),
+                        p("(2024/8/9) Improve the graph design for the boxplot, barplot, and volcano plot."),
+                        p("(2024/8/9) Fix bugs regarding the ssGSEA in the MultiDEG."),
+                        p("(2024/8/9) Fix bugs regarding the import of count data (ENSEMBL ID)"),
                         p("(2024/2/1) Add a limma method for the normalized count analysis in Multi DEG."),
                         p("(2024/2/1) Add an ssGSEA function in Multi DEG."),
                         p("(2024/1/12) Fix the desplayed text about FoldChange cut-off in Multi DEG and normalized count analysis (There is no impact on the results.)."),
@@ -413,28 +420,6 @@ shinyUI(
                                          )
                               )
                      ),
-                     tabPanel("Transcript",
-                              fluidRow(
-                                column(8, 
-                                       radioButtons('Transcript_group','Group:',
-                                                    c('ALL genes' ="DET_manual",
-                                                      'Genes containing up or down DETs'="DET",
-                                                      'Genes containing both up and down DETs'="DET_both"
-                                                    ),selected = "DET_manual"),
-                                       htmlOutput("Transcript_top"),
-                                       htmlOutput("transcript_manual"),
-                                       htmlOutput("GOIreset_transcript_manual"))
-                              ),
-                              downloadButton("download_transcript_barplot", "Download barplot"),
-                              div(
-                                plotOutput("transcript_barplot", height = "100%"),
-                                style = "height: calc(100vh  - 100px)"
-                              ),
-                              downloadButton("download_transcript_barplot_table", "Download table"),
-                              DTOutput('transcript_barplot_table'),
-                              downloadButton("download_transcript_GOIboxplot", "Download boxplot"),
-                              plotOutput("transcript_GOIboxplot")
-                              ),
                      tabPanel("DTU analysis",
                               fluidRow(
                                 column(4, textOutput("pair_DTU"),
@@ -2270,6 +2255,13 @@ shinyUI(
                                    strong("(2024/1/3) Add a function to select a second pair for fold change cut-off in Multi DEG and Normalized count analysis."),br(),
                                    strong("(2024/2/1) Add a limma method for the normalized count analysis in Multi DEG."),br(),
                                    strong("(2024/2/1) Add an ssGSEA function in Multi DEG."),br(),
+                                   strong("(2024/8/9) Add a function for transcript-level analysis."),br(),
+                                   strong("(2024/8/9) Fix bugs regarding the cnet plot."),br(),
+                                   strong("(2024/8/9) Improve the graph design for the boxplot, barplot, and volcano plot."),br(),
+                                   strong("(2024/8/9) Fix bugs regarding the ssGSEA in the MultiDEG."),br(),
+                                   strong("(2024/8/9) Add a pre-filter function for limma and edgeR."),br(),
+                                   strong("(2024/8/9) Add a function for gene extraction using 'Gene set' in the Normalized count analysis."),br(),
+                                   strong("(2024/8/9) Fix bugs regarding the import of count data (ENSEMBL ID)"),
                             )
                           )
                  )
