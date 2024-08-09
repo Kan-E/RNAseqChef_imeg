@@ -2,3 +2,4 @@
 .DS_Store
 data/.Rhistory
 .Rhistory
+data/hg19.ncbiRefSeq.gtf
