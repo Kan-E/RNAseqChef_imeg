@@ -1180,7 +1180,10 @@ shinyUI(
                               )
                      ),
                      tabPanel("ssGSEA",
-                              htmlOutput("Gene_set_ssGSEA"),
+                              fluidRow(
+                                column(4, htmlOutput("Gene_set_ssGSEA")),
+                              column(4, htmlOutput("Custom_input_ssGSEA"))
+                              ),
                               fluidRow(
                                 column(4, textOutput("multi_Spe1_ssGSEA"),
                                        tags$head(tags$style("#multi_Spe1_ssGSEA{color: red;
@@ -2100,6 +2103,24 @@ shinyUI(
                             column(12,
                             h2("Publications using RNAseqChef:"),
                             tags$ol(
+                              tags$li(HTML("Yasumura Y, Teshima T, Nagashima T, Michishita M, Taira Y, Suzuki R and Matsumoto H 
+                                            Effective enhancement of the immunomodulatory capacity of canine adipose-derived mesenchymal stromal cells on colitis by priming with colon tissue from mice with colitis. <b>Front. Vet. Sci.</b> 
+                                           (2024) <a href='https://doi.org/10.3389/fvets.2024.1437648'>https://doi.org/10.3389/fvets.2024.1437648</a>")),
+                              tags$li(HTML("Etoh K., Araki H., Koga T., Hino Y., Kuribayashi K., Hino S., & Nakao M. 
+                                           Citrate metabolism controls the senescent microenvironment via the remodeling of pro-inflammatory enhancers. <b>Cell Reports</b> 
+                                           (2024) <a href='https://doi.org/10.1016/j.celrep.2024.114496'>https://doi.org/10.1016/j.celrep.2024.114496</a>")),
+                              tags$li(HTML("Irawan A., & Bionaz M. Liver Transcriptomic Profiles of Ruminant Species Fed Spent Hemp Biomass Containing Cannabinoids. <b>Genes</b>
+                                           (2024) <a href='https://doi.org/10.3390/genes15070963'>https://doi.org/10.3390/genes15070963</a>")),
+                              tags$li(HTML("Carels N. (2024). Assessing RNA-Seq Workflow Methodologies Using Shannon Entropy. <b>Biology</b>
+                                           (2024) <a href='https://doi.org/10.3390/biology13070482'>https://doi.org/10.3390/biology13070482</a>")),
+                              tags$li(HTML("Toya H., Okamatsu-Ogura Y., Yokoi S., Kurihara M., Mito M., Iwasaki S., Hirose T., Nakagawa S. 
+                                           The essential role of architectural noncoding RNA Neat1 in cold-induced beige adipocyte differentiation in mice. <b>RNA</b> 
+                                           (2024) <a href='https://doi.org/10.1261/rna.079972.124'>https://doi.org/10.1261/rna.079972.124</a>")),
+                              tags$li(HTML("Nagai L.A.E., Lee S., & Nakato R. Protocol for identifying differentially expressed genes using the RumBall RNA-seq analysis platform. <b>STAR protocols</b>
+                                           (2024) <a href='https://doi.org/10.1016/j.xpro.2024.102926'>https://doi.org/10.1016/j.xpro.2024.102926</a>")),
+                              tags$li(HTML("Habib T.N., Altonsy M.O., Ghanem S.A., Salama M.S., & Hosny M.A.
+                                            Optimizing combination therapy in prostate cancer: mechanistic insights into the synergistic effects of Paclitaxel and Sulforaphane-induced apoptosis. <b>BMC Molecular and Cell Biology</b>
+                                           (2024) <a href='https://doi.org/10.1186/s12860-024-00501-z'>https://doi.org/10.1186/s12860-024-00501-z</a>")),
                               tags$li(HTML("Ohguchi H, Ohguchi Y, Kubota S, Etoh K, Hamashima A, Usuki A, Yokomizo-Nakano T, Bai J, Masuda T, Kawano Y, Harada T, Nakao M, Minami T, Hideshima T, Araki K, Sashida G.,
                                Multiple myeloma-associated DIS3 gene is essential for hematopoiesis but loss of DIS3 is insufficient for myelomagenesis.
                                       <b>Blood neoplasia</b> (2024) <a href='https://doi.org/10.1016/j.bneo.2024.100005'>https://doi.org/10.1016/j.bneo.2024.100005</a>")), 
@@ -2197,7 +2218,11 @@ shinyUI(
                                    "Tan, G., and Lenhard, B. (2016). TFBSTools: an R/bioconductor package for transcription factor
   binding site analysis. Bioinformatics 32, 1555-1556.",br(),
                                    "Hänzelmann, S., Castelo, R. and Guinney, A. GSVA: gene set variation analysis for
-  microarray and RNA-seq data. BMC Bioinformatics, 14:7, 2013."
+  microarray and RNA-seq data. BMC Bioinformatics, 14:7, 2013.",
+                                   "Malgorzata Nowicka, Mark D. Robinson (2016). DRIMSeq: a Dirichlet-multinomial framework for multivariate count
+  outcomes in genomics [version 2; referees: 2 approved]. F1000Research, 5(1356).",br(),
+                                   "Van den Berge K, Clement L (2022). _stageR: stageR: stage-wise analysis of high throughput gene expression data in R_.
+  R package version 1.18.0.",br(),
                                    )
                           )
                  ),

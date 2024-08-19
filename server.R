@@ -521,7 +521,7 @@ shinyServer(function(input, output, session) {
             stopifnot(!is.null(EBOut))
             PP <- as.data.frame(GetPPMat(EBOut))
             fc_res <- PostFC(EBOut)
-            results <- cbind(PP, fc_res$PostFC, fc_res$RealFC,unlist(EBOut$C1Mean)[rownames(PP)], unlist(EBOut$C2Mean)[rownames(PP)])
+            results <- cbind(PP, fc_res$PostFC, fc_res$RealFC,EBOut$Mean[rownames(PP),1], EBOut$Mean[rownames(PP),2])
             colnames(results) <- c("PPEE", "PPDE", "PostFC", "RealFC","C1Mean","C2Mean")
             res <- results[order(results[,"PPDE"], decreasing = TRUE),]
             incProgress(1)
@@ -2483,7 +2483,7 @@ shinyServer(function(input, output, session) {
             stopifnot(!is.null(EBOut))
             PP <- as.data.frame(GetPPMat(EBOut))
             fc_res <- PostFC(EBOut)
-            results <- cbind(PP, fc_res$PostFC, fc_res$RealFC,unlist(EBOut$C1Mean)[rownames(PP)], unlist(EBOut$C2Mean)[rownames(PP)])
+            results <- cbind(PP, fc_res$PostFC, fc_res$RealFC,EBOut$Mean[rownames(PP),1], EBOut$Mean[rownames(PP),2])
             colnames(results) <- c("PPEE", "PPDE", "PostFC", "RealFC","C1Mean","C2Mean")
             res <- results[order(results[,"PPDE"], decreasing = TRUE),]
             incProgress(1)
@@ -4529,11 +4529,32 @@ shinyServer(function(input, output, session) {
   )
   
   # Multi ssGSEA-----
+  Custom_input_ssGSEA <- reactive({
+    tmp <- input$custom_input_ssGSEA$datapath
+    data <- read_gene_list(tmp)
+    df <- gene_list_convert_for_enrichment(gene_type=gene_type6(),data= data, org=org6(),Species = input$Species6,Ortholog=ortholog6(),Isoform=isoform6())
+    return(df)
+  })
+  output$Custom_input_ssGSEA <- renderUI({
+    if(is.null(input$Gene_set_ssGSEA)){
+      return(NULL)
+    }else{
+      if(input$Gene_set_ssGSEA == "Custom gene set"){
+        fileInput("custom_input_ssGSEA",
+                  "Select a file (txt, csv, xlsx)",
+                  accept = c("txt", "csv","xlsx"),
+                  multiple = FALSE,
+                  width = "80%")
+      }else return(NULL)
+    }
+  })
   output$multi_Spe1_ssGSEA <- renderText({
     if(input$Species6 == "not selected") print("Please select 'Species'")
   })
   multi_Hallmark_set_ssGSEA <- reactive({
-    gene_set <- GeneList_for_enrichment(Species = input$Species6, Ortholog=input$Ortholog6,Biomart_archive=input$Biomart_archive6, Gene_set = input$Gene_set_ssGSEA, org = org6())
+    gene_set <- GeneList_for_enrichment(Species = input$Species6, Ortholog=input$Ortholog6,
+                                        Biomart_archive=input$Biomart_archive6, 
+                                        Gene_set = input$Gene_set_ssGSEA, Custom_gene_list = Custom_input_ssGSEA(),org = org6())
     my.symbols <- as.character(gene_set$entrez_gene)
     if(gene_type6() != "SYMBOL"){
       if(sum(is.element(no_orgDb, input$Species6)) == 1){
