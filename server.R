@@ -4532,8 +4532,12 @@ shinyServer(function(input, output, session) {
   Custom_input_ssGSEA <- reactive({
     tmp <- input$custom_input_ssGSEA$datapath
     data <- read_gene_list(tmp)
+    print(head(data))
+    print("gene_type")
+    print(gene_type6())
     df <- gene_list_convert_for_enrichment(gene_type=gene_type6(),data= data, org=org6(),Species = input$Species6,Ortholog=ortholog6(),Isoform=isoform6())
-    return(df)
+  print(head(df))
+      return(df)
   })
   output$Custom_input_ssGSEA <- renderUI({
     if(is.null(input$Gene_set_ssGSEA)){
@@ -4552,8 +4556,9 @@ shinyServer(function(input, output, session) {
     if(input$Species6 == "not selected") print("Please select 'Species'")
   })
   multi_Hallmark_set_ssGSEA <- reactive({
+    if(input$Gene_set_ssGSEA == "Custom gene set" && is.null(Custom_input_ssGSEA())) validate("")
     gene_set <- GeneList_for_enrichment(Species = input$Species6, Ortholog=input$Ortholog6,
-                                        Biomart_archive=input$Biomart_archive6, 
+                                        Biomart_archive=input$Biomart_archive6, gene_type = gene_type6(),
                                         Gene_set = input$Gene_set_ssGSEA, Custom_gene_list = Custom_input_ssGSEA(),org = org6())
     my.symbols <- as.character(gene_set$entrez_gene)
     if(gene_type6() != "SYMBOL"){
@@ -4598,6 +4603,7 @@ shinyServer(function(input, output, session) {
       count <- multi_deg_norm_count()
       print(head(count))
       withProgress(message = "ssGSEA",{
+        if(input$Gene_set_ssGSEA == "Custom gene set" && is.null(Custom_input_ssGSEA())) validate("")
         result <- ssGSEA(norm_count = count,gene_set = multi_Hallmark_set_ssGSEA(), org = org6(),
                        gene_type=gene_type6(),Species=input$Species6,Ortholog=input$Ortholog6)
         return(result)
@@ -4976,8 +4982,13 @@ shinyServer(function(input, output, session) {
       count2 <- merge(geneset, count, by = 0)
       rownames(count2) <- count2$GeneID
       if(input$Gene_set_ssGSEA == "DoRothEA regulon (activator)" || 
-        input$Gene_set_ssGSEA == "DoRothEA regulon (repressor)") num <- -1 else num <- 0
+        input$Gene_set_ssGSEA == "DoRothEA regulon (repressor)") {
+        num <- -1
+        }else if(input$Gene_set_ssGSEA =="Custom gene set"){
+          num <- dim(geneset)[2]-5
+          }else num <- 0
       count2 <- count2[,-1:-(6+num)]
+      print(head(geneset))
       return(count2)
     }
   })
@@ -4986,6 +4997,11 @@ shinyServer(function(input, output, session) {
     count <- multi_norm_count_for_ssGSEA_selected_id()
     if(length(grep("SYMBOL", colnames(count))) != 0) norm_count <- count[, - which(colnames(count) == "SYMBOL")] else norm_count <- count
     score <- multi_ssGSEA_df_selected_id()
+    print("score")
+    print(head(as.numeric(score)))
+    print(head(norm_count))
+    print(dim(score))
+    print(dim(norm_count))
     if(!is.null(norm_count)){
       df2 <- data.frame(matrix(rep(NA, 4), nrow=1))[numeric(0), ]
       for(i in rownames(norm_count)){
@@ -5002,6 +5018,7 @@ shinyServer(function(input, output, session) {
         df2 <- rbind(df2,df)
         }
       }
+      print(head(df2))
       label <- c("Gene","statistics","corr_score","pvalue")
       if(length(grep("SYMBOL", colnames(count))) != 0) label <- c(label,"Unique_ID")
       colnames(df2) <- label
@@ -5021,16 +5038,26 @@ shinyServer(function(input, output, session) {
   multi_ssGSEA_contribute_cor_count <- reactive({
     if(!is.null(multi_ssGSEA_contribute_cor())){
       norm_count <- multi_norm_count_for_ssGSEA_selected_id()
+      print("norm_count")
+      print(head(norm_count))
       data <- multi_ssGSEA_contribute_cor() %>% 
         dplyr::filter(ssGSEAscore_vs_Expression == "positive_correlation")
       rownames(data) <- data$Gene
+      print("data")
+      print(head(data))
       count <- merge(data, norm_count, by=0)
       rownames(count) <- count$Gene
+      print("count")
+      print(head(count))
       if(length(grep("SYMBOL", colnames(count))) != 0) rownames(count) <- count$Unique_ID
       count <- count[,-1:-7]
-      if(length(grep("SYMBOL", colnames(count))) != 0) count <- count[,-1]
+      print("count")
+      print(head(count))
+      if(length(grep("SYMBOL", colnames(count))) != 0){
+        count <- count[,-1]
       count <- count[, - which(colnames(count) == "SYMBOL")]
-      head(count)
+      }
+      print(head(count))
       return(count)
     }
   })
@@ -5041,6 +5068,7 @@ shinyServer(function(input, output, session) {
       for(i in 1:length(rownames(data))){
         rownames(data)[i] <- paste(strwrap(rownames(data)[i], width = 10),collapse = "\n")
       }
+      print(head(data))
       p <- GOIboxplot(data = data)
       return(p)
     }
