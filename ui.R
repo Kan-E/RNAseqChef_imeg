@@ -169,7 +169,8 @@ shinyUI(
                                                              ), selected = "ON")),
                                       
                                       column(6, conditionalPanel(condition=c("input.pair_prefilterON=='ON'"),
-                                             numericInput("pair_prefilter", "Minimum count required for at least some samples", value = 10)
+                                             numericInput("pair_prefilter", "Minimum count required for at least some samples", value = 10),
+                                             numericInput("pair_prefilterTotal", "Minimum total count required", value = 15)
                                              )
                                       )
                                       )
@@ -844,7 +845,8 @@ shinyUI(
                                                                'OFF'="OFF"
                                                              ), selected = "ON")),
                                       column(6, conditionalPanel(condition=c("input.multi_prefilterON=='ON'"),
-                                             numericInput("multi_prefilter", "Minimum count required for at least some samples", value = 0))
+                                             numericInput("multi_prefilter", "Minimum count required for at least some samples", value = 0),
+                                             numericInput("multi_prefilterTotal", "Minimum total count required", value = 15))
                                       )
                                     ),
                                     fluidRow(

@@ -360,8 +360,14 @@ shinyServer(function(input, output, session) {
   })
   # pair-wise DEG ------------------------------------------------------------------------------
   observeEvent(input$DEG_method,({
-    if(input$DEG_method == "edgeR") updateNumericInput(session,"pair_prefilter", "Minimum count required for at least some samples", value = 10)
-    if(input$DEG_method == "limma") updateNumericInput(session,"pair_prefilter", "Minimum count required for at least some samples", value = 0)
+    if(input$DEG_method == "edgeR") {
+      updateNumericInput(session,"pair_prefilter", "Minimum count required for at least some samples", value = 10)
+      updateNumericInput(session,"pair_prefilterTotal", "Minimum total count required", value = 15)
+    }
+    if(input$DEG_method == "limma") {
+      updateNumericInput(session,"pair_prefilter", "Minimum count required for at least some samples", value = 0)
+      updateNumericInput(session,"pair_prefilterTotal", "Minimum total count required", value = 15)
+    }
   }))
     dds <- reactive({
     count <- d_row_count_matrix()
@@ -389,7 +395,7 @@ shinyServer(function(input, output, session) {
           group <- factor(collist)
           dds <- DGEList(counts = count, group = group)
           if(input$pair_prefilterON == "ON"){
-          keep <- filterByExpr(dds,min.count=input$pair_prefilter)
+          keep <- filterByExpr(dds,min.count=input$pair_prefilter,min.total.count=input$pair_prefilterTotal)
           dds = dds[keep, , keep.lib.sizes=FALSE]
           }
           dds <- calcNormFactors(dds)
@@ -471,7 +477,7 @@ shinyServer(function(input, output, session) {
             ##pre-filtering
             if(input$pair_prefilterON == "ON"){
             dds <- DGEList(counts = count, group = group)
-            keep <- filterByExpr(dds,min.count=input$pair_prefilter)
+            keep <- filterByExpr(dds,min.count=input$pair_prefilter,min.total.count=input$pair_prefilterTotal)
             dds = dds[keep, , keep.lib.sizes=FALSE]
             count <- dds$counts
             }
@@ -2395,7 +2401,7 @@ shinyServer(function(input, output, session) {
           group <- factor(collist)
           dds <- DGEList(counts = count, group = group)
           if(input$pair_prefilterON == "ON"){
-          keep <- filterByExpr(dds)
+          keep <- filterByExpr(dds,min.count=input$pair_prefilter,min.total.count=input$pair_prefilterTotal)
           dds = dds[keep, , keep.lib.sizes=FALSE]
           }
           dds <- calcNormFactors(dds)
@@ -2459,7 +2465,7 @@ shinyServer(function(input, output, session) {
             ##pre-filtering
             if(input$pair_prefilterON == "ON"){
               dds <- DGEList(counts = count, group = group)
-              keep <- filterByExpr(dds,min.count=input$pair_prefilter)
+              keep <- filterByExpr(dds,min.count=input$pair_prefilter,min.total.count=input$pair_prefilterTotal)
               dds = dds[keep, , keep.lib.sizes=FALSE]
               count <- dds$counts
             }
@@ -2563,7 +2569,7 @@ shinyServer(function(input, output, session) {
             group <- factor(collist)
             dds <- DGEList(counts = count, group = group)
             if(input$pair_prefilterON == "ON"){
-            keep <- filterByExpr(dds)
+            keep <- filterByExpr(dds,min.count=input$pair_prefilter,min.total.count=input$pair_prefilterTotal)
             dds = dds[keep, , keep.lib.sizes=FALSE]
             }
             dds <- calcNormFactors(dds, method = "TMM")
@@ -3162,7 +3168,7 @@ shinyServer(function(input, output, session) {
           if(input$multi_prefilterON == "ON"){
           ##pre-filtering
           dds <- DGEList(counts = count, group = group)
-          keep <- filterByExpr(dds,min.count=input$multi_prefilter)
+          keep <- filterByExpr(dds,min.count=input$multi_prefilter,min.total.count=input$multi_prefilterTotal)
           dds = dds[keep, , keep.lib.sizes=FALSE]
           count <- dds$counts
           }
