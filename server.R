@@ -360,8 +360,8 @@ shinyServer(function(input, output, session) {
   })
   # pair-wise DEG ------------------------------------------------------------------------------
   observeEvent(input$DEG_method,({
-    if(input$DEG_method == "edgeR") updateNumericInput(session,"pair_prefilter", "Pre-filtering (to remove low count)", value = 10)
-    if(input$DEG_method == "limma") updateNumericInput(session,"pair_prefilter", "Pre-filtering (to remove low count)", value = 0)
+    if(input$DEG_method == "edgeR") updateNumericInput(session,"pair_prefilter", "Minimum count required for at least some samples", value = 10)
+    if(input$DEG_method == "limma") updateNumericInput(session,"pair_prefilter", "Minimum count required for at least some samples", value = 0)
   }))
     dds <- reactive({
     count <- d_row_count_matrix()
@@ -388,8 +388,10 @@ shinyServer(function(input, output, session) {
         withProgress(message = "edgeR",{
           group <- factor(collist)
           dds <- DGEList(counts = count, group = group)
+          if(input$pair_prefilterON == "ON"){
           keep <- filterByExpr(dds,min.count=input$pair_prefilter)
           dds = dds[keep, , keep.lib.sizes=FALSE]
+          }
           dds <- calcNormFactors(dds)
           if(input$paired_sample == "Yes"){
             if(!is.null(d_paired_sample_file())) {
@@ -467,10 +469,12 @@ shinyServer(function(input, output, session) {
             group <- factor(collist)
             
             ##pre-filtering
+            if(input$pair_prefilterON == "ON"){
             dds <- DGEList(counts = count, group = group)
             keep <- filterByExpr(dds,min.count=input$pair_prefilter)
             dds = dds[keep, , keep.lib.sizes=FALSE]
             count <- dds$counts
+            }
             
             count <- log(count + 1,2)
             eset = new("ExpressionSet", exprs=as.matrix(count))
@@ -2390,8 +2394,10 @@ shinyServer(function(input, output, session) {
         if (input$DEG_method == "edgeR") {
           group <- factor(collist)
           dds <- DGEList(counts = count, group = group)
+          if(input$pair_prefilterON == "ON"){
           keep <- filterByExpr(dds)
           dds = dds[keep, , keep.lib.sizes=FALSE]
+          }
           dds <- calcNormFactors(dds)
           dds <- estimateCommonDisp(dds)
           dds <- estimateTagwiseDisp(dds)
@@ -2450,6 +2456,13 @@ shinyServer(function(input, output, session) {
             collist <- gsub(" ", ".", collist)
             collist <- gsub("\\+", ".", collist)
             group <- factor(collist)
+            ##pre-filtering
+            if(input$pair_prefilterON == "ON"){
+              dds <- DGEList(counts = count, group = group)
+              keep <- filterByExpr(dds,min.count=input$pair_prefilter)
+              dds = dds[keep, , keep.lib.sizes=FALSE]
+              count <- dds$counts
+            }
             count <- log(count + 1,2)
             eset = new("ExpressionSet", exprs=as.matrix(count))
             design <- model.matrix(~0+collist)
@@ -2549,8 +2562,10 @@ shinyServer(function(input, output, session) {
           }else{
             group <- factor(collist)
             dds <- DGEList(counts = count, group = group)
+            if(input$pair_prefilterON == "ON"){
             keep <- filterByExpr(dds)
             dds = dds[keep, , keep.lib.sizes=FALSE]
+            }
             dds <- calcNormFactors(dds, method = "TMM")
             normalized_counts <- cpm(dds)
           }
@@ -3073,7 +3088,7 @@ shinyServer(function(input, output, session) {
   
   # Multi DEG ------------------------------------------------------------------------------
   observeEvent(input$DEG_method,({
-    if(input$DEG_method == "limma") updateNumericInput(session,"multi_prefilter", "Pre-filtering (to remove low count)", value = 0)
+    if(input$DEG_method == "limma") updateNumericInput(session,"multi_prefilter", "Minimum count required for at least some samples", value = 0)
   }))
   multi_dds <- reactive({
     count <- multi_d_row_count_matrix()
@@ -3144,11 +3159,13 @@ shinyServer(function(input, output, session) {
           collist <- gsub(" ", ".", collist)
           group <- factor(collist)
           
+          if(input$multi_prefilterON == "ON"){
           ##pre-filtering
           dds <- DGEList(counts = count, group = group)
           keep <- filterByExpr(dds,min.count=input$multi_prefilter)
           dds = dds[keep, , keep.lib.sizes=FALSE]
           count <- dds$counts
+          }
           
           count <- log(count + 1,2)
           if(is.element(TRUE, duplicated(collist)) == TRUE){

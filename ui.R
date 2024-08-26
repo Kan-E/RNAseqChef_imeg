@@ -161,7 +161,17 @@ shinyUI(
                                   'limma for normalized count data'="limma"
                                 ),selected = "DESeq2"),
                    conditionalPanel(condition=c("input.DEG_method=='limma' || input.DEG_method=='edgeR'"),
-                                    numericInput("pair_prefilter", "Pre-filtering (to remove low count)", value = 10)
+                                    fluidRow(
+                                      column(6, radioButtons("pair_prefilterON","Pre-filtering (to remove low count)",
+                                                             c('ON'="ON",
+                                                               'OFF'="OFF"
+                                                             ), selected = "ON")),
+                                      
+                                      column(6, conditionalPanel(condition=c("input.pair_prefilterON=='ON'"),
+                                             numericInput("pair_prefilter", "Minimum count required for at least some samples", value = 10)
+                                             )
+                                      )
+                                      )
                    ),
                    conditionalPanel(condition=c("input.DEG_method=='DESeq2' || input.DEG_method=='edgeR'"),
                                     selectInput("FDR_method", "FDR method", c("BH", "Qvalue", "IHW"), selected = "BH")
@@ -827,7 +837,15 @@ shinyUI(
                                            "Limma is for normalized count data, such as ", strong("CPM (RPM)")," and ", strong("proteomics data"), " (normalized protein abandunce).<br><br>"),
                              placement = "right",options = list(container = "body")),
                    conditionalPanel(condition="input.DEG_method_multi=='limma'",
-                                    numericInput("multi_prefilter", "Pre-filtering (to remove low count)", value = 0),
+                                    fluidRow(
+                                      column(6, radioButtons("multi_prefilterON","Pre-filtering (to remove low count)",
+                                                             c('ON'="ON",
+                                                               'OFF'="OFF"
+                                                             ), selected = "ON")),
+                                      column(6, conditionalPanel(condition=c("input.multi_prefilterON=='ON'"),
+                                             numericInput("multi_prefilter", "Minimum count required for at least some samples", value = 0))
+                                      )
+                                    ),
                                     fluidRow(
                                       column(6, radioButtons("limma_trend_multi","Trend",
                                                              c('TRUE'=TRUE,
