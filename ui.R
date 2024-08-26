@@ -846,7 +846,7 @@ shinyUI(
                                                              ), selected = "ON")),
                                       column(6, conditionalPanel(condition=c("input.multi_prefilterON=='ON'"),
                                              numericInput("multi_prefilter", "Minimum count required for at least some samples", value = 0),
-                                             numericInput("multi_prefilterTotal", "Minimum total count required", value = 15))
+                                             numericInput("multi_prefilterTotal", "Minimum total count required", value = 0))
                                       )
                                     ),
                                     fluidRow(
@@ -2125,6 +2125,8 @@ shinyUI(
                             column(12,
                             h2("Publications using RNAseqChef:"),
                             tags$ol(
+                              tags$li(HTML("Tanaka M., Toyonaga T., Nakagawa F., Iwamoto T., Komatsu A., Sumiyoshi N., Shibuya N., Minemura A., Ariyoshi T., Matsumoto A., Oka K., Shimoda M., & Saruta M. Exploring 3-Aminobenzoic Acid as a Therapeutic Dietary Component for Enhancing Intestinal Barrier Integrity in Ulcerative Colitis. <b> bioRxiv</b> 
+                                           (2024) <a href='https://doi.org/10.1101/2024.08.18.608525'>https://doi.org/10.1101/2024.08.18.608525</a>")),
                               tags$li(HTML("Yasumura Y, Teshima T, Nagashima T, Michishita M, Taira Y, Suzuki R and Matsumoto H 
                                             Effective enhancement of the immunomodulatory capacity of canine adipose-derived mesenchymal stromal cells on colitis by priming with colon tissue from mice with colitis. <b>Front. Vet. Sci.</b> 
                                            (2024) <a href='https://doi.org/10.3389/fvets.2024.1437648'>https://doi.org/10.3389/fvets.2024.1437648</a>")),

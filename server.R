@@ -366,7 +366,7 @@ shinyServer(function(input, output, session) {
     }
     if(input$DEG_method == "limma") {
       updateNumericInput(session,"pair_prefilter", "Minimum count required for at least some samples", value = 0)
-      updateNumericInput(session,"pair_prefilterTotal", "Minimum total count required", value = 15)
+      updateNumericInput(session,"pair_prefilterTotal", "Minimum total count required", value = 0)
     }
   }))
     dds <- reactive({
