@@ -1,12 +1,9 @@
-##ssGSEA EMSEMBL IDの時highly correlated genesのx軸がズレる
-##ENS 小数点以下でエラー 修正完了
-##limma, edgeR prefilter 完了
-## multi-DEGにlimmaの追加 完了
-## graph design 追加完了
+## eulerr追加
 
 ## limma, 数字から始まるサンプル名によるエラー
 ## proteinIDへの対応
 ## Receptor-Ligand interaction
+
 
 ##isoform経過：gene_type, no_org_ID, ensembl2geneID完了
 library(shiny)
@@ -60,6 +57,7 @@ library(statmod)
 library(DRIMSeq)
 library(stageR)
 library(ggtranscript) ##devtools::install_github("dzhang32/ggtranscript")
+library(eulerr)
 options(repos = BiocManager::repositories())
 file.copy("Rmd/pair_report.Rmd",file.path(tempdir(),"pair_report.Rmd"), overwrite = TRUE)
 file.copy("Rmd/pair_batch_report.Rmd",file.path(tempdir(),"pair_batch_report.Rmd"), overwrite = TRUE)
@@ -71,7 +69,9 @@ gene_set_list <- c("MSigDB Hallmark", "KEGG", "Reactome", "PID (Pathway Interact
                    "BioCarta","WikiPathways", "GO biological process", 
                    "GO cellular component","GO molecular function", "Human phenotype ontology", 
                    "DoRothEA regulon (activator)", "DoRothEA regulon (repressor)",
-                   "Transcription factor targets", "miRNA target","Position","Custom gene set")
+                   "Transcription factor targets", "miRNA target","Position",
+                   "CGP (chemical and genetic pertubations)","ImmuneSigDB","VAX (vaccine response)",
+                   "Cell type signature","Custom gene set")
 biomart_data <- read.table("https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/non-model.txt",sep = "\t", row.names = 1,header = T,quote = "")
 biomart_plants <- read.table("https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/non-model_plants.txt",sep = "\t",header = T,quote = "")
 biomart_fungi <- read.table("https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/non-model_fungi.txt",sep = "\t",header = T,quote = "")
@@ -149,7 +149,7 @@ read_df <- function(tmp, Species=NULL){
       df <- df[rownames(df) != "",]
     }
     }
-    if(sum(!str_detect(rownames(df),"\\.")) == 0) rownames(df) <- gsub("\\..+$", "",rownames(df))
+    if(sum(!str_detect(rownames(df),"\\.")) == 0  & !str_detect(rownames(df)[1],"chr")) rownames(df) <- gsub("\\..+$", "",rownames(df))
     return(df)
     }
   }
@@ -1512,6 +1512,24 @@ GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene
         H_t2g <- H_t2g %>% dplyr::filter(gs_subcat == "TFT:GTRD" | gs_subcat == "TFT:TFT_Legacy") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
       }
+    if(Gene_set == "CGP (chemical and genetic pertubations)"){
+      H_t2g <- msigdbr(species = species, category = "C2", subcategory = "CGP") %>%
+        dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
+    }
+    if(Gene_set == "ImmuneSigDB"){
+      H_t2g <- msigdbr(species = species, category = "C7")
+      H_t2g <- H_t2g %>% dplyr::filter(gs_subcat == "C7" | gs_subcat == "IMMUNESIGDB") %>%
+        dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
+    }
+    if(Gene_set == "VAX (vaccine response)"){
+      H_t2g <- msigdbr(species = species, category = "C7")
+      H_t2g <- H_t2g %>% dplyr::filter(gs_subcat == "C7" | gs_subcat == "VAX") %>%
+        dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
+    }
+    if(Gene_set == "Cell type signature"){
+      H_t2g <- msigdbr(species = species, category = "C8") %>%
+        dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
+    }
       if(Gene_set == "Reactome"){
         H_t2g <- msigdbr::msigdbr(species = species, category = "C2", subcategory = "CP:REACTOME") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
@@ -1611,7 +1629,7 @@ GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene
   }else return(NULL)
 }
 GOI_color_palette<-c("default","Set1","Set2","Set3","Paired","Dark2","Accent","Spectral")
-GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",ymin=0,
+GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",ymin=0, ylabel=NULL,
                        pair=NULL,ssGSEA=FALSE,color_design="new",color="default",rev="OFF"){
   print("GOIboxplot start")
   collist <- gsub("\\_.+$", "", colnames(data))
@@ -1722,10 +1740,10 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",ymin=0,
   }else{
     if(ssGSEA == FALSE) {
       if(is.na(ymin)) ylim <- NULL else ylim = c(ymin, NA)
-      ylab = "Normalized_count"
+      if(is.null(ylabel)) ylab = "Normalized_count" else ylab = ylabel
     }else {
       ylim = NULL
-      ylab = "ssGSEA score"
+      if(is.null(ylabel)) ylab = "ssGSEA score" else ylab = ylabel
     }
     if (plottype == "Boxplot"){
       if(color_design=="new"){

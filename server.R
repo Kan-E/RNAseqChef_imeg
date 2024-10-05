@@ -210,6 +210,10 @@ shinyServer(function(input, output, session) {
                            choices = colnames(pre_d_row_count_matrix()),selected = colnames(pre_d_row_count_matrix()))
     }
   }))
+  observeEvent(input$Level_pair,{
+    if(input$Level_pair == "transcript_level") showTab(inputId = "pair_tabs", target = "DTU analysis") else
+      hideTab(inputId = "pair_tabs", target = "DTU analysis")
+  })
   output$paired_sample_file <- renderUI({
     if(input$paired_sample == "Yes"){
       fileInput("paired_sample_file","Select a paired-sample file.",accept = c("txt", "csv","xlsx"),
@@ -7745,7 +7749,7 @@ shinyServer(function(input, output, session) {
     if(is.null(data) || is.null(input$statistics)){
       p <- NULL
     }else{
-      p <- GOIboxplot(data = data,statistical_test =input$statistics,color_design=input$Color_design_norm,
+      p <- GOIboxplot(data = data,statistical_test =input$statistics,color_design=input$Color_design_norm,ylab=input$norm_ylab,
                       plottype=input$PlotType,color = input$Color_norm,rev=input$Color_rev_norm,ymin=input$norm_ymin)
     }
     return(p)
@@ -8796,6 +8800,9 @@ shinyServer(function(input, output, session) {
     updateSelectInput(session,inputId = "Species7","Species",species_list, selected = "Mus musculus")
   }))
   
+  output$eulerr_label <- renderUI({
+    if(input$venn_type == "eulerr") radioButtons("eulerr_label","label",c("ON"="ON","OFF"="OFF"),"ON")
+  })
   output$venn <- renderPlot({
     if(is.null(files_table())){
       return(NULL)
@@ -8805,7 +8812,13 @@ shinyServer(function(input, output, session) {
         names(gene_list)[i] <- gsub("_", " ", names(gene_list)[i])
         names(gene_list)[i] <- paste(strwrap(names(gene_list)[i], width = 15),collapse = "\n")
       }
-      venn::venn(gene_list, ilabels = TRUE, zcolor = "style", opacity = 0, ilcs = 1.5, sncs = 1.5)
+      if(input$venn_type == "default") venn::venn(gene_list, ilabels = TRUE, zcolor = "style", opacity = 0, ilcs = 1.5, sncs = 1.5) else{
+        if(input$eulerr_label =="ON") label=list(cex=2) else label=NULL
+        plot(euler(gene_list, shape = "ellipse"), 
+             labels = label,quantities = list(type="counts",cex=2),
+             edges = list(col=as.vector(seq(1,length(names(gene_list)))),lex = 2),
+             fills = list(fill=rep("white",length(names(gene_list)))),legend = list(side = "right",cex=2)) 
+      }
     }
   })
   
@@ -8858,7 +8871,8 @@ shinyServer(function(input, output, session) {
             pdf_width <- 3
           }else pdf_width <- input$venn_pdf_width
           pdf(file, height = pdf_height, width = pdf_width)
-          print((venn::venn(gene_list, ilabels = TRUE, zcolor = "style", opacity = 0, ilcs = 1, sncs = 1 )))
+          if(input$venn_type == "default") venn::venn(gene_list, ilabels = TRUE, zcolor = "style", opacity = 0, ilcs = 1.5, sncs = 1.5) else
+            plot(euler(gene_list, shape = "ellipse"), quantities = TRUE)
           dev.off()
           incProgress(1)
         })

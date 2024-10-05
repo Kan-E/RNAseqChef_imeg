@@ -52,7 +52,9 @@ shinyUI(
                           tags$li(HTML("Function for paired-sample analysis in pair-wise DEG.")),
                           tags$li(HTML("Enrichment analysis using the custom gene set.")),
                         ),
-                        h4("Current version (v1.1.2-beta, 2024/9/5)"),
+                        h4("Current version (v1.1.2-beta, 2024/10/5)"),
+                        p("(2024/10/5) Add an eulerr package for venn diagram."),
+                        p("(2024/10/5) Add new gene sets for enrichment analysis."),
                         p("(2024/9/5) Improve the pre-filtering functions in the pair-wise DEG and MultiDEG."),
                         p("(2024/9/5) Fix bugs regarding ssGSEA in the MultiDEG."),
                         p("(2024/9/5) Add a function for transcript-level analysis."),
@@ -292,7 +294,7 @@ shinyUI(
                  # Main Panel -------------------------------------
                  mainPanel(
                    tabsetPanel(
-                     type = "tabs",
+                     type = "tabs",id = "pair_tabs",
                      tabPanel("Input Data",
                               bsCollapse(id="input_collapse_panel",open="Row_count_panel",multiple = FALSE,
                                          bsCollapsePanel(title="Count_matrix:",
@@ -1398,6 +1400,10 @@ shinyUI(
                               fluidRow(
                                 column(4, downloadButton("download_vennplot", "Download venn diagram"))
                               ),
+                              fluidRow(
+                                column(4,radioButtons("venn_type","venn_type",c("default"="default","eulerr"="eulerr"),"default")),
+                                column(4,htmlOutput("eulerr_label"))
+                              ),
                               plotOutput("venn"),
                               downloadButton("download_venn_result", "Download venn result"),
                               dataTableOutput("venn_result")
@@ -1670,7 +1676,10 @@ shinyUI(
                                 column(3, htmlOutput("Color_norm")),
                                 column(3, htmlOutput("Color_rev_norm"))
                               ),
-                              numericInput("norm_ymin","min value of y-axis",value = 0),
+                              fluidRow(
+                                column(3, numericInput("norm_ymin","min value of y-axis",value = 0)),
+                                column(3, textInput("norm_ylab","title of y-axis","Normalized count"))
+                              ),
                               htmlOutput("statistics"),
                               downloadButton("download_norm_GOIbox", "Download boxplot"),
                               div(
