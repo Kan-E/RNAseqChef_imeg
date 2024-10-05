@@ -4823,6 +4823,10 @@ shinyServer(function(input, output, session) {
     if(is.null(data)){
       ht <- NULL
     }else{
+      rownames(data) <- gsub("_"," ", rownames(data))
+      for(i in 1:length(rownames(data))){
+        rownames(data)[i] <- paste(strwrap(rownames(data)[i], width = 10),collapse = "\n")
+      }
       ht <- GOIheatmap(data, type = input$GOI_type_multi_ssGSEA, GOI = input$GOI_multi_ssGSEA,all=input$GOI_type_multi_ssGSEA_all)
     }
     return(ht)
