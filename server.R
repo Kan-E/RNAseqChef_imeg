@@ -223,7 +223,7 @@ shinyServer(function(input, output, session) {
   d_paired_sample_file <- reactive({
     if(!is.null(input$sample_order)){
       tmp <- input$paired_sample_file$datapath
-      if(is.null(input$paired_sample_file) && input$goButton > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/paired.csv"
+      if(is.null(input$paired_sample_file) && input$goButton > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef_imeg/main/data/241011_test_paired.csv"
       print(tmp)
       df <- read_df(tmp = tmp)
       if(!is.null(df)) {
@@ -256,12 +256,12 @@ shinyServer(function(input, output, session) {
     withProgress(message = "Importing row count matrix, please wait",{
       if (input$data_file_type == "Row1"){
         tmp <- input$file3$datapath
-        if(is.null(input$file3) && input$goButton > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/example1.txt"
+        if(is.null(input$file3) && input$goButton > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef_imeg/main/data/241011_test.txt"
         return(read_df(tmp = tmp))
       }
       if (input$data_file_type == "Row2"){
         tmp <- input$file1$datapath
-        if(is.null(input$file1) && input$goButton > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/example2.csv"
+        if(is.null(input$file1) && input$goButton > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef_imeg/main/data/241011_test.txt"
         return(read_df(tmp = tmp))
       }
     })
@@ -271,7 +271,7 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       tmp <- input$file2$datapath
-      if(is.null(input$file2) && input$goButton > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/example3.csv"
+      if(is.null(input$file2) && input$goButton > 0 )  tmp = tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef_imeg/main/data/241011_test_meta.txt"
       df <- read_df(tmp = tmp)
       if(!is.null(df)) rownames(df) <- gsub("-",".",rownames(df))
       return(df)
@@ -291,7 +291,15 @@ shinyServer(function(input, output, session) {
             meta <- data.frame(characteristics = meta[,1], row.names = rownames(meta))
             colname <- colnames(meta)
             data <- merge(meta, row_t, by=0, sort = F)
-            if(dim(data)[1] == 0) validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
+            if(dim(data)[1] == 0) {
+              rownames(meta) <- gsub("\\.","-",rownames(meta))
+              data <- merge(meta, row_t, by=0, sort = F)
+              if(dim(data)[1] == 0) {
+                rownames(row_t) <- gsub("\\.","-",rownames(row_t))
+                data <- merge(meta, row_t, by=0, sort = F)
+                validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
+              }
+            }
             rownames(data) <- data$characteristics
             data2 <- data[, - which(colnames(data) %in% c("Row.names", colname))]
             data2_t <- t(data2)
@@ -335,7 +343,15 @@ shinyServer(function(input, output, session) {
           meta <- data.frame(characteristics = meta[,1], row.names = rownames(meta))
           colname <- colnames(meta)
           data <- merge(meta, row_t, by=0, sort = F)
-          if(dim(data)[1] == 0) validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
+          if(dim(data)[1] == 0) {
+            rownames(meta) <- gsub("\\.","-",rownames(meta))
+            data <- merge(meta, row_t, by=0, sort = F)
+            if(dim(data)[1] == 0) {
+              rownames(row_t) <- gsub("\\.","-",rownames(row_t))
+              data <- merge(meta, row_t, by=0, sort = F)
+              validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
+            }
+          }
           rownames(data) <- data$characteristics
           data2 <- data[, - which(colnames(data) %in% c("Row.names", colname))]
           data2_t <- t(data2)
@@ -3019,12 +3035,12 @@ shinyServer(function(input, output, session) {
     withProgress(message = "Importing row count matrix, please wait",{
       if (input$multi_data_file_type == "Row1"){
         tmp <- input$multi_file1$datapath
-        if(is.null(input$multi_file1) && input$goButton6 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/example4.txt"
+        if(is.null(input$multi_file1) && input$goButton6 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef_imeg/main/data/241011_test.txt"
         return(read_df(tmp = tmp))
       }
       if (input$multi_data_file_type == "Row2"){
         tmp <- input$multi_file2$datapath
-        if(is.null(input$multi_file2) && input$goButton6 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/example8.txt"
+        if(is.null(input$multi_file2) && input$goButton6 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef_imeg/main/data/241011_test.txt"
         return(read_df(tmp = tmp))
       }
     })
@@ -3034,7 +3050,7 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       tmp <- input$multi_file3$datapath
-      if(is.null(input$multi_file3) && input$goButton6 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/example5.csv"
+      if(is.null(input$multi_file3) && input$goButton6 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef_imeg/main/data/241011_test_metamulti.txt"
       df <- read_df(tmp = tmp)
       if(!is.null(df)){
         rownames(df) <- gsub("-",".",rownames(df))
@@ -3061,7 +3077,15 @@ shinyServer(function(input, output, session) {
         row_t <- t(row)
         colname <- colnames(meta)
         data <- merge(meta, row_t, by=0, sort = F)
-        if(dim(data)[1] == 0) validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
+        if(dim(data)[1] == 0) {
+          rownames(meta) <- gsub("\\.","-",rownames(meta))
+          data <- merge(meta, row_t, by=0, sort = F)
+          if(dim(data)[1] == 0) {
+            rownames(row_t) <- gsub("\\.","-",rownames(row_t))
+            data <- merge(meta, row_t, by=0, sort = F)
+            validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
+          }
+        }
         rownames(data) <- data[,1]
         data2 <- data[, - which(colnames(data) %in% c("Row.names", colname))]
         data2 <- data2[,1:length(rownames(row))]
@@ -6024,7 +6048,15 @@ shinyServer(function(input, output, session) {
           meta <- data.frame(characteristics = meta[,1], row.names = rownames(meta))
           colname <- colnames(meta)
           data <- merge(meta, row_t, by=0, sort = F)
-          if(dim(data)[1] == 0) validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
+          if(dim(data)[1] == 0) {
+            rownames(meta) <- gsub("\\.","-",rownames(meta))
+            data <- merge(meta, row_t, by=0, sort = F)
+            if(dim(data)[1] == 0) {
+              rownames(row_t) <- gsub("\\.","-",rownames(row_t))
+              data <- merge(meta, row_t, by=0, sort = F)
+              validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
+            }
+          }
           rownames(data) <- data$characteristics
           data2 <- data[, - which(colnames(data) %in% c("Row.names", colname))]
           data2_t <- t(data2)
@@ -6071,7 +6103,15 @@ shinyServer(function(input, output, session) {
         meta <- data.frame(characteristics = meta[,1], row.names = rownames(meta))
         colname <- colnames(meta)
         data <- merge(meta, row_t, by=0, sort = F)
-        if(dim(data)[1] == 0) validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
+        if(dim(data)[1] == 0) {
+          rownames(meta) <- gsub("\\.","-",rownames(meta))
+          data <- merge(meta, row_t, by=0, sort = F)
+          if(dim(data)[1] == 0) {
+            rownames(row_t) <- gsub("\\.","-",rownames(row_t))
+            data <- merge(meta, row_t, by=0, sort = F)
+            validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
+          }
+        }
         rownames(data) <- data$characteristics
         data2 <- data[, - which(colnames(data) %in% c("Row.names", colname))]
         data2_t <- t(data2)
@@ -7257,7 +7297,7 @@ shinyServer(function(input, output, session) {
         return(read_df(tmp = tmp))
       }else{
         tmp <- input$file8$datapath
-        if(is.null(input$file8) && input$goButton3 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/example2.csv"
+        if(is.null(input$file8) && input$goButton3 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef_imeg/main/data/241011_test.txt"
         return(read_df(tmp = tmp))
       }
       incProgress(1)
@@ -7268,7 +7308,7 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       tmp <- input$file9$datapath
-      if(is.null(input$file9) && input$goButton3 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/example9.csv"
+      if(is.null(input$file9) && input$goButton3 > 0 )  "https://raw.githubusercontent.com/Kan-E/RNAseqChef_imeg/main/data/241011_test_meta.txt"
       df <- read_df(tmp = tmp)
       if(!is.null(df)) rownames(df) <- gsub("-",".",rownames(df))
       return(df)
@@ -7353,7 +7393,15 @@ shinyServer(function(input, output, session) {
           meta <- data.frame(characteristics = meta[,1], row.names = rownames(meta))
           colname <- colnames(meta)
           data <- merge(meta, row_t, by=0, sort = F)
-          if(dim(data)[1] == 0) validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
+          if(dim(data)[1] == 0) {
+            rownames(meta) <- gsub("\\.","-",rownames(meta))
+            data <- merge(meta, row_t, by=0, sort = F)
+            if(dim(data)[1] == 0) {
+              rownames(row_t) <- gsub("\\.","-",rownames(row_t))
+              data <- merge(meta, row_t, by=0, sort = F)
+              validate("Error: failed to merge count data with metadata. Please check row names of matadata.")
+            }
+          }
           rownames(data) <- data$characteristics
           data2 <- data[, - which(colnames(data) %in% c("Row.names", colname))]
           data2_t <- t(data2)

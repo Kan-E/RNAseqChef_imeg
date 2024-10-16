@@ -109,12 +109,32 @@ read_df <- function(tmp, Species=NULL){
     }
     if(tools::file_ext(tmp) == "csv") df <- try(read.csv(tmp, header=TRUE, sep = ",", row.names = 1,quote = ""))
     if(tools::file_ext(tmp) == "txt" || tools::file_ext(tmp) == "tsv") df <- try(read.table(tmp, header=TRUE, sep = "\t", row.names = 1,quote = ""))
-    if(class(df) == "try-error") {
+    if(class(df) == "try-error" || length(grep("Protein.Ids", colnames(df))) != 0 || length(grep("First.Protein.Description", colnames(df)))) {
       if(tools::file_ext(tmp) == "xlsx") df <- try(as.data.frame(readxl::read_xlsx(tmp)))
       if(tools::file_ext(tmp) == "csv") df <- try(read.csv(tmp, header=TRUE, sep = ",",quote = ""))
       if(tools::file_ext(tmp) == "txt" || tools::file_ext(tmp) == "tsv") df <- try(read.table(tmp, header=TRUE, sep = "\t",quote = ""))
       if(class(df) != "try-error") {
-        validate("Error: There are duplicated genes or 'NA' in the uploaded data. Please fix them.")
+        if(dim(df)[2] != 0){
+          if(length(grep("Protein.Ids", colnames(df))) != 0 || length(grep("First.Protein.Description", colnames(df)))){
+            if(class(df) == "try-error") {
+              if(tools::file_ext(tmp) == "xlsx") df <- try(as.data.frame(readxl::read_xlsx(tmp)))
+              if(tools::file_ext(tmp) == "csv") df <- try(read.csv(tmp, header=TRUE, sep = ",",quote = "", na.strings=c("")))
+              if(tools::file_ext(tmp) == "txt" || tools::file_ext(tmp) == "tsv") df <- try(read.table(tmp, header=TRUE, sep = "\t",quote = "", na.strings=c("")))
+            }
+            df <- df %>% distinct(Genes, .keep_all = T)
+            df[is.na(df)] <- 0
+            if(length(grep("Protein.Ids", colnames(df))) != 0) df[df$Genes == "",]$Genes <- gsub("\\_.+$", "", df[df$Genes == "",]$Protein.Ids)
+            rownames(df) <- df$Genes
+            if(length(grep("Protein.Group", colnames(df))) != 0) df <- df[, - which(colnames(df) == "Protein.Group")]
+            if(length(grep("Protein.Ids", colnames(df))) != 0) df <- df[, - which(colnames(df) == "Protein.Ids")]
+            if(length(grep("Protein.Names", colnames(df))) != 0) df <- df[, - which(colnames(df) == "Protein.Names")]
+            if(length(grep("First.Protein.Description", colnames(df))) != 0) df <- df[, - which(colnames(df) == "First.Protein.Description")]
+            if(length(grep("Genes", colnames(df))) != 0) df <- df[, - which(colnames(df) == "Genes")]
+            if(length(grep("Species", colnames(df))) != 0) df <- df[, - which(colnames(df) == "Species")]
+            df <- df[!str_detect(rownames(df), ";"),]
+            df <- df[rownames(df) != "",]
+          }else validate("Error: There are duplicated genes or 'NA' in the uploaded data. Please fix them.")
+        }
       }else{
         validate(paste0("Error: the uploaded data is in an unexpected format. The original error message is as follows:\n",print(df)))
       }
@@ -132,22 +152,6 @@ read_df <- function(tmp, Species=NULL){
     }
     if(length(grep("padj", colnames(df))) == 0 || length(grep("log2FoldChange", colnames(df))) == 0){
     df[is.na(df)] <- 0
-    }
-    if(dim(df)[2] != 0){
-      if(length(grep("Protein.Ids", colnames(df))) != 0 || length(grep("First.Protein.Description", colnames(df)))){
-      df <- df %>% distinct(Genes, .keep_all = T)
-      df[df$Genes == "",]$Genes <- gsub("\\_.+$", "", df[df$Genes == "",]$Protein.Ids)
-      rownames(df) <- df$Genes
-      if(length(grep("Protein.Group", colnames(df))) != 0) df <- df[, - which(colnames(df) == "Protein.Group")]
-      if(length(grep("Protein.Ids", colnames(df))) != 0) df <- df[, - which(colnames(df) == "Protein.Ids")]
-      if(length(grep("Protein.Names", colnames(df))) != 0) df <- df[, - which(colnames(df) == "Protein.Names")]
-      if(length(grep("First.Protein.Description", colnames(df))) != 0) df <- df[, - which(colnames(df) == "First.Protein.Description")]
-      if(length(grep("Genes", colnames(df))) != 0) df <- df[, - which(colnames(df) == "Genes")]
-      if(length(grep("Species", colnames(df))) != 0) df <- df[, - which(colnames(df) == "Species")]
-      df[is.na(df)] <- 0
-      df <- df[!str_detect(rownames(df), ";"),]
-      df <- df[rownames(df) != "",]
-    }
     }
     if(sum(!str_detect(rownames(df),"\\.")) == 0  & !str_detect(rownames(df)[1],"chr")) rownames(df) <- gsub("\\..+$", "",rownames(df))
     return(df)
