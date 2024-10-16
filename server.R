@@ -7253,7 +7253,7 @@ shinyServer(function(input, output, session) {
     withProgress(message = "Importing normalized count matrix, please wait",{
       if (input$data_file_type3 == "Row5"){
         tmp <- input$file7$datapath
-        if(is.null(input$file7) && input$goButton3 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/example8.txt"
+        if(is.null(input$file7) && input$goButton3 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef_imeg/main/data/241011_test.txt"
         return(read_df(tmp = tmp))
       }else{
         tmp <- input$file8$datapath
