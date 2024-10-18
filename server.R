@@ -271,7 +271,7 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       tmp <- input$file2$datapath
-      if(is.null(input$file2) && input$goButton > 0 )  tmp = tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef_imeg/main/data/241011_test_meta.txt"
+      if(is.null(input$file2) && input$goButton > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef_imeg/main/data/241011_test_meta.csv"
       df <- read_df(tmp = tmp)
       if(!is.null(df)) rownames(df) <- gsub("-",".",rownames(df))
       return(df)
@@ -513,7 +513,7 @@ shinyServer(function(input, output, session) {
                 fit <- lmFit(eset, design)
                 if(input$limma_trend == TRUE) fit2 <- eBayes(fit,trend = TRUE,robust = input$regression_mode)
                 if(input$limma_trend == FALSE) fit2 <- eBayes(fit,trend = FALSE,robust = input$regression_mode)
-                res <- topTable(fit,coef = dim(design)[2], number = 1e12)
+                res <- topTable(fit2,coef = dim(design)[2], number = 1e12)
               }
             }else{
               design <- model.matrix(~0+collist)
@@ -618,7 +618,7 @@ shinyServer(function(input, output, session) {
   })
   
   observeEvent(input$goButton,({
-    updateSelectInput(session,inputId = "Species","Species",species_list, selected = "Mus musculus")
+    updateSelectInput(session,inputId = "Species","Species",species_list, selected = "Homo sapiens")
   }))
   
   observeEvent(input$file1, ({
@@ -3050,7 +3050,7 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       tmp <- input$multi_file3$datapath
-      if(is.null(input$multi_file3) && input$goButton6 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef_imeg/main/data/241011_test_metamulti.txt"
+      if(is.null(input$multi_file3) && input$goButton6 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef_imeg/main/data/241011_test_metamulti.csv"
       df <- read_df(tmp = tmp)
       if(!is.null(df)){
         rownames(df) <- gsub("-",".",rownames(df))
@@ -3265,7 +3265,7 @@ shinyServer(function(input, output, session) {
   })
   
   observeEvent(input$goButton6,({
-    updateSelectInput(session,inputId = "Species6","Species",species_list, selected = "Mus musculus")
+    updateSelectInput(session,inputId = "Species6","Species",species_list, selected = "Homo sapiens")
   }))
   
   observeEvent(input$multi_file1, ({
@@ -7308,7 +7308,7 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       tmp <- input$file9$datapath
-      if(is.null(input$file9) && input$goButton3 > 0 )  "https://raw.githubusercontent.com/Kan-E/RNAseqChef_imeg/main/data/241011_test_meta.txt"
+      if(is.null(input$file9) && input$goButton3 > 0 )  tmp <- "https://raw.githubusercontent.com/Kan-E/RNAseqChef_imeg/main/data/241011_test_meta.csv"
       df <- read_df(tmp = tmp)
       if(!is.null(df)) rownames(df) <- gsub("-",".",rownames(df))
       return(df)
@@ -7452,7 +7452,7 @@ shinyServer(function(input, output, session) {
   })
   
   observeEvent(input$goButton3,({
-    updateSelectInput(session,inputId = "Species3","Species",species_list, selected = "Mus musculus")
+    updateSelectInput(session,inputId = "Species3","Species",species_list, selected = "Homo sapiens")
   }))
   
   observeEvent(input$file7, ({
