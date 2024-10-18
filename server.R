@@ -8864,7 +8864,7 @@ shinyServer(function(input, output, session) {
         names(gene_list)[i] <- gsub("_", " ", names(gene_list)[i])
         names(gene_list)[i] <- paste(strwrap(names(gene_list)[i], width = 15),collapse = "\n")
       }
-      if(input$venn_type == "default") venn::venn(gene_list, ilabels = TRUE, zcolor = "style", opacity = 0, ilcs = 1.5, sncs = 1.5) else{
+      if(input$venn_type == "default" || is.null(input$eulerr_label)) venn::venn(gene_list, ilabels = TRUE, zcolor = "style", opacity = 0, ilcs = 1.5, sncs = 1.5) else{
         if(input$eulerr_label =="ON") label=list(cex=2) else label=NULL
         plot(euler(gene_list, shape = "ellipse"), 
              labels = label,quantities = list(type="counts",cex=2),
