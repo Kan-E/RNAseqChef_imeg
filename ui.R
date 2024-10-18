@@ -52,9 +52,10 @@ shinyUI(
                           tags$li(HTML("Function for paired-sample analysis in pair-wise DEG.")),
                           tags$li(HTML("Enrichment analysis using the custom gene set.")),
                         ),
-                        h4("Current version (v1.1.2-beta, 2024/10/5)"),
-                        p("(2024/10/5) Add an eulerr package for venn diagram."),
-                        p("(2024/10/5) Add new gene sets for enrichment analysis."),
+                        h4("Current version (v1.1.2-beta, 2024/10/18)"),
+                        p("(2024/10/18) Add an eulerr package for venn diagram."),
+                        p("(2024/10/18) Add new gene sets for enrichment analysis."),
+                        p("(2024/10/18) Fix bugs reagarding the import of count data."),
                         p("(2024/9/5) Improve the pre-filtering functions in the pair-wise DEG and MultiDEG."),
                         p("(2024/9/5) Fix bugs regarding ssGSEA in the MultiDEG."),
                         p("(2024/9/5) Add a function for transcript-level analysis."),
@@ -1401,7 +1402,7 @@ shinyUI(
                                 column(4, downloadButton("download_vennplot", "Download venn diagram"))
                               ),
                               fluidRow(
-                                column(4,radioButtons("venn_type","venn_type",c("default"="default","eulerr"="eulerr"),"default")),
+                                column(4,radioButtons("venn_type","venn_type",c("default"="default","eulerr package"="eulerr"),"default")),
                                 column(4,htmlOutput("eulerr_label"))
                               ),
                               plotOutput("venn"),
