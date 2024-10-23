@@ -8923,8 +8923,13 @@ shinyServer(function(input, output, session) {
             pdf_width <- 3
           }else pdf_width <- input$venn_pdf_width
           pdf(file, height = pdf_height, width = pdf_width)
-          if(input$venn_type == "default") venn::venn(gene_list, ilabels = TRUE, zcolor = "style", opacity = 0, ilcs = 1.5, sncs = 1.5) else
-            plot(euler(gene_list, shape = "ellipse"), quantities = TRUE)
+          if(input$venn_type == "default" || is.null(input$eulerr_label)) print(venn::venn(gene_list, ilabels = TRUE, zcolor = "style", opacity = 0, ilcs = 1.5, sncs = 1.5)) else{
+            if(input$eulerr_label =="ON") label=list(cex=0.8) else label=NULL
+            print(plot(euler(gene_list, shape = "ellipse"), 
+                 labels = label,quantities = list(type="counts",cex=0.8),
+                 edges = list(col=as.vector(seq(1,length(names(gene_list)))),lex = 0.8),
+                 fills = list(fill=rep("white",length(names(gene_list)))),legend = list(side = "right",cex=0.8)) )
+          }
           dev.off()
           incProgress(1)
         })
