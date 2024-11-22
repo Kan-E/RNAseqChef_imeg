@@ -764,9 +764,10 @@ shinyServer(function(input, output, session) {
           }else{
             my.symbols <- data$Row.names
             if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
+            if(org1()$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
             gene_IDs<-AnnotationDbi::select(org1(),keys = my.symbols,
                                             keytype = key,
-                                            columns = c(key,"SYMBOL", "ENTREZID"))
+                                            columns = c(key,SYMBOL, "ENTREZID"))
           }
           colnames(gene_IDs) <- c("Row.names","SYMBOL", "ENTREZID")
           gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
@@ -781,9 +782,10 @@ shinyServer(function(input, output, session) {
             gene_IDs <- isoform1()[,-1]
           }else{
             my.symbols <- data$Row.names
+            if(org1()$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
             gene_IDs<-AnnotationDbi::select(org1(),keys = my.symbols,
-                                            keytype = "SYMBOL",
-                                            columns = c("SYMBOL", "ENTREZID"))
+                                            keytype = SYMBOL,
+                                            columns = c(SYMBOL, "ENTREZID"))
           }
           colnames(gene_IDs) <- c("Row.names", "ENTREZID")
           gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
@@ -985,6 +987,10 @@ shinyServer(function(input, output, session) {
     if(is.null(d_row_count_matrix())){
       return(NULL)
     }else{
+      if(is.null(input$GOI_color_type)) validate("")
+      if(input$GOI_color_type != "default" && !is.null(pair_pathway_color_gene())){
+        data <- data %>% dplyr::filter(Row.names %in% rownames(pair_pathway_color_gene()))
+      }
       if(gene_type1() != "SYMBOL"){
         if(input$Species != "not selected"){
           GOI <- data$Unique_ID
@@ -1008,6 +1014,33 @@ shinyServer(function(input, output, session) {
       })
     }
   })
+  output$GOI_color_type <- renderUI({
+    if(input$Species == "not selected"){
+      radioButtons("GOI_color_type","Filter", c("All genes" = "default"),selected="default")
+    }else{
+      radioButtons("GOI_color_type","Filter", c("All genes" = "default","Pathway of interest"="pathway"),selected="default")
+    }
+  })
+  observeEvent(input$Species, ({
+    if(input$Species == "not selected"){
+      updateSelectInput(session, "GOI_color_pathway1","Select a gene set for gene extraction","")
+    }else  if(input$Species != "Xenopus laevis" && input$Ortholog != "Arabidopsis thaliana" && input$Species != "Arabidopsis thaliana"){
+      updateSelectInput(session, "GOI_color_pathway1","Select a gene set for gene extraction",gene_set_list) 
+    }else {
+      updateSelectInput(session, "GOI_color_pathway1","Select a gene set for gene extraction",c("KEGG", "GO biological process", 
+                                                                                                "GO cellular component","GO molecular function")) 
+    }
+  }))
+  observeEvent(input$GOI_color_pathway1, ({
+    if(is.null(input$GOI_color_pathway1)){
+      updateSelectInput(session, "GOI_color_pathway2","","")
+    }else{
+      list <- unique(GeneList_for_enrichment(Species = input$Species, Ortholog = input$Ortholog,
+                                             Gene_set=input$GOI_color_pathway1, org = org1(), 
+                                             Biomart_archive=input$Biomart_archive,gene_type=gene_type1())$gs_name)
+      updateSelectInput(session, "GOI_color_pathway2","",list)
+    }
+  }))
   output$GOIreset_pair <- renderUI({
     actionButton("GOIreset_pair", "GOI reset")
   })
@@ -1055,7 +1088,41 @@ shinyServer(function(input, output, session) {
       }
     }
   })
-  
+  pair_pathway_color_gene <- reactive({
+    ##extract pathway genes
+    if(is.null(input$GOI_color_pathway1) || is.null(input$GOI_color_pathway2) || is.null(gene_type1()) || is.null(org1())) validate("")
+    genes <- GeneList_for_enrichment(Species = input$Species, Ortholog = input$Ortholog,
+                                     Gene_set=input$GOI_color_pathway1, org = org1(), 
+                                     Biomart_archive=input$Biomart_archive,gene_type=gene_type1())
+    genes <- try(dplyr::filter(genes, gs_name == input$GOI_color_pathway2))
+    if(length(genes) == 1) if(class(genes)=="try-error") validate("")
+    
+    my.symbols <- as.character(genes$entrez_gene)
+    if(gene_type1() == "non-model organism"){
+      gene_IDs <-  try(dplyr::filter(ortholog1(), ENTREZID %in% my.symbols))
+      if(length(gene_IDs) == 1) if(class(gene_IDs)=="try-error") validate("")
+      df <- data.frame(gene = gene_IDs$ENSEMBL, row.names = gene_IDs$ENSEMBL)
+    }else if(gene_type1() == "isoform"){
+      gene_IDs <-  try(dplyr::filter(isoform1(), ENTREZID %in% my.symbols))
+      if(length(gene_IDs) == 1) if(class(gene_IDs)=="try-error") validate("")
+      df <- data.frame(gene = gene_IDs$Transcript_ID, row.names = gene_IDs$Transcript_ID)
+    }else{
+      if(gene_type1() == "SYMBOL") columns <- c("ENTREZID","SYMBOL") else columns <- c("ENTREZID","ENSEMBL")
+      gene_IDs <- AnnotationDbi::select(org1(), keys = my.symbols,
+                                        keytype = "ENTREZID",
+                                        columns = columns)
+      colnames(gene_IDs) <- c("entrezid","GeneID")
+      gene_IDs <- na.omit(gene_IDs)
+      gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
+      df <- data.frame(gene = gene_IDs$GeneID, row.names = gene_IDs$GeneID)
+      if(dim(df)[1] == 0) validate("No filtered genes.")
+    }
+    return(df)
+  })
+  output$uniqueID_cut <- renderUI({
+    if(gene_type1() != "SYMBOL" && input$Species != "not selected") 
+      radioButtons("uniqueID_cut","Short unique ID",c("ON"=TRUE,"OFF"=FALSE),selected = TRUE)
+  })
   pair_volcano <- reactive({
     if(!is.null(input$xrange) && !is.null(input$yrange)){
       data <- as.data.frame(data_degcount())
@@ -1074,29 +1141,67 @@ shinyServer(function(input, output, session) {
           label_data <- input$GOI
         }else label_data <- NULL
       }
-      data$color <- "NS"
-      data$color[data$log2FoldChange < -log2(input$fc) & data$padj < input$fdr] <- "down"
-      data$color[data$log2FoldChange > log2(input$fc) & data$padj < input$fdr] <- "up"
       data$padj[data$padj == 0] <- 10^(-300)
-      if(!is.null(label_data)) {
-        Color <- c("blue","green","darkgray","red")
-        if(length(data$color[data$log2FoldChange < -log2(input$fc) & data$padj < input$fdr]) == 0) Color <- c("green","darkgray","red")
-        for(name in label_data){
-          if(gene_type1() != "SYMBOL"){
-            if(input$Species != "not selected"){
-              data$color[data$Unique_ID == name] <- "GOI"
+      if(input$GOI_color_type == "default"){
+        data$color <- "NS"
+        data$color[data$log2FoldChange < -log2(input$fc) & data$padj < input$fdr] <- "down"
+        data$color[data$log2FoldChange > log2(input$fc) & data$padj < input$fdr] <- "up"
+        if(!is.null(label_data)) {
+          Color <- c("blue","green","darkgray","red")
+          if(length(data$color[data$log2FoldChange < -log2(input$fc) & data$padj < input$fdr]) == 0) Color <- c("green","darkgray","red")
+          for(name in label_data){
+            if(gene_type1() != "SYMBOL"){
+              if(input$Species != "not selected"){
+                data$color[data$Unique_ID == name] <- "GOI"
+              }else{
+                data$color[data$Row.names == name] <- "GOI"
+              }
             }else{
               data$color[data$Row.names == name] <- "GOI"
             }
-          }else{
-            data$color[data$Row.names == name] <- "GOI"
           }
+          data$color <- factor(data$color, levels = c("down","GOI","NS", "up"))
+        }else{
+          Color <- c("blue","darkgray","red")
+          if(length(data$color[data$log2FoldChange < -log2(input$fc) & data$padj < input$fdr]) == 0) Color <- c("darkgray","red")
+          data$color <- factor(data$color, levels = c("down","NS", "up"))
         }
-        data$color <- factor(data$color, levels = c("down","GOI","NS", "up"))
       }else{
-        Color <- c("blue","darkgray","red")
-        if(length(data$color[data$log2FoldChange < -log2(input$fc) & data$padj < input$fdr]) == 0) Color <- c("darkgray","red")
-        data$color <- factor(data$color, levels = c("down","NS", "up"))
+        df <- pair_pathway_color_gene()
+        data$color <- "others"
+        Color <- c("lightgray","blue","gray1","red")
+        for(name in rownames(df)){
+          data$color[data$Row.names == name] <- "NS"
+          data$color[data$Row.names == name & data$log2FoldChange < -log2(input$fc) & data$padj < input$fdr] <- "down"
+          data$color[data$Row.names == name & data$log2FoldChange > log2(input$fc) & data$padj < input$fdr] <- "up"
+        }
+        data$color <- factor(data$color, levels = c("others", "NS","down","up"))
+        
+        if(!is.null(label_data)) {
+          Color <- c("lightgray","blue","green","gray1","red")
+          if(length(data$color[data$color == "down"]) == 0) Color <- c("lightgray","green","gray1","red")
+          for(name2 in label_data){
+            if(gsub(".+\\s", "", name2) %in% rownames(df)){
+              if(gene_type1() != "SYMBOL"){
+                if(input$Species != "not selected"){
+                  data <- data %>% dplyr::mutate(color=if_else(Unique_ID==name2, "GOI", color))
+                }else{
+                  data <- data %>% dplyr::mutate(color=if_else(Row.names==name2, "GOI", color))
+                }
+              }else{
+                data <- data %>% dplyr::mutate(color=if_else(Row.names==name2, "GOI", color))
+              }
+            }
+          }
+          data$color <- factor(data$color, levels = c("others","down","GOI","NS", "up"))
+        }else{
+          Color <- c("lightgray","blue","gray1","red")
+          if(length(data$color[data$color == "down"]) == 0) Color <- c("lightgray","gray1","red")
+          data$color <- factor(data$color, levels = c("others","down","NS", "up"))
+        }
+        
+        
+        
       }
       data$minusLog10padj<--log10(data$padj)
       lab_y <- "-log10(padj)"
@@ -1126,9 +1231,25 @@ shinyServer(function(input, output, session) {
               axis.text.y= ggplot2::element_text(size = 12),
               text = ggplot2::element_text(size = 12),
               title = ggplot2::element_text(size = 12)) 
+      if(input$GOI_color_type == "pathway") {
+        v <- v + geom_point(data=dplyr::filter(data, color == "NS"),color="gray1", size=1)
+        v <- v + geom_point(data=dplyr::filter(data, color == "up"),color="red", size=1)
+        v <- v + geom_point(data=dplyr::filter(data, color == "down"),color="blue", size=1)
+      }
       if(!is.null(label_data)) {
         if(gene_type1() != "SYMBOL"){
           if(input$Species != "not selected"){
+            if(input$uniqueID_cut) {
+              id_list <- gsub("\\\n.+$", "", data$Unique_ID)
+              dup_list <- unique(id_list[duplicated(id_list)])
+              for(i in 1:length(data$Unique_ID)){
+                if(gsub("\\\n.+$", "", data$Unique_ID[i]) == "NA") {
+                  data$Unique_ID[i] <- gsub(".+\\s", "", data$Unique_ID[i])
+                }else if(! gsub("\\\n.+$", "", data$Unique_ID[i]) %in% dup_list) {
+                  data$Unique_ID[i] <- gsub("\\\n.+$", "", data$Unique_ID[i])
+                }
+              }
+            }
             v <- v + geom_point(data=dplyr::filter(data, color == "GOI"),color="green", size=1)
             v <- v + ggrepel::geom_label_repel(data = dplyr::filter(data, color == "GOI"), mapping = aes(label = Unique_ID),label.padding=.1,alpha = 0.6,label.size = NA, 
                                                box.padding = unit(0.35, "lines"), point.padding = unit(0.3,"lines"), fontface = "bold.italic")
@@ -1274,6 +1395,17 @@ shinyServer(function(input, output, session) {
           Unique_ID <- input$GOI
           label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
           data2 <- merge(data, label_data, by="Unique_ID")
+          if(input$uniqueID_cut) {
+            id_list <- gsub("\\\n.+$", "", data2$Unique_ID)
+            dup_list <- unique(id_list[duplicated(id_list)])
+            for(i in 1:length(data2$Unique_ID)){
+              if(gsub("\\\n.+$", "", data2$Unique_ID[i]) == "NA") {
+                data2$Unique_ID[i] <- gsub(".+\\s", "", data2$Unique_ID[i])
+              }else if(! gsub("\\\n.+$", "", data2$Unique_ID[i]) %in% dup_list) {
+                data2$Unique_ID[i] <- gsub("\\\n.+$", "", data2$Unique_ID[i])
+              }
+            }
+          }
           rownames(data2) <- data2$Unique_ID
           data2 <- data2[, - which(colnames(data2) == "Row.names")]
         }else{
@@ -1296,6 +1428,17 @@ shinyServer(function(input, output, session) {
       }
       if(gene_type1() != "SYMBOL"){
         if(input$Species != "not selected"){
+          if(input$uniqueID_cut) {
+            id_list <- gsub("\\\n.+$", "", data2$Unique_ID)
+            dup_list <- unique(id_list[duplicated(id_list)])
+            for(i in 1:length(data2$Unique_ID)){
+              if(gsub("\\\n.+$", "", data2$Unique_ID[i]) == "NA") {
+                data2$Unique_ID[i] <- gsub(".+\\s", "", data2$Unique_ID[i])
+              }else if(! gsub("\\\n.+$", "", data2$Unique_ID[i]) %in% dup_list) {
+                data2$Unique_ID[i] <- gsub("\\\n.+$", "", data2$Unique_ID[i])
+              }
+            }
+          }
           rownames(data2) <- data2$Unique_ID
         }else{
           rownames(data2) <- data2$Row.names
@@ -1303,6 +1446,9 @@ shinyServer(function(input, output, session) {
       }else{
         rownames(data2) <- data2$Row.names
       }
+    }
+    if(input$GOI_color_type != "default" && !is.null(pair_pathway_color_gene())){
+      data2 <- data2 %>% dplyr::filter(Row.names %in% rownames(pair_pathway_color_gene()))
     }
     return(data2)
   })
@@ -1327,6 +1473,7 @@ shinyServer(function(input, output, session) {
     Cond_1 <- vec[1]
     Cond_2 <- vec[2]
     data2 <- pair_GOI_count()
+    if(dim(data2)[1] == 0) validate("")
     if(is.null(data2)){
       p <- NULL
     }else{
@@ -1486,7 +1633,6 @@ shinyServer(function(input, output, session) {
       norm_count <- deg_norm_count()
       data <- merge(gene,norm_count,by="SYMBOL")
     }
-    print(head(data))
     data <- isoform_balance(data,norm_count = deg_norm_count())
     return(data)
     }
@@ -2732,9 +2878,10 @@ shinyServer(function(input, output, session) {
               }else{
                 my.symbols <- data$Row.names
                 if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
+                if(org1()$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
                 gene_IDs<-AnnotationDbi::select(org1(),keys = my.symbols,
                                                 keytype = key,
-                                                columns = c(key,"SYMBOL", "ENTREZID"))
+                                                columns = c(key,SYMBOL, "ENTREZID"))
               }
               colnames(gene_IDs) <- c("Row.names","SYMBOL", "ENTREZID")
               gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
@@ -2749,9 +2896,10 @@ shinyServer(function(input, output, session) {
                 gene_IDs <- isoform1_batch()[,-1]
               }else{
                 my.symbols <- data$Row.names
+                if(org1()$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
                 gene_IDs<-AnnotationDbi::select(org1(),keys = my.symbols,
-                                                keytype = "SYMBOL",
-                                                columns = c("SYMBOL", "ENTREZID"))
+                                                keytype = SYMBOL,
+                                                columns = c(SYMBOL, "ENTREZID"))
               }
               colnames(gene_IDs) <- c("Row.names", "ENTREZID")
               gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
@@ -4394,9 +4542,10 @@ shinyServer(function(input, output, session) {
           }else{
             my.symbols <- sig_res_LRT$Row.names
             if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
+            if(org6()$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
             gene_IDs<-AnnotationDbi::select(org6(),keys = my.symbols,
                                             keytype = key,
-                                            columns = c(key,"SYMBOL", "ENTREZID"))
+                                            columns = c(key,SYMBOL, "ENTREZID"))
           }
           colnames(gene_IDs) <- c("Row.names","SYMBOL", "ENTREZID")
           gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
@@ -4411,9 +4560,10 @@ shinyServer(function(input, output, session) {
             gene_IDs <- isoform6()[,-1]
           }else{
             my.symbols <- sig_res_LRT$Row.names
+            if(org6()$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
             gene_IDs<-AnnotationDbi::select(org6(),keys = my.symbols,
-                                            keytype = "SYMBOL",
-                                            columns = c("SYMBOL", "ENTREZID"))
+                                            keytype = SYMBOL,
+                                            columns = c(SYMBOL, "ENTREZID"))
           }
           colnames(gene_IDs) <- c("Row.names", "ENTREZID")
           gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
@@ -6650,7 +6800,10 @@ shinyServer(function(input, output, session) {
       return(GOI)
     }
   })
-  
+  output$cond3_uniqueID_cut <- renderUI({
+    if(gene_type2() != "SYMBOL" && input$Species2 != "not selected") 
+      radioButtons("cond3_uniqueID_cut","Short unique ID",c("ON"=TRUE,"OFF"=FALSE),selected = TRUE)
+  })
   cond3_specific_group <- reactive({
     if(is.null(d_row_count_matrix2())){
       return(NULL)
@@ -6727,7 +6880,7 @@ shinyServer(function(input, output, session) {
       cond3_scatter_plot(gene_type=gene_type2(),data = deg_norm_count2(), data4 = data_3degcount2_1(),
                          result_Condm = deg_result2_condmean(), result_FDR = deg_result2(), 
                          fc = input$fc2, fdr = input$fdr2, basemean = input$basemean2,
-                         y_axis = input$cond3_scatter_yrange,x_axis = input$cond3_scatter_xrange,heatmap = FALSE,
+                         y_axis = input$cond3_scatter_yrange,x_axis = input$cond3_scatter_xrange,heatmap = FALSE,id_cut=input$cond3_uniqueID_cut,
                          specific = cond3_specific_group2(), GOI = input$GOI2, Species = input$Species2,brush=brush_info_cond3())
     }
   })
@@ -6828,6 +6981,17 @@ shinyServer(function(input, output, session) {
         }
         label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
         data <- merge(count, label_data, by="Unique_ID")
+        if(input$cond3_uniqueID_cut) {
+          id_list <- gsub("\\\n.+$", "", data$Unique_ID)
+          dup_list <- unique(id_list[duplicated(id_list)])
+          for(i in 1:length(data$Unique_ID)){
+            if(gsub("\\\n.+$", "", data$Unique_ID[i]) == "NA") {
+              data$Unique_ID[i] <- gsub(".+\\s", "", data$Unique_ID[i])
+            }else if(! gsub("\\\n.+$", "", data$Unique_ID[i]) %in% dup_list) {
+              data$Unique_ID[i] <- gsub("\\\n.+$", "", data$Unique_ID[i])
+            }
+          }
+        }
         rownames(data) <- data$Unique_ID
         data <- data[, - which(colnames(data) == "SYMBOL")]
         data <- data[,-1]
@@ -7697,6 +7861,10 @@ shinyServer(function(input, output, session) {
                            options = list(delimiter = " ", create=TRUE, 'plugins' = list('remove_button'), persist = FALSE))
     })
   })
+  output$norm_uniqueID_cut <- renderUI({
+    if(gene_type3() != "SYMBOL" && input$Species3 != "not selected") 
+      radioButtons("norm_uniqueID_cut","Short unique ID",c("ON"=TRUE,"OFF"=FALSE),selected = TRUE)
+  })
   GOI3_INPUT <- reactive({
     if(is.null(d_norm_count_matrix_cutofff())){
       return(NULL)
@@ -7712,6 +7880,17 @@ shinyServer(function(input, output, session) {
         Unique_ID <- GOI3_INPUT()
         label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
         data <- merge(count, label_data, by="Unique_ID")
+        if(input$norm_uniqueID_cut) {
+          id_list <- gsub("\\\n.+$", "", data$Unique_ID)
+          dup_list <- unique(id_list[duplicated(id_list)])
+          for(i in 1:length(data$Unique_ID)){
+            if(gsub("\\\n.+$", "", data$Unique_ID[i]) == "NA") {
+              data$Unique_ID[i] <- gsub(".+\\s", "", data$Unique_ID[i])
+            }else if(! gsub("\\\n.+$", "", data$Unique_ID[i]) %in% dup_list) {
+              data$Unique_ID[i] <- gsub("\\\n.+$", "", data$Unique_ID[i])
+            }
+          }
+        }
         rownames(data) <- data$Unique_ID
         data <- data[, - which(colnames(data) == "SYMBOL")]
         data <- data[, - which(colnames(data) == "Unique_ID")]
@@ -9908,7 +10087,10 @@ shinyServer(function(input, output, session) {
     dir_name <- paste(paste(gsub("\\..+$", "", input$deg_file1),sep = "-"), paste(input$fc4, input$fdr4,sep="_"),sep="_")
     return(dir_name)
   })
-  
+  output$deg_uniqueID_cut <- renderUI({
+    if(gene_type5() != "SYMBOL" && input$Species5 != "not selected") 
+      radioButtons("deg_uniqueID_cut","Short unique ID",c("ON"=TRUE,"OFF"=FALSE),selected = TRUE)
+  })
   DEG_uniqueID <- reactive({
     count <- norm_count_combined_DEG()
     if(input$Species5 != "not selected"){
@@ -9923,13 +10105,74 @@ shinyServer(function(input, output, session) {
     }
     return(count)
   })
-  
+  output$deg_GOI_color_type <- renderUI({
+    if(input$Species5 == "not selected"){
+      radioButtons("deg_GOI_color_type","Color type", c("All genes" = "default"),selected="default")
+    }else{
+      radioButtons("deg_GOI_color_type","Filter", c("All genes" = "default","Pathway of interest"="pathway"),selected="default")
+    }
+  })
+  observeEvent(input$Species5, ({
+    if(input$Species5 == "not selected"){
+      updateSelectInput(session, "deg_GOI_color_pathway1","Select a gene set for gene extraction","")
+    }else  if(input$Species5 != "Xenopus laevis" && input$Ortholog5 != "Arabidopsis thaliana" && input$Species5 != "Arabidopsis thaliana"){
+      updateSelectInput(session, "deg_GOI_color_pathway1","Select a gene set for gene extraction",gene_set_list) 
+    }else {
+      updateSelectInput(session, "deg_GOI_color_pathway1","Select a gene set for gene extraction",c("KEGG", "GO biological process", 
+                                                                                                    "GO cellular component","GO molecular function")) 
+    }
+  }))
+  observeEvent(input$deg_GOI_color_pathway1, ({
+    if(is.null(input$deg_GOI_color_pathway1)){
+      updateSelectInput(session, "deg_GOI_color_pathway2","","")
+    }else{
+      list <- unique(GeneList_for_enrichment(Species = input$Species5, Ortholog = input$Ortholog5,
+                                             Gene_set=input$deg_GOI_color_pathway1, org = org5(), 
+                                             Biomart_archive=input$Biomart_archive5,gene_type=gene_type5())$gs_name)
+      updateSelectInput(session, "deg_GOI_color_pathway2","",list)
+    }
+  }))
+  deg_pathway_color_gene <- reactive({
+    ##extract pathway genes
+    if(is.null(input$deg_GOI_color_pathway1) || is.null(input$deg_GOI_color_pathway2)) validate("")
+    genes <- GeneList_for_enrichment(Species = input$Species5, Ortholog = input$Ortholog5,
+                                     Gene_set=input$deg_GOI_color_pathway1, org = org5(), 
+                                     Biomart_archive=input$Biomart_archive5,gene_type=gene_type5())
+    genes <- try(dplyr::filter(genes, gs_name == input$deg_GOI_color_pathway2))
+    if(length(genes) == 1) if(class(genes)=="try-error") validate("")
+    
+    my.symbols <- as.character(genes$entrez_gene)
+    if(gene_type5() == "non-model organism"){
+      gene_IDs <-  try(dplyr::filter(ortholog5(), ENTREZID %in% my.symbols))
+      if(length(gene_IDs) == 1) if(class(gene_IDs)=="try-error") validate("")
+      df <- data.frame(gene = gene_IDs$ENSEMBL, row.names = gene_IDs$ENSEMBL)
+    }else if(gene_type5() == "isoform"){
+      gene_IDs <-  try(dplyr::filter(isoform5(), ENTREZID %in% my.symbols))
+      if(length(gene_IDs) == 1) if(class(gene_IDs)=="try-error") validate("")
+      df <- data.frame(gene = gene_IDs$Transcript_ID, row.names = gene_IDs$Transcript_ID)
+    }else{
+      if(gene_type5() == "SYMBOL") columns <- c("ENTREZID","SYMBOL") else columns <- c("ENTREZID","ENSEMBL")
+      gene_IDs <- AnnotationDbi::select(org5(), keys = my.symbols,
+                                        keytype = "ENTREZID",
+                                        columns = columns)
+      colnames(gene_IDs) <- c("entrezid","GeneID")
+      gene_IDs <- na.omit(gene_IDs)
+      gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
+      df <- data.frame(gene = gene_IDs$GeneID, row.names = gene_IDs$GeneID)
+      if(dim(df)[1] == 0) validate("No filtered genes.")
+    }
+    return(df)
+  })
   GOI_DEG <- reactive({
     withProgress(message = "Preparing GOI list (about 10 sec)",{
       count <- DEG_uniqueID()
       if(is.null(count)){
         return(NULL)
       }else{
+        if(is.null(input$deg_GOI_color_type)) validate("")
+        if(input$deg_GOI_color_type != "default" && !is.null(deg_pathway_color_gene())){
+          count <- count %>% dplyr::filter(row.names(.) %in% rownames(deg_pathway_color_gene()))
+        }
         if(gene_type5() != "SYMBOL"){
           if(input$Species5 != "not selected"){
             GOI <- count$Unique_ID
@@ -10015,17 +10258,17 @@ shinyServer(function(input, output, session) {
         }else{
           label_data <- rownames(brush_info_volcano())
         }
-        print(label_data)
       }else{
         if(!is.null(input$degGOI)){
           label_data <- input$degGOI
         }else label_data <- NULL
       }
-      data$color <- "NS"
       data$Row.names <- rownames(data)
+      data$padj[data$padj <= 10^(-300)] <- 10^(-300)
+      if(input$deg_GOI_color_type == "default"){
+      data$color <- "NS"
       data$color[data$log2FoldChange < -log2(input$fc4) & data$padj < input$fdr4] <- "down"
       data$color[data$log2FoldChange > log2(input$fc4) & data$padj < input$fdr4] <- "up"
-      data$padj[data$padj <= 10^(-300)] <- 10^(-300)
       if(!is.null(label_data)) {
         Color <- c("blue","green","darkgray","red")
         if(length(data$color[data$log2FoldChange < -log2(input$fc4) & data$padj < input$fdr4]) == 0) Color <- c("green","darkgray","red")
@@ -10046,6 +10289,40 @@ shinyServer(function(input, output, session) {
         if(length(data$color[data$log2FoldChange < -log2(input$fc4) & data$padj < input$fdr4]) == 0) Color <- c("darkgray","red")
         data$color <- factor(data$color, levels = c("down","NS", "up"))
       }
+      }else{
+        df <- deg_pathway_color_gene()
+        data$color <- "others"
+        Color <- c("lightgray","blue","gray1","red")
+        for(name in rownames(df)){
+          data$color[data$Row.names == name] <- "NS"
+          data$color[data$Row.names == name & data$log2FoldChange < -log2(input$fc4) & data$padj < input$fdr4] <- "down"
+          data$color[data$Row.names == name & data$log2FoldChange > log2(input$fc4) & data$padj < input$fdr4] <- "up"
+        }
+        data$color <- factor(data$color, levels = c("others", "NS","down","up"))
+        
+        if(!is.null(label_data)) {
+          Color <- c("lightgray","blue","green","gray1","red")
+          if(length(data$color[data$color == "down"]) == 0) Color <- c("lightgray","green","gray1","red")
+          for(name2 in label_data){
+            if(gsub(".+\\s", "", name2) %in% rownames(df)){
+              if(gene_type5() != "SYMBOL"){
+                if(input$Species != "not selected"){
+                  data <- data %>% dplyr::mutate(color=if_else(Unique_ID==name2, "GOI", color))
+                }else{
+                  data <- data %>% dplyr::mutate(color=if_else(Row.names==name2, "GOI", color))
+                }
+              }else{
+                data <- data %>% dplyr::mutate(color=if_else(Row.names==name2, "GOI", color))
+              }
+            }
+          }
+          data$color <- factor(data$color, levels = c("others","down","GOI","NS", "up"))
+        }else{
+          Color <- c("lightgray","blue","gray1","red")
+          if(length(data$color[data$color == "down"]) == 0) Color <- c("lightgray","gray1","red")
+          data$color <- factor(data$color, levels = c("others","down","NS", "up"))
+        }
+      }
       data$minusLog10padj<--log10(data$padj)
       v <- ggplot(data, aes(x = log2FoldChange, y = minusLog10padj)) + ggrastr::geom_point_rast(aes(color = color),size = 0.4)
       v <- v  + geom_vline(xintercept = c(-log2(input$fc4), log2(input$fc4)), linetype = c(2, 2), color = c("black", "black")) +
@@ -10059,9 +10336,25 @@ shinyServer(function(input, output, session) {
         xlab("log2 fold change") + ylab("-log10(padj)") +
         xlim(input$deg_xrange)+
         ylim(c(0, input$deg_yrange))
+      if(input$deg_GOI_color_type == "pathway") {
+        v <- v + geom_point(data=dplyr::filter(data, color == "NS"),color="gray1", size=1)
+        v <- v + geom_point(data=dplyr::filter(data, color == "up"),color="red", size=1)
+        v <- v + geom_point(data=dplyr::filter(data, color == "down"),color="blue", size=1)
+      }
       if(!is.null(label_data)) {
         if(gene_type5() != "SYMBOL"){
           if(input$Species5 != "not selected"){
+            if(input$deg_uniqueID_cut) {
+              id_list <- gsub("\\\n.+$", "", data$Unique_ID)
+              dup_list <- unique(id_list[duplicated(id_list)])
+              for(i in 1:length(data$Unique_ID)){
+                if(gsub("\\\n.+$", "", data$Unique_ID[i]) == "NA") {
+                  data$Unique_ID[i] <- gsub(".+\\s", "", data$Unique_ID[i])
+                }else if(! gsub("\\\n.+$", "", data$Unique_ID[i]) %in% dup_list) {
+                  data$Unique_ID[i] <- gsub("\\\n.+$", "", data$Unique_ID[i])
+                }
+              }
+            }
             v <- v + geom_point(data=dplyr::filter(data, color == "GOI"),color="green", size=1)
             v <- v + ggrepel::geom_label_repel(data = dplyr::filter(data, color == "GOI"), mapping = aes(label = Unique_ID),alpha = 0.6,label.size = NA, 
                                                box.padding = unit(0.35, "lines"), point.padding = unit(0.3,"lines"), force = 1, fontface = "bold.italic")
@@ -10083,8 +10376,6 @@ shinyServer(function(input, output, session) {
     data <- as.data.frame(DEG_uniqueID())
     data$padj[data$padj == 0] <- 10^(-300)
     data$minusLog10padj<--log10(data$padj)
-    print(head(data))
-    print(brushedPoints(data, input$plot1_brush_volcano,xvar = "log2FoldChange",yvar="minusLog10padj"))
     return(brushedPoints(data, input$plot1_brush_volcano,xvar = "log2FoldChange",yvar="minusLog10padj"))
   })
   
@@ -10132,6 +10423,17 @@ shinyServer(function(input, output, session) {
             Unique_ID <- input$degGOI
             label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
             data <- merge(count, label_data, by="Unique_ID")
+            if(input$deg_uniqueID_cut) {
+              id_list <- gsub("\\\n.+$", "", data$Unique_ID)
+              dup_list <- unique(id_list[duplicated(id_list)])
+              for(i in 1:length(data$Unique_ID)){
+                if(gsub("\\\n.+$", "", data$Unique_ID[i]) == "NA") {
+                  data$Unique_ID[i] <- gsub(".+\\s", "", data$Unique_ID[i])
+                }else if(! gsub("\\\n.+$", "", data$Unique_ID[i]) %in% dup_list) {
+                  data$Unique_ID[i] <- gsub("\\\n.+$", "", data$Unique_ID[i])
+                }
+              }
+            }
             rownames(data) <- data$Unique_ID
             data <- data[, - which(colnames(data) == "SYMBOL")]
             data <- data[, - which(colnames(data) == "Unique_ID")]
@@ -10153,9 +10455,23 @@ shinyServer(function(input, output, session) {
         }
       }else{
         data<-brush_info_volcano()
+        if(input$deg_GOI_color_type != "default" && !is.null(deg_pathway_color_gene())){
+          data <- data %>% dplyr::filter(row.names(.) %in% rownames(deg_pathway_color_gene()))
+        }
         data <- data[, - which(colnames(data) == "minusLog10padj")]
         if(gene_type5() != "SYMBOL"){
           if(input$Species5 != "not selected"){
+            if(input$deg_uniqueID_cut) {
+              id_list <- gsub("\\\n.+$", "", data$Unique_ID)
+              dup_list <- unique(id_list[duplicated(id_list)])
+              for(i in 1:length(data$Unique_ID)){
+                if(gsub("\\\n.+$", "", data$Unique_ID[i]) == "NA") {
+                  data$Unique_ID[i] <- gsub(".+\\s", "", data$Unique_ID[i])
+                }else if(! gsub("\\\n.+$", "", data$Unique_ID[i]) %in% dup_list) {
+                  data$Unique_ID[i] <- gsub("\\\n.+$", "", data$Unique_ID[i])
+                }
+              }
+            }
             rownames(data) <- data$Unique_ID
             data <- data[, - which(colnames(data) == "SYMBOL")]
             data <- data[, - which(colnames(data) == "Unique_ID")]
@@ -10197,6 +10513,7 @@ shinyServer(function(input, output, session) {
   
   deg_GOIbox <- reactive({
     data <- deg_GOIcount()
+    if(dim(data)[1] == 0) validate("")
     if(is.null(data)){
       p <- NULL
     }else{
@@ -10405,5 +10722,82 @@ shinyServer(function(input, output, session) {
   observeEvent(input$dorothea_target_set, ({
     updateCollapse(session,id =  "dorothea_collapse_panel", open="dorothea_tf_panel")
   }))
+  
+  
+  output$sessionInfo <- renderPrint({
+    capture.output(sessionInfo())
+  })
+  
+  ##ensembl2symbol----
+  output$Spe_ens <- renderText({
+    if(input$Species_ens == "not selected") print("Please select 'Species'")
+  })
+  org_ens <- reactive({
+    return(org(Species = input$Species_ens,Ortholog = input$Ortholog_ens))
+  })
+  ortholog_ens <- reactive({
+    return(no_org_ID(gene_list = rownames(input_ens()),Species = input$Species_ens,Ortholog = input$Ortholog_ens,Biomart_archive=input$Biomart_archive_ens))
+  })
+  gene_type_ens <- reactive({
+    data <- input_ens()
+    return(gene_type(my.symbols=rownames(data),org=org_ens(),Species=input$Species_ens))
+  })
+  
+  input_ens <- reactive({
+    upload = list()
+    tmp <- input$data_file_ens$datapath
+    if(is.null(input$data_file_ens) && input$goButton_ens > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/enrich_example.txt"
+    if(!is.null(tmp)){
+    if(tools::file_ext(tmp) == "xlsx") {
+      df <- try(readxl::read_xlsx(tmp))
+      df <- as.data.frame(df)
+    }
+    if(tools::file_ext(tmp) == "csv") df <- read.csv(tmp, header=TRUE, sep = ",",quote = "")
+    if(tools::file_ext(tmp) == "txt" || tools::file_ext(tmp) == "tsv") df <- read.table(tmp, header=TRUE, sep = "\t",quote = "")
+    if(rownames(df)[1] == 1){
+      if(dim(df)[2]==1) df <- data.frame(row.names = df[,1]) else{
+        rownames(df) <- df[,1]
+        df <- df[,-1] 
+      }
+    }
+    rownames(df) = gsub("\"", "", rownames(df))
+    if(dim(df)[2] != 0) {
+      if(str_detect(colnames(df)[1], "^X\\.")) colnames(df) = str_sub(colnames(df), start = 3, end = -2) 
+    }else df <- data.frame(geneID = rownames(df),row.names = rownames(df))
+    if(sum(!str_detect(rownames(df),"\\.")) == 0) rownames(df) <- gsub("\\..+$", "",rownames(df))
+    return(df)
+    }
+  })
+  output$input_ens <- DT::renderDataTable({
+    input_ens()
+  })
+  id_convert_ens <- reactive({
+    if(input$Species_ens != "not selected") {
+      if(gene_type_ens() == "SYMBOL") validate("The gene names must be ENSEMBL ID.")
+      data <- ensembl2symbol(gene_type=gene_type_ens(),
+                             data = input_ens(), input$Species_ens,
+                             Ortholog=ortholog_ens(),org = org_ens())
+      data$Unique_ID <- paste0(data$SYMBOL,"\n- ",rownames(data))
+      id_list <- gsub("\\\n.+$", "", data$Unique_ID)
+      dup_list <- unique(id_list[duplicated(id_list)])
+      for(i in 1:dim(data)[1]){
+        if(! gsub("\\\n.+$", "", data$Unique_ID[i]) %in% dup_list) {
+          data$Unique_ID[i] <- data$SYMBOL[i]
+        }else if(gsub("\\\n.+$", "", data$Unique_ID[i]) == "NA") {
+          data$Unique_ID[i] <- rownames(data)[i]
+        }else data$Unique_ID[i] <- gsub("\\\n"," ", data$Unique_ID[i])
+      }
+      return(data)
+    }
+  })
+  output$input_ens2symbol <- DT::renderDataTable({
+    id_convert_ens()
+  })
+  output$download_ens2symbol = downloadHandler(
+    filename = function(){
+      paste0(sub("\\..+$", "", input$data_file_ens), "_to_symbol.txt")
+    },
+    content = function(file) {write.table(id_convert_ens(), file, quote = F, row.names = T,col.names = NA, sep = "\t")})
+  
   
 })

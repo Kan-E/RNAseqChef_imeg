@@ -242,9 +242,10 @@ gene_list_convert_for_enrichment <- function(gene_type,data, Ortholog,Isoform,or
           gene_IDs <- Isoform
         }else{
         if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
+        if(org$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
         gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
                                         keytype = key,
-                                        columns = c(key,"SYMBOL", "ENTREZID"))
+                                        columns = c(key,SYMBOL, "ENTREZID"))
         }
         colnames(gene_IDs) <- c("GeneID","SYMBOL", "ENTREZID")
       }else{
@@ -253,9 +254,10 @@ gene_list_convert_for_enrichment <- function(gene_type,data, Ortholog,Isoform,or
         }else if(gene_type == "isoform"){
           gene_IDs <- Isoform[,-1]
         }else{
+          if(org$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
         gene_IDs <- AnnotationDbi::select(org, keys = my.symbols,
-                                          keytype = "SYMBOL",
-                                          columns = c("ENTREZID", "SYMBOL"))
+                                          keytype = SYMBOL,
+                                          columns = c("ENTREZID", SYMBOL))
         }
         colnames(gene_IDs) <- c("GeneID","ENTREZID")
       }
@@ -1022,9 +1024,10 @@ data_3degcount2 <- function(gene_type,data3, Species, Ortholog,Isoform,org){
           }else{
           my.symbols <- data4$Row.names
           if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
+          if(org$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
           gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
                                           keytype = key,
-                                          columns = c(key,"SYMBOL", "ENTREZID"))
+                                          columns = c(key,SYMBOL, "ENTREZID"))
           }
           colnames(gene_IDs) <- c("Row.names","SYMBOL", "ENTREZID")
           gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
@@ -1038,9 +1041,10 @@ data_3degcount2 <- function(gene_type,data3, Species, Ortholog,Isoform,org){
             gene_IDs <- Isoform[,-1]
           }else{
           my.symbols <- data4$Row.names
+          if(org$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
           gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
-                                          keytype = "SYMBOL",
-                                          columns = c("SYMBOL", "ENTREZID"))
+                                          keytype = SYMBOL,
+                                          columns = c(SYMBOL, "ENTREZID"))
           }
           colnames(gene_IDs) <- c("Row.names", "ENTREZID")
           gene_IDs <- gene_IDs %>% distinct(Row.names, .keep_all = T)
@@ -1052,7 +1056,7 @@ data_3degcount2 <- function(gene_type,data3, Species, Ortholog,Isoform,org){
   }
 }
 cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, specific, 
-                               fc, fdr, basemean, y_axis=NULL, x_axis=NULL,
+                               fc, fdr, basemean, y_axis=NULL, x_axis=NULL,id_cut,
                                GOI=NULL, heatmap = TRUE, Species,brush=NULL){
   if(is.null(data)){
     return(NULL)
@@ -1208,6 +1212,17 @@ cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, 
       }
       if(gene_type != "SYMBOL"){
         if(Species != "not selected"){
+          if(id_cut) {
+            id_list <- gsub("\\\n.+$", "", data3$Unique_ID)
+            dup_list <- unique(id_list[duplicated(id_list)])
+            for(i in 1:length(data3$Unique_ID)){
+              if(gsub("\\\n.+$", "", data3$Unique_ID[i]) == "NA") {
+                data3$Unique_ID[i] <- gsub(".+\\s", "", data3$Unique_ID[i])
+              }else if(! gsub("\\\n.+$", "", data3$Unique_ID[i]) %in% dup_list) {
+                data3$Unique_ID[i] <- gsub("\\\n.+$", "", data3$Unique_ID[i])
+              }
+            }
+          }
           p <- p + geom_point(data=dplyr::filter(data3, color == "GOI"),color="green", size=1)
           p <- p + ggrepel::geom_label_repel(data = dplyr::filter(data3, color == "GOI"), mapping = aes(label = Unique_ID),alpha = 0.6,label.size = NA, 
                                             box.padding = unit(0.35, "lines"), point.padding = unit(0.3,"lines"), force = 1, fontface = "bold.italic")
@@ -1856,9 +1871,10 @@ enrich_viewer_forMulti1 <- function(gene_type,df, Species, Ortholog,Isoform, org
         gene_IDs <- Isoform
       }else{
       if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
+      if(org$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
       gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
                                       keytype = key,
-                                      columns = c(key,"SYMBOL", "ENTREZID"))
+                                      columns = c(key,SYMBOL, "ENTREZID"))
       }
       colnames(gene_IDs) <- c("GeneID","SYMBOL", "ENTREZID")
     }else{
@@ -2252,11 +2268,8 @@ MotifRegion <- function(data, target_motif, Species, x){
   df <- data.frame(GeneID = data[,1], Group = data[,2])
   target_motif$Group <- gsub(" ", "\n", target_motif$Group)
   name <- gsub("\\\n.+$", "", target_motif$Group)
-  print(head(target_motif))
   data <- dplyr::filter(df, Group %in% name)
   my.symbols <- data$GeneID
-  print(head(data))
-  print(head(my.symbols))
   if(str_detect(my.symbols[1], "ENS") || str_detect(my.symbols[1], "FBgn") ||
      str_detect(my.symbols[1], "^AT.G")){
     if(sum(is.element(no_orgDb, Species)) == 1){
@@ -2274,9 +2287,10 @@ MotifRegion <- function(data, target_motif, Species, x){
       gene_IDs <- org(Species)
       gene_IDs <- gene_IDs[,-1]
     }else{
+      if(org$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
     gene_IDs <- AnnotationDbi::select(org(Species), keys = my.symbols,
-                                      keytype = "SYMBOL",
-                                      columns = c("SYMBOL","ENTREZID"))
+                                      keytype = SYMBOL,
+                                      columns = c(SYMBOL,"ENTREZID"))
     }
     colnames(gene_IDs) <- c("SYMBOL","gene_id")
   }
@@ -2413,9 +2427,10 @@ ensembl2symbol <- function(data,Species,Ortholog,Isoform,gene_type,org, merge=TR
     if(gene_type == "ENSEMBL"){
       my.symbols <- gsub("\\..*","", rownames(data))
       if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
+      if(org$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
       gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
                                       keytype = key,
-                                      columns = c(key,"SYMBOL"))
+                                      columns = c(key,SYMBOL))
     }
     if(gene_type == "isoform"){
       gene_IDs <- try(Isoform[,-3])
@@ -2448,12 +2463,16 @@ gene_type <- function(my.symbols,org,Species,RNA_type="gene_level"){
     ENS <- "ENSEMBL"
     ENT <- "SYMBOL"
     if(sum(is.element(no_orgDb, Species)) != 1){
+      if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
+      print("a")
+      if(org$packageName == "org.Sc.sgd.db") SYMBOLa <- "GENENAME" else SYMBOLa <- "SYMBOL"
+      print("b")
     ENSEMBL<-try(AnnotationDbi::select(org,keys = my.symbols,
-                                       keytype = ENS,
-                                       columns = c(ENS, "ENTREZID")))
+                                       keytype = key,
+                                       columns = c(key, "ENTREZID")))
     SYMBOL <-try(AnnotationDbi::select(org,keys = my.symbols,
-                                       keytype = ENT,
-                                       columns = c(ENT, "ENTREZID")))
+                                       keytype = SYMBOLa,
+                                       columns = c(SYMBOLa, "ENTREZID")))
     if(class(ENSEMBL) == "try-error" && class(SYMBOL) != "try-error") {type <- "SYMBOL"
     }else if(class(ENSEMBL) != "try-error" && class(SYMBOL) == "try-error") {type <- "ENSEMBL"
     }else if(class(ENSEMBL) == "try-error" && class(SYMBOL) == "try-error") {validate("Cannot identify gene IDs. Please check the 'Species' and use the 'Official gene symbol' or 'ENSEMBL ID' for gene names.")
