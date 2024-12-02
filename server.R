@@ -1005,10 +1005,11 @@ shinyServer(function(input, output, session) {
   })
   
   output$GOI <- renderUI({
-    if(is.null(deg_norm_count())){
+    if(is.null(GOI_list())){
       return(NULL)
     }else{
       withProgress(message = "Preparing GOI list (about 10 sec)",{
+        print("GOI_list_ui")
         selectizeInput("GOI", "genes of interest (GOI)", c(GOI_list()),multiple = TRUE, 
                        options = list(delimiter = " ", create = T))
       })
@@ -1031,14 +1032,18 @@ shinyServer(function(input, output, session) {
                                                                                                 "GO cellular component","GO molecular function")) 
     }
   }))
+  GOI_color_pathway_list <- reactive({
+    list <- unique(GeneList_for_enrichment(Species = input$Species, Ortholog = input$Ortholog,
+                                           Gene_set=input$GOI_color_pathway1, org = org1(), 
+                                           Biomart_archive=input$Biomart_archive,gene_type=gene_type1())$gs_name)
+    list <- gsub("_", " ", list)
+    return(list)
+  })
   observeEvent(input$GOI_color_pathway1, ({
     if(is.null(input$GOI_color_pathway1)){
       updateSelectInput(session, "GOI_color_pathway2","","")
     }else{
-      list <- unique(GeneList_for_enrichment(Species = input$Species, Ortholog = input$Ortholog,
-                                             Gene_set=input$GOI_color_pathway1, org = org1(), 
-                                             Biomart_archive=input$Biomart_archive,gene_type=gene_type1())$gs_name)
-      updateSelectInput(session, "GOI_color_pathway2","",list)
+      updateSelectInput(session, "GOI_color_pathway2","",GOI_color_pathway_list())
     }
   }))
   output$GOIreset_pair <- renderUI({
@@ -1090,11 +1095,14 @@ shinyServer(function(input, output, session) {
   })
   pair_pathway_color_gene <- reactive({
     ##extract pathway genes
-    if(is.null(input$GOI_color_pathway1) || is.null(input$GOI_color_pathway2) || is.null(gene_type1()) || is.null(org1())) validate("")
+    if(is.null(input$GOI_color_pathway1) || is.null(input$GOI_color_pathway2) || 
+       is.null(gene_type1()) || is.null(org1()) || input$GOI_color_pathway1 == "" || 
+       input$GOI_color_pathway2 == "" || !input$GOI_color_pathway2 %in% GOI_color_pathway_list()) validate("")
     genes <- GeneList_for_enrichment(Species = input$Species, Ortholog = input$Ortholog,
                                      Gene_set=input$GOI_color_pathway1, org = org1(), 
                                      Biomart_archive=input$Biomart_archive,gene_type=gene_type1())
-    genes <- try(dplyr::filter(genes, gs_name == input$GOI_color_pathway2))
+    GOI_color_pathway2 <- gsub(" ","_",input$GOI_color_pathway2)
+    genes <- try(dplyr::filter(genes, gs_name == GOI_color_pathway2))
     if(length(genes) == 1) if(class(genes)=="try-error") validate("")
     
     my.symbols <- as.character(genes$entrez_gene)
@@ -2458,8 +2466,10 @@ shinyServer(function(input, output, session) {
   pair_enrich_table <- reactive({
     if(!is.null(input$Gene_set) && input$Species != "not selected"){
       if(input$Species != "Xenopus laevis" && input$Ortholog != "Arabidopsis thaliana" && input$Species != "Arabidopsis thaliana"){
-        return(enrich_for_table(data = as.data.frame(enrichment_1_1()), H_t2g = Hallmark_set(), Gene_set = input$Gene_set))
-      }else return(as.data.frame(enrichment_1_1()))
+        table <- enrich_for_table(data = as.data.frame(enrichment_1_1()), H_t2g = Hallmark_set(), Gene_set = input$Gene_set)
+      }else table <- as.data.frame(enrichment_1_1())
+      table$Gene_set_name <- gsub("_"," ",table$Gene_set_name)
+      return(table)
     }
   })
   
@@ -2495,6 +2505,7 @@ shinyServer(function(input, output, session) {
                                   pvalue = data2$pvalue, p.adjust = data2$p.adjust, qvalue = data2$qvalue, 
                                   rank = data2$rank, leading_edge = data2$leading_edge, core_enrichment = data2$core_enrichment)
             }
+            data3$Gene_set_name <- gsub("_"," ",data3$Gene_set_name)
             return(data3) 
           }
         }
@@ -7433,14 +7444,18 @@ shinyServer(function(input, output, session) {
                                                         "GO cellular component","GO molecular function")) 
     }
   }))
+  norm_gene_pathway_filter_list <- reactive({
+    list <- unique(GeneList_for_enrichment(Species = input$Species3, Ortholog = input$Ortholog3,
+                                           Gene_set=input$gene_set_forFilter, org = org3(), 
+                                           Biomart_archive=input$Biomart_archive3,gene_type=gene_type3())$gs_name)
+    list <- gsub("_", " ", list)
+    return(list)
+  })
   observeEvent(input$gene_set_forFilter, ({
     if(is.null(input$gene_set_forFilter)){
       updateSelectInput(session, "gene_set_forFilter2","","")
     }else{
-      list <- unique(GeneList_for_enrichment(Species = input$Species3, Ortholog = input$Ortholog3,
-                                      Gene_set=input$gene_set_forFilter, org = org3(), 
-                                      Biomart_archive=input$Biomart_archive3,gene_type=gene_type3())$gs_name)
-      updateSelectInput(session, "gene_set_forFilter2","",list)
+      updateSelectInput(session, "gene_set_forFilter2","",norm_gene_pathway_filter_list())
     }
   }))
   
@@ -7489,12 +7504,14 @@ shinyServer(function(input, output, session) {
     df <- as.data.frame(gene, row.names = gene)
     }else if(input$norm_filter == "Gene set" && input$Species3 != "not selected"){
       print("c")
-      if(is.null(input$gene_set_forFilter) || is.null(input$gene_set_forFilter2)) validate("")
-      print("d1")
+      if(is.null(input$gene_set_forFilter) || is.null(input$gene_set_forFilter2) || 
+         input$gene_set_forFilter == "" || input$gene_set_forFilter2 == "" ||
+         !input$gene_set_forFilter2 %in% norm_gene_pathway_filter_list()) validate("")
+      gene_set_forFilter2 <- gsub(" ","_",input$gene_set_forFilter2)
       genes <- GeneList_for_enrichment(Species = input$Species3, Ortholog = input$Ortholog3,
                                        Gene_set=input$gene_set_forFilter, org = org3(), 
                                        Biomart_archive=input$Biomart_archive3,gene_type=gene_type3())
-      genes <- try(dplyr::filter(genes, gs_name == input$gene_set_forFilter2))
+      genes <- try(dplyr::filter(genes, gs_name == gene_set_forFilter2))
       if(length(genes) == 1) if(class(genes)=="try-error") validate("")
       print("e")
       print(gene_type3())
@@ -7532,11 +7549,13 @@ shinyServer(function(input, output, session) {
         if(is.null(row)) {
           return(NULL)
         }else{
-          print("a")
+          print("a1")
           if(input$norm_filter != "not selected" && input$Species3 != "not selected"){
-            print("b")
-            if(is.null(input$gene_set_forFilter) || is.null(input$gene_set_forFilter2)) validate("")
-            print("c")
+            print("b1")
+            if(is.null(input$gene_set_forFilter) || is.null(input$gene_set_forFilter2) || 
+               input$gene_set_forFilter == "" || input$gene_set_forFilter2 == "" ||
+               !input$gene_set_forFilter2 %in% norm_gene_pathway_filter_list()) validate("")
+            print("c1")
           if(!is.null(gene_list)){
             row <- merge(row,gene_list, by=0)
             print(head(row))
@@ -7774,16 +7793,24 @@ shinyServer(function(input, output, session) {
     if(is.null(GOI_list3())){
       return(NULL)
     }else{ 
-      print(paste0("The number of genes after the filtration: ", length(GOI_list3())))
+      if(length(input$selectFC_normGOI) == 2){
+        print(paste0("The number of genes after the filtration (basemean > ", input$basemean3,", |log2(", 
+                     input$selectFC_normGOI[1],"/", input$selectFC_normGOI[2],")| > ", log2(input$fc3),"): ", 
+                     length(GOI_list3())))
+      }else{
+        print(paste0("The number of genes after the filtration (basemean > ", input$basemean3,"): ", 
+                     length(GOI_list3())))
+      }
     }
   })
   output$selectFC_normGOI <- renderUI({
     if(is.null(d_norm_count_matrix_cutofff())){
       return(NULL)
     }else{
-      selectizeInput("selectFC_normGOI", "Option: select a pair for fold change cut-off", c(unique(unique(gsub("\\_.*","", colnames(d_norm_count_matrix_cutofff()))))),
-                     selected = "", multiple = TRUE, 
-                     options = list(maxItems = 2))
+      selectizeInput("selectFC_normGOI", "Option: select a pair for fold change cut-off", 
+                     choices =c(unique(unique(gsub("\\_.*","", colnames(d_norm_count_matrix_cutofff()))))),
+                     selected = "", options = list(maxItems = 2)
+                     )
     }
   })
   
@@ -7800,6 +7827,20 @@ shinyServer(function(input, output, session) {
         count <- data2[,-1]
       }
     return(count)
+    }
+  })
+  d_norm_count_uniqueID <- reactive({
+    count <- as.data.frame(d_norm_count_matrix())
+    if(!is.null(count)){
+      if(!is.null(gene_ID_norm())){
+        gene_IDs  <- gene_ID_norm()
+        data2 <- merge(count, gene_IDs, by= 0)
+        rownames(data2) <- data2[,1]
+        data2 <- data2[, - which(colnames(data2) == "Row.names.y")]
+        data2$Unique_ID <- paste(data2$SYMBOL,data2$Row.names, sep = "\n- ")
+        count <- data2[,-1]
+      }
+      return(count)
     }
   })
   GOI_list3 <- reactive({
@@ -7824,29 +7865,33 @@ shinyServer(function(input, output, session) {
     }
   })
   preGOI_list3 <- reactive({
-    data <- d_norm_count_cutoff_uniqueID()
-    if(length(input$selectFC_normGOI) == 2){
-      if(dim(data)[1] != 0){
-        cond1 <- input$selectFC_normGOI[1]
-        cond2 <- input$selectFC_normGOI[2]
-        cond1_num <- data %>% dplyr::select(.,starts_with(cond1)) %>% colnames() %>% length()
-        cond2_num <- data %>% dplyr::select(.,starts_with(cond2)) %>% colnames() %>% length()
-        cond1_ave <- data %>% dplyr::select(starts_with(cond1)) %>% rowSums(na.rm=TRUE)/cond1_num
-        cond2_ave <- data %>% dplyr::select(starts_with(cond2)) %>% rowSums(na.rm=TRUE)/cond2_num
-        Log2FoldChange <- log((cond1_ave + 0.01)/(cond2_ave + 0.01),2)
-        data$Log2FoldChange <- Log2FoldChange
-        data2 <- data %>% dplyr::filter(abs(Log2FoldChange) > log2(input$fc3))
-        data2 <- data2[, - which(colnames(data2) == "Log2FoldChange")]
-      }else data2 <- NULL
-    }else data2 <- d_norm_count_cutoff_uniqueID()
+    if(input$normGOI_filter_on == "ON"){
+      print(input$selectFC_normGOI)
+      if(length(input$selectFC_normGOI) == 2){
+        data <- d_norm_count_cutoff_uniqueID()
+        if(dim(data)[1] != 0){
+          cond1 <- input$selectFC_normGOI[1]
+          cond2 <- input$selectFC_normGOI[2]
+          cond1_num <- data %>% dplyr::select(.,starts_with(cond1)) %>% colnames() %>% length()
+          cond2_num <- data %>% dplyr::select(.,starts_with(cond2)) %>% colnames() %>% length()
+          cond1_ave <- data %>% dplyr::select(starts_with(cond1)) %>% rowSums(na.rm=TRUE)/cond1_num
+          cond2_ave <- data %>% dplyr::select(starts_with(cond2)) %>% rowSums(na.rm=TRUE)/cond2_num
+          Log2FoldChange <- log((cond1_ave + 0.01)/(cond2_ave + 0.01),2)
+          data$Log2FoldChange <- Log2FoldChange
+          data2 <- data %>% dplyr::filter(abs(Log2FoldChange) > log2(input$fc3))
+          data2 <- data2[, - which(colnames(data2) == "Log2FoldChange")]
+        }else data2 <- NULL
+      }else data2 <- d_norm_count_uniqueID()
+    }else data2 <- d_norm_count_uniqueID()
     return(data2)
   })
   
   output$GOI3 <- renderUI({
-    if(is.null(d_norm_count_matrix_cutofff())){
+    if(is.null(GOI_list3())){
       return(NULL)
     }else{
       withProgress(message = "Preparing GOI list (about 10 sec)",{
+        print("GOI_list3")
         selectizeInput("GOI3", "genes of interest (GOI)", c(GOI_list3()),multiple = TRUE, options = list(delimiter = " ", create = T))
       })
     }
@@ -7874,7 +7919,7 @@ shinyServer(function(input, output, session) {
     }
   })
   norm_GOIcount <- reactive({
-    count <- d_norm_count_cutoff_uniqueID()
+    count <- d_norm_count_uniqueID() 
     if(gene_type3() != "SYMBOL"){
       if(input$Species3 != "not selected"){
         Unique_ID <- GOI3_INPUT()
@@ -10122,23 +10167,30 @@ shinyServer(function(input, output, session) {
                                                                                                     "GO cellular component","GO molecular function")) 
     }
   }))
+  deg_GOI_color_pathway_list <- reactive({
+    list <- unique(GeneList_for_enrichment(Species = input$Species5, Ortholog = input$Ortholog5,
+                                           Gene_set=input$deg_GOI_color_pathway1, org = org5(), 
+                                           Biomart_archive=input$Biomart_archive5,gene_type=gene_type5())$gs_name)
+    list <- gsub("_", " ", list)
+    return(list)
+  })
   observeEvent(input$deg_GOI_color_pathway1, ({
     if(is.null(input$deg_GOI_color_pathway1)){
       updateSelectInput(session, "deg_GOI_color_pathway2","","")
     }else{
-      list <- unique(GeneList_for_enrichment(Species = input$Species5, Ortholog = input$Ortholog5,
-                                             Gene_set=input$deg_GOI_color_pathway1, org = org5(), 
-                                             Biomart_archive=input$Biomart_archive5,gene_type=gene_type5())$gs_name)
-      updateSelectInput(session, "deg_GOI_color_pathway2","",list)
+      updateSelectInput(session, "deg_GOI_color_pathway2","",deg_GOI_color_pathway_list())
     }
   }))
   deg_pathway_color_gene <- reactive({
     ##extract pathway genes
-    if(is.null(input$deg_GOI_color_pathway1) || is.null(input$deg_GOI_color_pathway2)) validate("")
+    if(is.null(input$deg_GOI_color_pathway1) || is.null(input$deg_GOI_color_pathway2) ||
+       input$deg_GOI_color_pathway1 == "" || input$deg_GOI_color_pathway2 == "" || 
+       !input$deg_GOI_color_pathway2 %in% deg_GOI_color_pathway_list()) validate("")
     genes <- GeneList_for_enrichment(Species = input$Species5, Ortholog = input$Ortholog5,
                                      Gene_set=input$deg_GOI_color_pathway1, org = org5(), 
                                      Biomart_archive=input$Biomart_archive5,gene_type=gene_type5())
-    genes <- try(dplyr::filter(genes, gs_name == input$deg_GOI_color_pathway2))
+    GOI_color_pathway2 <- gsub(" ","_",input$deg_GOI_color_pathway2)
+    genes <- try(dplyr::filter(genes, gs_name == GOI_color_pathway2))
     if(length(genes) == 1) if(class(genes)=="try-error") validate("")
     
     my.symbols <- as.character(genes$entrez_gene)

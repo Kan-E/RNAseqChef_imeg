@@ -388,7 +388,7 @@ shinyUI(
                                 column(4, htmlOutput("volcano_y"))
                               ),
                               conditionalPanel(condition="input.GOI_color_type=='pathway'",
-                                               column(6,selectInput("GOI_color_pathway1","Select a gene set",choices = ""),
+                                               column(10,selectInput("GOI_color_pathway1","Select a gene set",choices = ""),
                                                       selectInput("GOI_color_pathway2","",choices = ""))             
                               ),
                               htmlOutput("GOI"),
@@ -1657,12 +1657,15 @@ shinyUI(
                               ),
                               fluidRow(
                                 column(4, 
+                                       radioButtons("normGOI_filter_on","Filter (basemean, fold change)",c("ON" = "ON","OFF"="OFF"),selected = "OFF"),
+                                       conditionalPanel(condition="input.normGOI_filter_on=='ON'",
                                        htmlOutput("selectFC_normGOI"),
                                        textOutput("filtered_regionGOI"),
                                        tags$head(tags$style("#filtered_regionGOI{color: red;
                                  font-size: 20px;
                                  font-style: bold;
-                                 }")),
+                                 }"))
+                                       ),
                                        radioButtons('GOI3_type','Genes:',
                                                     c('Select all genes'="ALL",
                                                       'Custom'="custom"

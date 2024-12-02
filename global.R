@@ -2494,47 +2494,48 @@ consensus_kmeans = function(mat, centers, km_repeats) {
   as.vector(cl_class_ids(partition_consensus)) 
 }
 
-corr_plot_pair <- function(data,corr_color,GOI_x,GOI_y){
+corr_plot_pair <- function(data,corr_color,GOI_x,GOI_y,logscale=TRUE){
   p1 <- NULL
   p2 <- NULL
   if(corr_color == ""){
-    p1 <- ggplot(data, aes(x=log10(.data[[GOI_x]]+1),y=log10(.data[[GOI_y]]+1))) +
-      geom_smooth(method=lm, se=FALSE, color='#2C3E50',linetype="dashed",size=0.5)
+    if(logscale) p1 <- ggplot(data, aes(x=log10(.data[[GOI_x]]+1),y=log10(.data[[GOI_y]]+1))) else p1 <- ggplot(data, aes(x=.data[[GOI_x]],y=.data[[GOI_y]]))
+    p1 <- p1 + geom_smooth(method=lm, se=FALSE, color='#2C3E50',linetype="dashed",size=0.5)
   }else if(corr_color == "sample_name"){
     label <- gsub("\\_.+$", "", rownames(data))
-    p1 <- ggplot(data, aes(x=log10(.data[[GOI_x]]+1),y=log10(.data[[GOI_y]]+1), col=label)) +
-      geom_smooth(method=lm, se=FALSE, color='#2C3E50',linetype="dashed",size=0.5)
+    if(logscale) p1 <- ggplot(data, aes(x=log10(.data[[GOI_x]]+1),y=log10(.data[[GOI_y]]+1), col=label)) else p1 <- ggplot(data, aes(x=.data[[GOI_x]],y=.data[[GOI_y]], col=label))
+    p1 <- p1 + geom_smooth(method=lm, se=FALSE, color='#2C3E50',linetype="dashed",size=0.5)
   }else {
-    p2 <- ggplot(data, aes(x=log10(.data[[GOI_x]]+1),y=log10(.data[[GOI_y]]+1), col=log10(.data[[corr_color]]))) +
-      geom_smooth(method=lm, se=FALSE, color='#2C3E50',linetype="dashed",size=0.5)
+    if(logscale) p1 <- ggplot(data, aes(x=log10(.data[[GOI_x]]+1),y=log10(.data[[GOI_y]]+1), col=log10(.data[[corr_color]]))) else p1 <- ggplot(data, aes(x=.data[[GOI_x]],y=.data[[GOI_y]], col=.data[[corr_color]]))
+    p1 <- p1 + geom_smooth(method=lm, se=FALSE, color='#2C3E50',linetype="dashed",size=0.5)
   }
   if(!is.null(p1)){
     p <- p1 +
       geom_point()+ 
       theme_bw()+ 
-      xlab(paste(strwrap(paste0("log10(", GOI_x," + 1)"), width = 30),collapse = "\n"))+
-      ylab(paste(strwrap(paste0("log10(", GOI_y," + 1)"), width = 30),collapse = "\n"))+
       theme(legend.position = "top" , legend.title = element_blank(),
             axis.text.x= ggplot2::element_text(size = 12),
             axis.text.y= ggplot2::element_text(size = 12),
             text = ggplot2::element_text(size = 15),
             title = ggplot2::element_text(size = 15),
             plot.title = element_text(size = 15))
+    if(logscale) p<- p + 
+        xlab(paste(strwrap(paste0("log10(", GOI_x," + 1)"), width = 30),collapse = "\n"))+
+        ylab(paste(strwrap(paste0("log10(", GOI_y," + 1)"), width = 30),collapse = "\n"))
   }
   if(!is.null(p2)){
     p <- p2 +
       geom_point()+
       scale_color_continuous(low="blue", high="red")+ 
       theme_bw()+
-      ggtitle(paste(strwrap(paste0("color = log10(", corr_color," + 1)"), width = 30),collapse = "\n"))+ 
-      xlab(paste(strwrap(paste0("log10(", GOI_x," + 1)"), width = 30),collapse = "\n"))+
-      ylab(paste(strwrap(paste0("log10(", GOI_y," + 1)"), width = 30),collapse = "\n"))+
       theme(legend.title = element_blank(),
             axis.text.x= ggplot2::element_text(size = 12),
             axis.text.y= ggplot2::element_text(size = 12),
             text = ggplot2::element_text(size = 15),
             title = ggplot2::element_text(size = 15),
             plot.title = element_text(size = 15))
+    if(logscale) p <- p + ggtitle(paste(strwrap(paste0("color = log10(", corr_color," + 1)"), width = 30),collapse = "\n"))+ 
+        xlab(paste(strwrap(paste0("log10(", GOI_x," + 1)"), width = 30),collapse = "\n"))+
+        ylab(paste(strwrap(paste0("log10(", GOI_y," + 1)"), width = 30),collapse = "\n"))
   }
   return(p)
 }
