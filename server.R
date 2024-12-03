@@ -1036,7 +1036,6 @@ shinyServer(function(input, output, session) {
     list <- unique(GeneList_for_enrichment(Species = input$Species, Ortholog = input$Ortholog,
                                            Gene_set=input$GOI_color_pathway1, org = org1(), 
                                            Biomart_archive=input$Biomart_archive,gene_type=gene_type1())$gs_name)
-    list <- gsub("_", " ", list)
     return(list)
   })
   observeEvent(input$GOI_color_pathway1, ({
@@ -1101,8 +1100,7 @@ shinyServer(function(input, output, session) {
     genes <- GeneList_for_enrichment(Species = input$Species, Ortholog = input$Ortholog,
                                      Gene_set=input$GOI_color_pathway1, org = org1(), 
                                      Biomart_archive=input$Biomart_archive,gene_type=gene_type1())
-    GOI_color_pathway2 <- gsub(" ","_",input$GOI_color_pathway2)
-    genes <- try(dplyr::filter(genes, gs_name == GOI_color_pathway2))
+    genes <- try(dplyr::filter(genes, gs_name == input$GOI_color_pathway2))
     if(length(genes) == 1) if(class(genes)=="try-error") validate("")
     
     my.symbols <- as.character(genes$entrez_gene)
@@ -2468,7 +2466,6 @@ shinyServer(function(input, output, session) {
       if(input$Species != "Xenopus laevis" && input$Ortholog != "Arabidopsis thaliana" && input$Species != "Arabidopsis thaliana"){
         table <- enrich_for_table(data = as.data.frame(enrichment_1_1()), H_t2g = Hallmark_set(), Gene_set = input$Gene_set)
       }else table <- as.data.frame(enrichment_1_1())
-      table$Gene_set_name <- gsub("_"," ",table$Gene_set_name)
       return(table)
     }
   })
@@ -2505,7 +2502,6 @@ shinyServer(function(input, output, session) {
                                   pvalue = data2$pvalue, p.adjust = data2$p.adjust, qvalue = data2$qvalue, 
                                   rank = data2$rank, leading_edge = data2$leading_edge, core_enrichment = data2$core_enrichment)
             }
-            data3$Gene_set_name <- gsub("_"," ",data3$Gene_set_name)
             return(data3) 
           }
         }
@@ -7448,7 +7444,6 @@ shinyServer(function(input, output, session) {
     list <- unique(GeneList_for_enrichment(Species = input$Species3, Ortholog = input$Ortholog3,
                                            Gene_set=input$gene_set_forFilter, org = org3(), 
                                            Biomart_archive=input$Biomart_archive3,gene_type=gene_type3())$gs_name)
-    list <- gsub("_", " ", list)
     return(list)
   })
   observeEvent(input$gene_set_forFilter, ({
@@ -7507,11 +7502,10 @@ shinyServer(function(input, output, session) {
       if(is.null(input$gene_set_forFilter) || is.null(input$gene_set_forFilter2) || 
          input$gene_set_forFilter == "" || input$gene_set_forFilter2 == "" ||
          !input$gene_set_forFilter2 %in% norm_gene_pathway_filter_list()) validate("")
-      gene_set_forFilter2 <- gsub(" ","_",input$gene_set_forFilter2)
       genes <- GeneList_for_enrichment(Species = input$Species3, Ortholog = input$Ortholog3,
                                        Gene_set=input$gene_set_forFilter, org = org3(), 
                                        Biomart_archive=input$Biomart_archive3,gene_type=gene_type3())
-      genes <- try(dplyr::filter(genes, gs_name == gene_set_forFilter2))
+      genes <- try(dplyr::filter(genes, gs_name == input$gene_set_forFilter2))
       if(length(genes) == 1) if(class(genes)=="try-error") validate("")
       print("e")
       print(gene_type3())
@@ -10171,7 +10165,6 @@ shinyServer(function(input, output, session) {
     list <- unique(GeneList_for_enrichment(Species = input$Species5, Ortholog = input$Ortholog5,
                                            Gene_set=input$deg_GOI_color_pathway1, org = org5(), 
                                            Biomart_archive=input$Biomart_archive5,gene_type=gene_type5())$gs_name)
-    list <- gsub("_", " ", list)
     return(list)
   })
   observeEvent(input$deg_GOI_color_pathway1, ({
@@ -10189,8 +10182,7 @@ shinyServer(function(input, output, session) {
     genes <- GeneList_for_enrichment(Species = input$Species5, Ortholog = input$Ortholog5,
                                      Gene_set=input$deg_GOI_color_pathway1, org = org5(), 
                                      Biomart_archive=input$Biomart_archive5,gene_type=gene_type5())
-    GOI_color_pathway2 <- gsub(" ","_",input$deg_GOI_color_pathway2)
-    genes <- try(dplyr::filter(genes, gs_name == GOI_color_pathway2))
+    genes <- try(dplyr::filter(genes, gs_name == input$GOI_color_pathway2))
     if(length(genes) == 1) if(class(genes)=="try-error") validate("")
     
     my.symbols <- as.character(genes$entrez_gene)
@@ -10655,7 +10647,9 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       withProgress(message = "Prepare gene sets",{
-        msigdbr_list <- msigdbr(species = input$msigdbr_Species)
+        msigdbr_list <- msigdbr(species = input$msigdbr_Species) %>%
+          as.data.frame()
+        msigdbr_list$gs_name <- gsub("_"," ",msigdbr_list$gs_name)
         return(msigdbr_list)
       })
     }
@@ -10666,8 +10660,7 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       data <- msigdbr_list() %>% 
-        dplyr::filter(gs_name == input$msigdbr_gene_set) %>%
-        as.data.frame()
+        dplyr::filter(gs_name == input$msigdbr_gene_set)
       return(data)
     }
   }) 
