@@ -70,7 +70,7 @@ gene_set_list <- c("MSigDB Hallmark", "KEGG", "Reactome", "PID (Pathway Interact
                    "GO cellular component","GO molecular function", "Human phenotype ontology", 
                    "DoRothEA regulon (activator)", "DoRothEA regulon (repressor)",
                    "Transcription factor targets", "miRNA target","Position",
-                   "CGP (chemical and genetic pertubations)","ImmuneSigDB","Macrophage (412 gene sets from ImmuneSigDB)","VAX (vaccine response)",
+                   "CGP (chemical and genetic pertubations)","ImmuneSigDB","Macrophage (444 gene sets from ImmuneSigDB)","VAX (vaccine response)",
                    "Cell type signature","Custom gene set")
 biomart_data <- read.table("https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/non-model.txt",sep = "\t", row.names = 1,header = T,quote = "")
 biomart_plants <- read.table("https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/non-model_plants.txt",sep = "\t",header = T,quote = "")
@@ -1540,11 +1540,13 @@ GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene
       H_t2g <- H_t2g %>% dplyr::filter(gs_subcat == "C7" | gs_subcat == "IMMUNESIGDB") %>%
         dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
     }
-    if(Gene_set == "Macrophage (412 gene sets from ImmuneSigDB)"){
+    if(Gene_set == "Macrophage (444 gene sets from ImmuneSigDB)"){
       H_t2g <- msigdbr(species = species, category = "C7")
       H_t2g <- H_t2g %>% dplyr::filter(gs_subcat == "C7" | gs_subcat == "IMMUNESIGDB") %>%
-        dplyr::select(gs_name, entrez_gene, gs_id, gs_description) %>% 
-        dplyr::filter(grepl(x = gs_name,pattern="MACROPHAGE"))
+        dplyr::select(gs_name, entrez_gene, gs_id, gs_description) %>% as.data.frame()
+      macrophages <- H_t2g %>% dplyr::filter(grepl(x = gs_name,pattern="MACROPHAGE"))
+      BMDMs <- H_t2g %>% dplyr::filter(grepl(x = gs_name,pattern="BMDM"))
+      H_t2g <- rbind(macrophages, BMDMs)
     }
     if(Gene_set == "VAX (vaccine response)"){
       H_t2g <- msigdbr(species = species, category = "C7")
