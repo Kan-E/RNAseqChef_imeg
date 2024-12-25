@@ -727,11 +727,17 @@ shinyUI(
                                 column(4, downloadButton("download_3cond_GOIheat", "Download heatmap"))
                               ),
                               fluidRow(
-                                column(4, htmlOutput("GOI2"), htmlOutput("cond3_GOI_pair"),
-                                       htmlOutput("cond3_uniqueID_cut")),
+                                column(4,
+                                       htmlOutput("cond3_GOI_color_type")),
                                 column(4, htmlOutput("cond3_xrange"), htmlOutput("GOIreset_cond3")),
                                 column(4, htmlOutput("cond3_yrange"))
                               ),
+                              conditionalPanel(condition="input.cond3_GOI_color_type=='pathway'",
+                                               column(6,selectInput("cond3_GOI_color_pathway1","Select a gene set",choices = ""),
+                                                      selectInput("cond3_GOI_color_pathway2","",choices = ""))             
+                              ),
+                              htmlOutput("GOI2"), htmlOutput("cond3_GOI_pair"),
+                              htmlOutput("cond3_uniqueID_cut"),
                               fluidRow(
                                 column(8, plotOutput("cond3_GOIscatter",
                                                      brush = "plot1_brush_cond3")),
@@ -2114,7 +2120,7 @@ shinyUI(
                                         placement = "right",options = list(container = "body")),
                               fluidRow(
                                 column(6, selectInput("Species_ens", "Species", species_list, selected = "not selected")),
-                                conditionalPanel(condition=c("input.Species != 'not selected' && input.Species_ens != 'Homo sapiens' &&
+                                conditionalPanel(condition=c("input.Species_ens != 'not selected' && input.Species_ens != 'Homo sapiens' &&
                    input.Species_ens != 'Mus musculus' && input.Species_ens != 'Rattus norvegicus' &&
                    input.Species_ens != 'Drosophila melanogaster' && input.Species_ens != 'Caenorhabditis elegans' &&
                    input.Species_ens != 'Bos taurus' && input.Species_ens != 'Canis lupus familiaris' &&
@@ -2130,7 +2136,7 @@ shinyUI(
                                                  bsPopover("Ortholog_enrich", "Ortholog for the pathway analysis of non-model organisms", 
                                                            content=paste(img(src="non-model organism.png", width = 500,height = 800)), 
                                                            placement = "right",options = list(container = "body"))),
-                                                 column(12, selectInput("Biomart_archive4", "Biomart host", ensembl_archive)))
+                                                 column(12, selectInput("Biomart_archive_ens", "Biomart host", ensembl_archive)))
                               ),
                               actionButton("goButton_ens", "example data (mouse)"),
                               tags$head(tags$style("#goButton_ens{color: black;

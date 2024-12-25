@@ -1057,7 +1057,8 @@ data_3degcount2 <- function(gene_type,data3, Species, Ortholog,Isoform,org){
 }
 cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, specific, 
                                fc, fdr, basemean, y_axis=NULL, x_axis=NULL,id_cut,
-                               GOI=NULL, heatmap = TRUE, Species,brush=NULL){
+                               GOI=NULL, heatmap = TRUE, Species,brush=NULL,
+                               GOI_color_type="default",cond3_pathway_color_gene=NULL){
   if(is.null(data)){
     return(NULL)
   }else{
@@ -1108,23 +1109,37 @@ cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, 
     data$Row.names <- rownames(data)
     data2 <- merge(data, result, by="Row.names")
     result <- dplyr::filter(data2, apply(data2[,2:(Cond_1 + Cond_2 + Cond_3)],1,mean) > basemean)
-    sig <- rep(3, nrow(result))
+    if(GOI_color_type == "default"){
+      sig <- rep(3, nrow(result))
     sig[which(result$FDR <= fdr & result$FC_x < log2(1/fc) & result$FC_y < log2(1/fc) & (result$MAP == Pattern1 | result$MAP == Pattern2))] = 2
     sig[which(result$FDR <= fdr & result$FC_x > log2(fc) & result$FC_y > log2(fc) & (result$MAP == Pattern1 | result$MAP == Pattern2))] = 1
+    new.levels <- c()
+    col = NULL
+    }else{
+      sig <- rep(3, nrow(result))
+      df <- cond3_pathway_color_gene
+      for(name in rownames(df)){
+        sig[which(result$Row.names == name)] = 4
+        sig[which(result$Row.names == name & result$FDR <= fdr & result$FC_x < log2(1/fc) & result$FC_y < log2(1/fc) & (result$MAP == Pattern1 | result$MAP == Pattern2))] = 2
+        sig[which(result$Row.names == name & result$FDR <= fdr & result$FC_x > log2(fc) & result$FC_y > log2(fc) & (result$MAP == Pattern1 | result$MAP == Pattern2))] = 1
+      }
+      new.levels <- c("others")
+      col = c("lightgray")
+    }
     data3 <- data.frame(Row.names = result$Row.names, FC_x = result$FC_x,
                         FC_y = result$FC_y, padj = result$FDR, sig = sig, FC_xy = result$FC_x * result$FC_y)
     if((sum(sig == 1) >= 1) && (sum(sig == 2) >= 1)){
-      new.levels <- c( paste0(paste0(specific,"_high: "), sum(sig == 1)), paste0(paste0(specific,"_low: "), sum(sig == 2)), "NS" )
-      col = c("red","blue", "darkgray")}
+      new.levels <- c(paste0(paste0(specific,"_high: "), sum(sig == 1)), paste0(paste0(specific,"_low: "), sum(sig == 2)), "NS", new.levels)
+      col = c("red","blue", col,"darkgray")}
     if((sum(sig == 1) >= 1) && (sum(sig == 2) == 0)){
-      new.levels <- c(paste0(paste0(specific,"_high: "), sum(sig == 1)), "NS" )
-      col = c("red", "darkgray")}
+      new.levels <- c(paste0(paste0(specific,"_high: "), sum(sig == 1)), "NS", new.levels)
+      col = c("red",col, "darkgray")}
     if((sum(sig == 1) == 0) && (sum(sig == 2) >= 1)){
-      new.levels <- c(paste0(paste0(specific,"_low: "), sum(sig == 2)), "NS" )
-      col = c("blue", "darkgray")}
+      new.levels <- c(paste0(paste0(specific,"_low: "), sum(sig == 2)), "NS", new.levels)
+      col = c("blue", col,"darkgray")}
     if((sum(sig == 1) == 0) && (sum(sig == 2) == 0)){
-      new.levels <- c("NS")
-      col = "darkgray"}
+      new.levels <- c("NS", new.levels)
+      col = c(col,"darkgray")}
     data3$sig <- factor(data3$sig, labels = new.levels)
     if(gene_type != "SYMBOL"){
       if(Species != "not selected"){
@@ -1152,14 +1167,17 @@ cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, 
             title = ggplot2::element_text(size = 15)) +
       xlab(FC_xlab) + ylab(FC_ylab)
     if((sum(sig == 1) >= 1) && (sum(sig == 2) >= 1)){
-      p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[1]),color = "red", size= 0.25 )
-      p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[2]),color = "blue", size= 0.25 )
+      if(GOI_color_type != "default") p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[4]),color = "gray1", size= 0.4 )
+      p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[1]),color = "red", size= 0.4 )
+      p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[2]),color = "blue", size= 0.4 )
     }
     if((sum(sig == 1) >= 1) && (sum(sig == 2) == 0)){
-      p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[1]),color = "red", size= 0.25 )
+      if(GOI_color_type != "default") p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[4]),color = "gray1", size= 0.4 )
+      p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[1]),color = "red", size= 0.4 )
     }
     if((sum(sig == 1) == 0) && (sum(sig == 2) >= 1)){
-      p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[1]),color = "blue", size= 0.25 )
+      if(GOI_color_type != "default") p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[4]),color = "gray1", size= 0.4 )
+      p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[1]),color = "blue", size= 0.4 )
     }
     if (heatmap==TRUE) {
       if(!is.null(labs_data)) {
@@ -1199,6 +1217,7 @@ cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, 
           GOI <- brush$Row.names
         }
       }
+      if(GOI_color_type == "default"){
       for(name in GOI){
         if(gene_type != "SYMBOL"){
           if(Species != "not selected"){
@@ -1210,6 +1229,22 @@ cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, 
           data3$color[data3$Row.names == name] <- "GOI"
         }
       }
+      }else{
+        for(name2 in GOI){
+          if(gsub(".+\\s", "", name2) %in% rownames(df)){
+            if(gene_type != "SYMBOL"){
+              if(Species != "not selected"){
+                data3$color[data3$Unique_ID == name2] <- "GOI"
+              }else{
+                data3$color[data3$Row.names == name2] <- "GOI"
+              }
+            }else{
+              data3$color[data3$Row.names == name2] <- "GOI"
+            }
+          }
+        } 
+      }
+      if(length(grep("color", colnames(data3))) != 0) {
       if(gene_type != "SYMBOL"){
         if(Species != "not selected"){
           if(id_cut) {
@@ -1236,6 +1271,7 @@ cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, 
         p <- p + ggrepel::geom_label_repel(data = dplyr::filter(data3, color == "GOI"), mapping = aes(label = Row.names),alpha = 0.6,label.size = NA, 
                                           box.padding = unit(0.35, "lines"), point.padding = unit(0.3,"lines"), force = 1, fontface = "bold.italic")
       }
+    }
     }
     }
     if(heatmap == TRUE){
@@ -1507,6 +1543,7 @@ enrich_for_table <- function(data, H_t2g, Gene_set){
 }
 GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene_list,Biomart_archive,gene_type=NULL){
   if(Species != "not selected" || is.null(Gene_set) || is.null(org)){
+    if(Species != "Xenopus laevis" && Ortholog != "Arabidopsis thaliana" && Species != "Arabidopsis thaliana"){
     if(Species %in% orgDb_list == TRUE) species <- Species else species <- Ortholog
     H_t2g <- NULL
       if(Gene_set == "MSigDB Hallmark"){
@@ -1653,7 +1690,10 @@ GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene
       }
       H_t2g <- H_t2g %>% as.data.frame()
       H_t2g$gs_name <- gsub("_"," ",H_t2g$gs_name)
-      return(H_t2g)
+    }else{
+      H_t2g <- At_Xl_path(Species,Gene_set)
+    }
+    return(H_t2g)
   }else return(NULL)
 }
 GOI_color_palette<-c("default","Set1","Set2","Set3","Paired","Dark2","Accent","Spectral")
@@ -2591,4 +2631,46 @@ geneid_convert_ssGSEA <- function(norm_count,gene_type,Species,Ortholog,Isoform,
   rownames(gene_IDs) <- gene_IDs$GeneID
 
   return(gene_IDs)
+}
+At_Xl_path <- function(Species,Gene_set){
+  if(Gene_set == "KEGG"){
+    ##KEGG
+    if(Species == "Arabidopsis thaliana") {
+      species <- "ath" 
+      gsub_name <- ' - Arabidopsis thaliana \\(thale cress\\)'
+    }else if(Species == "Xenopus laevis") {
+      species <- "xla"
+      gsub_name <- ' - Xenopus laevis \\(African clawed frog\\)'
+    }
+    library(KEGGREST)
+    pathwayList <- keggList("pathway", species)
+    df <- data.frame(pathway = names(pathwayList), gs_name = pathwayList)
+    df$gs_name <- gsub(gsub_name,"",df$gs_name)
+    kegg <- keggLink(species, "pathway")
+    df2 <- data.frame(pathway = names(kegg), entrez_gene = kegg)
+    df2$pathway <- gsub("path:", "", df2$pathway)
+    df2$entrez_gene <- as.character(gsub(paste0(species,":"), "", df2$entrez_gene))
+    pathwayList <- merge(df,df2,by="pathway")
   }
+  
+  if(Species == "Arabidopsis thaliana") {
+    if(Gene_set == "ARACYC"){
+      ##ARACYC
+      pathwayList <- toTable(org.At.tairARACYC)
+    }else if(str_detect(Gene_set, "GO")){
+      pathwayList <- toTable(org.At.tairGO2TAIR)[,1:2]
+      tb = toTable(GOTERM)[,-1]
+      pathwayList <- merge(pathwayList,tb,by="go_id")
+      colnames(pathwayList)[2:3] <- c("entrez_gene","gs_name")
+    }
+  }else if(Species == "Xenopus laevis") {
+    ##GO
+    if(str_detect(Gene_set, "GO")){
+      pathwayList <- toTable(org.Xl.egGO2EG)[,1:2]
+      tb = toTable(GOTERM)[,-1]
+      pathwayList <- merge(pathwayList,tb,by="go_id")
+      colnames(pathwayList)[2:3] <- c("entrez_gene","gs_name")
+    }
+  }
+  return(pathwayList)
+}

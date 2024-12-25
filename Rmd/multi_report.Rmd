@@ -1,5 +1,5 @@
 ---
-title: "Multi DEG with RNAseqChef-beta v1.1.2"
+title: "Multi DEG with RNAseqChef v1.1.4-beta"
 date: '`r format(Sys.time(), "%y/%m/%d %H:%M")`'
 params:
     raw_count: [some object]
@@ -28,10 +28,10 @@ knitr::opts_chunk$set(echo = TRUE)
  
 ```{r echo = FALSE, results='asis'}
 if(params$input$multi_data_file_type == "Row1" && !is.null(params$input$multi_file1)) {
-  try(cat(paste0("Count_data: **", params$input$multi_file1$name,"**\n\n")))
+  try(cat(paste0("raw_count_data: **", params$input$multi_file1$name,"**\n\n")))
 }
 if(params$input$multi_data_file_type == "Row2" && !is.null(params$input$multi_file2)) {
-  try(cat(paste0("Count_data: **", params$input$multi_file2$name,"**\n\n")))
+  try(cat(paste0("raw_count_data: **", params$input$multi_file2$name,"**\n\n")))
 }
 ```
 
@@ -54,14 +54,7 @@ for(i in 1:length(label)){
 ```
 
  - Method for DEG detection: 
- **`r params$input$DEG_method_multi`**
-```{r echo = FALSE, results='asis'}
-if(params$input$DEG_method_multi == "limma"){
-  try(cat(paste0("Trend: **", params$input$limma_trend_multi,"**\n")))
-  try(cat(paste0("Regression: **", params$input$regression_mode_multi,"**\n\n")))
-  cat("\n")
-}
-```
+ **DESeq2**
   - Method for FDR control: 
  **`r params$input$FDR_method6`**
  - Species: 

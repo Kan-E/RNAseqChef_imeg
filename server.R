@@ -179,6 +179,31 @@ shinyServer(function(input, output, session) {
       updateSelectInput(session,inputId = "Biomart_archive7", "Biomart host", ensembl_archive)
     }
   }))
+  observeEvent(input$Species_ens,({
+    if(sum(is.element(no_orgDb_plants,input$Species_ens)) == 1){
+      updateSelectInput(session,inputId = "Ortholog_ens", 
+                        "Ortholog",
+                        "Arabidopsis thaliana", selected = "Arabidopsis thaliana")
+      updateSelectInput(session,inputId = "Biomart_archive_ens", "Biomart host", ensembl_archive_plants)
+    }
+    if(sum(is.element(no_orgDb_fungi,input$Species_ens)) == 1){
+      updateSelectInput(session,inputId = "Ortholog_ens", 
+                        "Ortholog",
+                        "Saccharomyces cerevisiae", selected = "Saccharomyces cerevisiae")
+      updateSelectInput(session,inputId = "Biomart_archive_ens", "Biomart host", ensembl_archive_fungi)
+    }
+    if(sum(is.element(no_orgDb_metazoa,input$Species_ens)) == 1){
+      updateSelectInput(session,inputId = "Ortholog_ens", 
+                        "Ortholog",
+                        c("Drosophila melanogaster","Caenorhabditis elegans"), selected = "Drosophila melanogaster")
+      updateSelectInput(session,inputId = "Biomart_archive_ens", "Biomart host", ensembl_archive_metazoa)
+    }
+    if(sum(is.element(no_orgDb_animals,input$Species_ens)) == 1){
+      updateSelectInput(session,inputId = "Ortholog_ens", 
+                        "Ortholog", orgDb_list, selected = "Mus musculus")
+      updateSelectInput(session,inputId = "Biomart_archive_ens", "Biomart host", ensembl_archive)
+    }
+  }))
   # pair-wise ------------------------------------------------------------------------------
   org1 <- reactive({
     return(org(Species = input$Species,Ortholog = input$Ortholog))
@@ -1033,9 +1058,15 @@ shinyServer(function(input, output, session) {
     }
   }))
   GOI_color_pathway_list <- reactive({
-    list <- unique(GeneList_for_enrichment(Species = input$Species, Ortholog = input$Ortholog,
-                                           Gene_set=input$GOI_color_pathway1, org = org1(), 
-                                           Biomart_archive=input$Biomart_archive,gene_type=gene_type1())$gs_name)
+    list <-pair_pathway_color_gene_list()
+    if(!is.null(input$GOI_color_pathway1)){
+    if(input$Species == "Xenopus laevis" || input$Ortholog == "Arabidopsis thaliana" || input$Species == "Arabidopsis thaliana"){
+      print(head(list))
+      if(input$GOI_color_pathway1 == "GO biological process") list <- list %>% dplyr::filter(Ontology == "BP")
+      if(input$GOI_color_pathway1 == "GO cellular component") list <- list %>% dplyr::filter(Ontology == "CC")
+      if(input$GOI_color_pathway1 == "GO molecular function") list <- list %>% dplyr::filter(Ontology == "MF") 
+    }}
+    list <- unique(list$gs_name)
     return(list)
   })
   observeEvent(input$GOI_color_pathway1, ({
@@ -1092,14 +1123,18 @@ shinyServer(function(input, output, session) {
       }
     }
   })
+  pair_pathway_color_gene_list <- reactive({
+    genes <- GeneList_for_enrichment(Species = input$Species, Ortholog = input$Ortholog,
+                                     Gene_set=input$GOI_color_pathway1, org = org1(), 
+                                     Biomart_archive=input$Biomart_archive,gene_type=gene_type1())
+    return(genes)
+  })
   pair_pathway_color_gene <- reactive({
     ##extract pathway genes
     if(is.null(input$GOI_color_pathway1) || is.null(input$GOI_color_pathway2) || 
        is.null(gene_type1()) || is.null(org1()) || input$GOI_color_pathway1 == "" || 
        input$GOI_color_pathway2 == "" || !input$GOI_color_pathway2 %in% GOI_color_pathway_list()) validate("")
-    genes <- GeneList_for_enrichment(Species = input$Species, Ortholog = input$Ortholog,
-                                     Gene_set=input$GOI_color_pathway1, org = org1(), 
-                                     Biomart_archive=input$Biomart_archive,gene_type=gene_type1())
+    genes <- pair_pathway_color_gene_list()
     genes <- try(dplyr::filter(genes, gs_name == input$GOI_color_pathway2))
     if(length(genes) == 1) if(class(genes)=="try-error") validate("")
     
@@ -1114,11 +1149,22 @@ shinyServer(function(input, output, session) {
       df <- data.frame(gene = gene_IDs$Transcript_ID, row.names = gene_IDs$Transcript_ID)
     }else{
       if(gene_type1() == "SYMBOL") columns <- c("ENTREZID","SYMBOL") else columns <- c("ENTREZID","ENSEMBL")
-      gene_IDs <- AnnotationDbi::select(org1(), keys = my.symbols,
-                                        keytype = "ENTREZID",
-                                        columns = columns)
-      colnames(gene_IDs) <- c("entrezid","GeneID")
-      gene_IDs <- na.omit(gene_IDs)
+      if(org1()$packageName == "org.At.tair.db") {
+        if(gene_type1() == "SYMBOL"){
+          gene_IDs <- AnnotationDbi::select(org1(), keys = my.symbols,
+                                            keytype = "TAIR",
+                                            columns = c("TAIR","SYMBOL"))
+          colnames(gene_IDs) <- c("TAIR","GeneID")
+        }else{
+          gene_IDs <- data.frame(TAIR = my.symbols, GeneID = my.symbols)
+        }
+      } else {
+        gene_IDs <- AnnotationDbi::select(org1(), keys = my.symbols,
+                                          keytype = "ENTREZID",
+                                          columns = columns)
+        colnames(gene_IDs) <- c("entrezid","GeneID")
+        gene_IDs <- na.omit(gene_IDs) 
+      }
       gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
       df <- data.frame(gene = gene_IDs$GeneID, row.names = gene_IDs$GeneID)
       if(dim(df)[1] == 0) validate("No filtered genes.")
@@ -1236,7 +1282,8 @@ shinyServer(function(input, output, session) {
               axis.text.x= ggplot2::element_text(size = 12),
               axis.text.y= ggplot2::element_text(size = 12),
               text = ggplot2::element_text(size = 12),
-              title = ggplot2::element_text(size = 12)) 
+              title = ggplot2::element_text(size = 12))+
+        guides(color = guide_legend(override.aes = list(size=2))) +guides(shape = guide_legend(override.aes = list(size=4))) 
       if(input$GOI_color_type == "pathway") {
         v <- v + geom_point(data=dplyr::filter(data, color == "NS"),color="gray1", size=1)
         v <- v + geom_point(data=dplyr::filter(data, color == "up"),color="red", size=1)
@@ -1302,7 +1349,7 @@ shinyServer(function(input, output, session) {
   
   output$download_pair_volcano = downloadHandler(
     filename = function(){
-      paste0(download_pair_overview_dir(), "_volcano.pdf")
+      if(input$GOI_color_type == "default") paste0(download_pair_overview_dir(), "_volcano.pdf") else paste0(download_pair_overview_dir(), "_volcano_",input$GOI_color_pathway2,".pdf")
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
@@ -1361,7 +1408,7 @@ shinyServer(function(input, output, session) {
   
   output$download_pair_GOIheatmap = downloadHandler(
     filename = function(){
-      paste0(download_pair_overview_dir(), "_GOIheatmap.pdf")
+      if(input$GOI_color_type == "default") paste0(download_pair_overview_dir(), "_GOIheatmap.pdf") else paste0(download_pair_overview_dir(), "_GOIheatmap_",input$GOI_color_pathway2,".pdf")
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
@@ -1452,9 +1499,9 @@ shinyServer(function(input, output, session) {
       }else{
         rownames(data2) <- data2$Row.names
       }
-    }
-    if(input$GOI_color_type != "default" && !is.null(pair_pathway_color_gene())){
-      data2 <- data2 %>% dplyr::filter(Row.names %in% rownames(pair_pathway_color_gene()))
+      if(input$GOI_color_type != "default" && !is.null(pair_pathway_color_gene())){
+        data2 <- data2 %>% dplyr::filter(Row.names %in% rownames(pair_pathway_color_gene()))
+      }
     }
     return(data2)
   })
@@ -1512,7 +1559,7 @@ shinyServer(function(input, output, session) {
   
   output$download_pair_GOIbox = downloadHandler(
     filename = function(){
-      paste0(download_pair_overview_dir(), "_GOIboxplot.pdf")
+      if(input$GOI_color_type == "default") paste0(download_pair_overview_dir(), "_GOIboxplot.pdf") else paste0(download_pair_overview_dir(), "_GOIboxplot_",input$GOI_color_pathway2,".pdf")
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
@@ -1557,6 +1604,9 @@ shinyServer(function(input, output, session) {
             }
           }else{
             rownames(data2) <- data2$Row.names
+          }
+          if(input$GOI_color_type != "default" && !is.null(pair_pathway_color_gene())){
+            data2 <- data2 %>% dplyr::filter(Row.names %in% rownames(pair_pathway_color_gene()))
           }
         }
         rowlist <- rownames(data2)
@@ -2067,15 +2117,20 @@ shinyServer(function(input, output, session) {
         dev.off()
         if(!is.null(input$xrange)){
           dir.create("GOI_profiling/",showWarnings = FALSE)
-          volcano <- "GOI_profiling/volcano_plot.pdf"
+          if(input$GOI_color_type == "default") volcano <- "GOI_profiling/volcano_plot.pdf" else volcano <- paste0("GOI_profiling/volcano_plot_",input$GOI_color_pathway2,".pdf")
           fs <- c(fs,volcano)
           pdf(volcano, height = 5, width = 5)
           print(pair_volcano())
           dev.off()
           if(!is.null(brush_info())){
             if(!is.null(input$GOI) || dim(brush_info())[1] != 0){
-              boxplot <- "GOI_profiling/boxplot.pdf"
-              heat <- "GOI_profiling/heatmap.pdf"
+                if(input$GOI_color_type == "default") {
+                  boxplot <- "GOI_profiling/boxplot.pdf"
+                  heat <- "GOI_profiling/heatmap.pdf"
+                }else{
+                  boxplot <- paste0("GOI_profiling/boxplot_",input$GOI_color_pathway2,".pdf")
+                  heat <- paste0("GOI_profiling/heatmap_",input$GOI_color_pathway2,".pdf")
+                } 
               fs <- c(fs,boxplot,heat)
               data <- data_degcount()
               count <- deg_norm_count()
@@ -2118,6 +2173,9 @@ shinyServer(function(input, output, session) {
                   }
                 }else{
                   rownames(data2) <- data2$Row.names
+                }
+                if(input$GOI_color_type != "default" && !is.null(pair_pathway_color_gene())){
+                  data2 <- data2 %>% dplyr::filter(Row.names %in% rownames(pair_pathway_color_gene()))
                 }
               }
               rowlist <- rownames(data2)
@@ -2262,19 +2320,19 @@ shinyServer(function(input, output, session) {
         }else{
           set.seed(123)
           if(input$Gene_set == "KEGG"){
-            em3 <- try(gseKEGG(geneList, organism = org_code(input$Species, Ortholog= input$Ortholog),pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+            em3 <- try(clusterProfiler::gseKEGG(geneList, organism = org_code(input$Species, Ortholog= input$Ortholog),pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
                                minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F,keyType = "ncbi-geneid"))
           }
           if(input$Gene_set == "GO biological process"){
-            em3 <- try(gseGO(geneList, OrgDb = org(input$Species, Ortholog= input$Ortholog),ont = "BP",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+            em3 <- try(clusterProfiler::gseGO(geneList, OrgDb = org(input$Species, Ortholog= input$Ortholog),ont = "BP",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
                              minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F))
           }
           if(input$Gene_set == "GO cellular component"){
-            em3 <- try(gseGO(geneList, OrgDb = org(input$Species, Ortholog= input$Ortholog),ont = "CC",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+            em3 <- try(clusterProfiler::gseGO(geneList, OrgDb = org(input$Species, Ortholog= input$Ortholog),ont = "CC",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
                              minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F))
           }
           if(input$Gene_set == "GO molecular function"){
-            em3 <- try(gseGO(geneList, OrgDb = org(input$Species, Ortholog= input$Ortholog),ont = "MF",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+            em3 <- try(clusterProfiler::gseGO(geneList, OrgDb = org(input$Species, Ortholog= input$Ortholog),ont = "MF",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
                              minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F))
           }
         }
@@ -4602,19 +4660,19 @@ shinyServer(function(input, output, session) {
         }else{
           set.seed(123)
           if(input$Gene_set6 == "KEGG"){
-            em3 <- try(gseKEGG(geneList, organism = org_code(input$Species6, Ortholog= input$Ortholog6),pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+            em3 <- try(clusterProfiler::gseKEGG(geneList, organism = org_code(input$Species6, Ortholog= input$Ortholog6),pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
                                minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F,keyType = "ncbi-geneid"))
           }
           if(input$Gene_set6 == "GO biological process"){
-            em3 <- try(gseGO(geneList, OrgDb = org(input$Species6, Ortholog= input$Ortholog6),ont = "BP",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+            em3 <- try(clusterProfiler::gseGO(geneList, OrgDb = org(input$Species6, Ortholog= input$Ortholog6),ont = "BP",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
                              minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F))
           }
           if(input$Gene_set6 == "GO cellular component"){
-            em3 <- try(gseGO(geneList, OrgDb = org(input$Species6, Ortholog= input$Ortholog6),ont = "CC",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+            em3 <- try(clusterProfiler::gseGO(geneList, OrgDb = org(input$Species6, Ortholog= input$Ortholog6),ont = "CC",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
                              minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F))
           }
           if(input$Gene_set6 == "GO molecular function"){
-            em3 <- try(gseGO(geneList, OrgDb = org(input$Species6, Ortholog= input$Ortholog6),ont = "MF",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
+            em3 <- try(clusterProfiler::gseGO(geneList, OrgDb = org(input$Species6, Ortholog= input$Ortholog6),ont = "MF",pvalueCutoff = 0.05,exponent = 1, eps = 0, pAdjustMethod = "BH",
                              minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F))
           }
         }
@@ -6153,7 +6211,7 @@ shinyServer(function(input, output, session) {
     }
     if (input$data_file_type2 == "Row4"){
       tmp <- input$file5$datapath
-      if(is.null(input$file5) && input$goButton2 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/example2.csv"
+      if(is.null(input$file5) && input$goButton2 > 0 )  tmp = "https://raw.githubusercontent.com/Kan-E/RNAseqChef/refs/tags/v1.1.4/data/sample_ens.txt"
       return(read_df(tmp = tmp))
     }
     if (input$data_file_type2 == "RowRecode_cond3"){
@@ -6726,7 +6784,7 @@ shinyServer(function(input, output, session) {
   
   output$download_3cond_scatter = downloadHandler(
     filename = function(){
-      paste0(download_cond3_dir(), "_GOI_scatter.pdf")
+      if(input$cond3_GOI_color_type == "default") paste0(download_cond3_dir(), "_GOI_scatter.pdf") else paste0(download_cond3_dir(), "_GOI_scatter_",input$cond3_GOI_color_pathway2,".pdf")
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
@@ -6740,8 +6798,9 @@ shinyServer(function(input, output, session) {
         print(cond3_scatter_plot(gene_type=gene_type2(),data = deg_norm_count2(), data4 = data_3degcount2_1(),
                                  result_Condm = deg_result2_condmean(), result_FDR = deg_result2(), 
                                  fc = input$fc2, fdr = input$fdr2, basemean = input$basemean2,
-                                 y_axis = input$cond3_scatter_yrange,x_axis = input$cond3_scatter_xrange,heatmap = FALSE,
-                                 specific = cond3_specific_group2(), GOI = input$GOI2, Species = input$Species2))
+                                 y_axis = input$cond3_scatter_yrange,x_axis = input$cond3_scatter_xrange,heatmap = FALSE,id_cut=input$cond3_uniqueID_cut,
+                                 specific = cond3_specific_group2(), GOI = input$GOI2, Species = input$Species2,brush=brush_info_cond3(),
+                                 GOI_color_type=input$cond3_GOI_color_type,cond3_pathway_color_gene=cond3_pathway_color_gene()))
         dev.off()
       })
     }
@@ -6795,6 +6854,10 @@ shinyServer(function(input, output, session) {
     if(is.null(d_row_count_matrix2())){
       return(NULL)
     }else{
+      if(is.null(input$cond3_GOI_color_type)) validate("")
+      if(input$cond3_GOI_color_type != "default" && !is.null(cond3_pathway_color_gene())){
+        count <- count %>% dplyr::filter(row.names(.) %in% rownames(cond3_pathway_color_gene()))
+      }
       if(gene_type2() != "SYMBOL"){
         if(input$Species2 != "not selected"){
           GOI <- count$Unique_ID
@@ -6807,10 +6870,7 @@ shinyServer(function(input, output, session) {
       return(GOI)
     }
   })
-  output$cond3_uniqueID_cut <- renderUI({
-    if(gene_type2() != "SYMBOL" && input$Species2 != "not selected") 
-      radioButtons("cond3_uniqueID_cut","Short unique ID",c("ON"=TRUE,"OFF"=FALSE),selected = TRUE)
-  })
+
   cond3_specific_group <- reactive({
     if(is.null(d_row_count_matrix2())){
       return(NULL)
@@ -6838,6 +6898,48 @@ shinyServer(function(input, output, session) {
       })
     }
   })
+  output$cond3_GOI_color_type <- renderUI({
+    if(input$Species2 == "not selected"){
+      radioButtons("cond3_GOI_color_type","Filter", c("All genes" = "default"),selected="default")
+    }else{
+      radioButtons("cond3_GOI_color_type","Filter", c("All genes" = "default","Pathway of interest"="pathway"),selected="default")
+    }
+  })
+  observeEvent(input$Species2, ({
+    if(input$Species2 == "not selected"){
+      updateSelectInput(session, "cond3_GOI_color_pathway1","Select a gene set for gene extraction","")
+    }else  if(input$Species2 != "Xenopus laevis" && input$Ortholog2 != "Arabidopsis thaliana" && input$Species2 != "Arabidopsis thaliana"){
+      updateSelectInput(session, "cond3_GOI_color_pathway1","Select a gene set for gene extraction",gene_set_list) 
+    }else {
+      updateSelectInput(session, "cond3_GOI_color_pathway1","Select a gene set for gene extraction",c("KEGG", "GO biological process", 
+                                                                                                "GO cellular component","GO molecular function")) 
+    }
+  }))
+  cond3_pathway_color_gene_list <- reactive({
+    genes <- GeneList_for_enrichment(Species = input$Species2, Ortholog = input$Ortholog2,
+                                     Gene_set=input$cond3_GOI_color_pathway1, org = org2(), 
+                                     Biomart_archive=input$Biomart_archive,gene_type=gene_type2())
+    return(genes)
+  })
+  cond3_GOI_color_pathway_list <- reactive({
+    list <-cond3_pathway_color_gene_list()
+    if(!is.null(input$cond3_GOI_color_pathway1)){
+      if(input$Species2 == "Xenopus laevis" || input$Ortholog2 == "Arabidopsis thaliana" || input$Species2 == "Arabidopsis thaliana"){
+        print(head(list))
+        if(input$cond3_GOI_color_pathway1 == "GO biological process") list <- list %>% dplyr::filter(Ontology == "BP")
+        if(input$cond3_GOI_color_pathway1 == "GO cellular component") list <- list %>% dplyr::filter(Ontology == "CC")
+        if(input$cond3_GOI_color_pathway1 == "GO molecular function") list <- list %>% dplyr::filter(Ontology == "MF") 
+      }}
+    list <- unique(list$gs_name)
+    return(list)
+  })
+  observeEvent(input$cond3_GOI_color_pathway1, ({
+    if(is.null(input$cond3_GOI_color_pathway1)){
+      updateSelectInput(session, "cond3_GOI_color_pathway2","","")
+    }else{
+      updateSelectInput(session, "cond3_GOI_color_pathway2","",cond3_GOI_color_pathway_list())
+    }
+  }))
   output$GOIreset_cond3 <- renderUI({
     actionButton("GOIreset_cond3", "GOI reset")
   })
@@ -6869,6 +6971,52 @@ shinyServer(function(input, output, session) {
                   value = c(min, max))
     }
   })
+  cond3_pathway_color_gene <- reactive({
+    ##extract pathway genes
+    if(is.null(input$cond3_GOI_color_pathway1) || is.null(input$cond3_GOI_color_pathway2) || 
+       is.null(gene_type2()) || is.null(org2()) || input$cond3_GOI_color_pathway1 == "" || 
+       input$cond3_GOI_color_pathway2 == "" || !input$cond3_GOI_color_pathway2 %in% cond3_GOI_color_pathway_list()) validate("")
+    genes <- cond3_pathway_color_gene_list()
+    genes <- try(dplyr::filter(genes, gs_name == input$cond3_GOI_color_pathway2))
+    if(length(genes) == 1) if(class(genes)=="try-error") validate("")
+    
+    my.symbols <- as.character(genes$entrez_gene)
+    if(gene_type2() == "non-model organism"){
+      gene_IDs <-  try(dplyr::filter(ortholog2(), ENTREZID %in% my.symbols))
+      if(length(gene_IDs) == 1) if(class(gene_IDs)=="try-error") validate("")
+      df <- data.frame(gene = gene_IDs$ENSEMBL, row.names = gene_IDs$ENSEMBL)
+    }else if(gene_type2() == "isoform"){
+      gene_IDs <-  try(dplyr::filter(isoform2(), ENTREZID %in% my.symbols))
+      if(length(gene_IDs) == 1) if(class(gene_IDs)=="try-error") validate("")
+      df <- data.frame(gene = gene_IDs$Transcript_ID, row.names = gene_IDs$Transcript_ID)
+    }else{
+      if(gene_type2() == "SYMBOL") columns <- c("ENTREZID","SYMBOL") else columns <- c("ENTREZID","ENSEMBL")
+      if(org2()$packageName == "org.At.tair.db") {
+        if(gene_type2() == "SYMBOL"){
+          gene_IDs <- AnnotationDbi::select(org2(), keys = my.symbols,
+                                            keytype = "TAIR",
+                                            columns = c("TAIR","SYMBOL"))
+          colnames(gene_IDs) <- c("TAIR","GeneID")
+        }else{
+          gene_IDs <- data.frame(TAIR = my.symbols, GeneID = my.symbols)
+        }
+      } else {
+        gene_IDs <- AnnotationDbi::select(org2(), keys = my.symbols,
+                                          keytype = "ENTREZID",
+                                          columns = columns)
+        colnames(gene_IDs) <- c("entrezid","GeneID")
+        gene_IDs <- na.omit(gene_IDs) 
+      }
+      gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
+      df <- data.frame(gene = gene_IDs$GeneID, row.names = gene_IDs$GeneID)
+      if(dim(df)[1] == 0) validate("No filtered genes.")
+    }
+    return(df)
+  })
+  output$cond3_uniqueID_cut <- renderUI({
+    if(gene_type2() != "SYMBOL" && input$Species2 != "not selected") 
+      radioButtons("cond3_uniqueID_cut","Short unique ID",c("ON"=TRUE,"OFF"=FALSE),selected = TRUE)
+  })
   
   cond3_specific_group2 <- reactive({
     if(!is.null(input$cond3_GOIpair)){
@@ -6888,7 +7036,8 @@ shinyServer(function(input, output, session) {
                          result_Condm = deg_result2_condmean(), result_FDR = deg_result2(), 
                          fc = input$fc2, fdr = input$fdr2, basemean = input$basemean2,
                          y_axis = input$cond3_scatter_yrange,x_axis = input$cond3_scatter_xrange,heatmap = FALSE,id_cut=input$cond3_uniqueID_cut,
-                         specific = cond3_specific_group2(), GOI = input$GOI2, Species = input$Species2,brush=brush_info_cond3())
+                         specific = cond3_specific_group2(), GOI = input$GOI2, Species = input$Species2,brush=brush_info_cond3(),
+                         GOI_color_type=input$cond3_GOI_color_type,cond3_pathway_color_gene=cond3_pathway_color_gene())
     }
   })
   
@@ -6984,7 +7133,13 @@ shinyServer(function(input, output, session) {
     if(gene_type2() != "SYMBOL"){
       if(input$Species2 != "not selected"){
         if(!is.null(brush_info_cond3())){
-          if(dim(brush_info_cond3())[1] != 0) Unique_ID <- brush_info_cond3()$Unique_ID else Unique_ID <- input$GOI2
+          brush <- brush_info_cond3()
+          if(dim(brush)[1] != 0) {
+            if(input$cond3_GOI_color_type != "default" && !is.null(cond3_pathway_color_gene())){
+              brush <- brush %>% dplyr::filter(Row.names %in% rownames(cond3_pathway_color_gene()))
+            }
+            Unique_ID <- brush$Unique_ID 
+            }else Unique_ID <- input$GOI2
         }
         label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
         data <- merge(count, label_data, by="Unique_ID")
@@ -7004,7 +7159,13 @@ shinyServer(function(input, output, session) {
         data <- data[,-1]
       }else{
         if(!is.null(brush_info_cond3())){
-          if(dim(brush_info_cond3())[1] != 0) Row.names <- brush_info_cond3()$Row.names else Row.names <- input$GOI2
+          brush <- brush_info_cond3()
+          if(dim(brush)[1] != 0) {
+            if(input$cond3_GOI_color_type != "default" && !is.null(cond3_pathway_color_gene())){
+              brush <- brush %>% dplyr::filter(Row.names %in% rownames(cond3_pathway_color_gene()))
+            }
+            Row.names <- brush$Row.names 
+          }else Row.names <- input$GOI2
         }
         count$Row.names <- rownames(count)
         label_data <- as.data.frame(Row.names, row.names = Row.names)
@@ -7014,7 +7175,13 @@ shinyServer(function(input, output, session) {
       }
     }else{
       if(!is.null(brush_info_cond3())){
-        if(dim(brush_info_cond3())[1] != 0) Row.names <- brush_info_cond3()$Row.names else Row.names <- input$GOI2
+        brush <- brush_info_cond3()
+        if(dim(brush)[1] != 0) {
+          if(input$cond3_GOI_color_type != "default" && !is.null(cond3_pathway_color_gene())){
+            brush <- brush %>% dplyr::filter(Row.names %in% rownames(cond3_pathway_color_gene()))
+          }
+          Row.names <- brush$Row.names 
+        }else Row.names <- input$GOI2
       }
       count$Row.names <- rownames(count)
       label_data <- as.data.frame(Row.names, row.names = Row.names)
@@ -7079,7 +7246,7 @@ shinyServer(function(input, output, session) {
   
   output$download_3cond_GOIbox = downloadHandler(
     filename = function(){
-      paste0(download_cond3_dir(), "_GOIboxplot.pdf")
+      if(input$cond3_GOI_color_type == "default") paste0(download_cond3_dir(), "_GOIboxplot.pdf") else paste0(download_cond3_dir(), "_GOIboxplot_",input$cond3_GOI_color_pathway2,".pdf")
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
@@ -7101,7 +7268,7 @@ shinyServer(function(input, output, session) {
   )
   output$download_3cond_GOIheat = downloadHandler(
     filename = function(){
-      paste0(download_cond3_dir(), "_GOIheatmap.pdf")
+      if(input$cond3_GOI_color_type == "default") paste0(download_cond3_dir(), "_GOIheatmap.pdf") else paste0(download_cond3_dir(), "_GOIheatmap_",input$cond3_GOI_color_pathway2,".pdf")
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
@@ -7336,19 +7503,25 @@ shinyServer(function(input, output, session) {
         dev.off()
         if(!is.null(input$cond3_GOIpair) && !is.null(input$cond3_scatter_yrange) && !is.null(input$cond3_scatter_xrange)){
           dir.create("GOI_profiling/",showWarnings = FALSE)
-          goiscatter <- "GOI_profiling/scatter_plot.pdf"
+          if(input$cond3_GOI_color_type == "default") goiscatter <- "GOI_profiling/scatter_plot.pdf" else goiscatter <- paste0("GOI_profiling/scatter_plot_",input$cond3_GOI_color_pathway2,".pdf") 
           fs <- c(fs,goiscatter)
           pdf(goiscatter, height = 6, width = 10)
           print(cond3_scatter_plot(gene_type=gene_type2(),data = deg_norm_count2(), data4 = data_3degcount2_1(),
                                    result_Condm = deg_result2_condmean(), result_FDR = deg_result2(), 
                                    fc = input$fc2, fdr = input$fdr2, basemean = input$basemean2,
-                                   y_axis = input$cond3_scatter_yrange,x_axis = input$cond3_scatter_xrange,heatmap = FALSE,
-                                   specific = cond3_specific_group2(), GOI = input$GOI2, Species = input$Species2,brush = brush_info_cond3()))
+                                   y_axis = input$cond3_scatter_yrange,x_axis = input$cond3_scatter_xrange,heatmap = FALSE,id_cut=input$cond3_uniqueID_cut,
+                                   specific = cond3_specific_group2(), GOI = input$GOI2, Species = input$Species2,brush=brush_info_cond3(),
+                                   GOI_color_type=input$cond3_GOI_color_type,cond3_pathway_color_gene=cond3_pathway_color_gene()))
           dev.off()
           if(!is.null(brush_info_cond3())){
             if(!is.null(input$GOI2) || dim(brush_info_cond3())[1] != 0){
-              boxplot <- "GOI_profiling/boxplot.pdf"
-              heat <- "GOI_profiling/heatmap.pdf"
+              if(input$cond3_GOI_color_type == "default") {
+                boxplot <- "GOI_profiling/boxplot.pdf"
+                heat <- "GOI_profiling/heatmap.pdf"
+              }else {
+                boxplot <- paste0("GOI_profiling/boxplot_",input$cond3_GOI_color_pathway2,".pdf") 
+                heat <- paste0("GOI_profiling/heatmap_",input$cond3_GOI_color_pathway2,".pdf") 
+              }
               fs <- c(fs,boxplot,heat)
               data <- cond3_GOIcount()
               rowlist <- rownames(data)
@@ -7441,9 +7614,14 @@ shinyServer(function(input, output, session) {
     }
   }))
   norm_gene_pathway_filter_list <- reactive({
-    list <- unique(GeneList_for_enrichment(Species = input$Species3, Ortholog = input$Ortholog3,
-                                           Gene_set=input$gene_set_forFilter, org = org3(), 
-                                           Biomart_archive=input$Biomart_archive3,gene_type=gene_type3())$gs_name)
+    list <-norm_gene_list()
+    if(!is.null(input$gene_set_forFilter)){
+      if(input$Species3 == "Xenopus laevis" || input$Ortholog3 == "Arabidopsis thaliana" || input$Species3 == "Arabidopsis thaliana"){
+        if(input$gene_set_forFilter == "GO biological process") list <- list %>% dplyr::filter(Ontology == "BP")
+        if(input$gene_set_forFilter == "GO cellular component") list <- list %>% dplyr::filter(Ontology == "CC")
+        if(input$gene_set_forFilter == "GO molecular function") list <- list %>% dplyr::filter(Ontology == "MF") 
+      }}
+    list <- unique(list$gs_name)
     return(list)
   })
   observeEvent(input$gene_set_forFilter, ({
@@ -7488,6 +7666,12 @@ shinyServer(function(input, output, session) {
       return(df)
     }
   })
+  norm_gene_list <- reactive({
+    genes <- GeneList_for_enrichment(Species = input$Species3, Ortholog = input$Ortholog3,
+                                     Gene_set=input$gene_set_forFilter, org = org3(), 
+                                     Biomart_archive=input$Biomart_archive3,gene_type=gene_type3())
+    return(genes)
+  })
   gene_list <- reactive({
     df <- NULL
     if(input$norm_filter == "custom"){
@@ -7502,9 +7686,7 @@ shinyServer(function(input, output, session) {
       if(is.null(input$gene_set_forFilter) || is.null(input$gene_set_forFilter2) || 
          input$gene_set_forFilter == "" || input$gene_set_forFilter2 == "" ||
          !input$gene_set_forFilter2 %in% norm_gene_pathway_filter_list()) validate("")
-      genes <- GeneList_for_enrichment(Species = input$Species3, Ortholog = input$Ortholog3,
-                                       Gene_set=input$gene_set_forFilter, org = org3(), 
-                                       Biomart_archive=input$Biomart_archive3,gene_type=gene_type3())
+      genes <- norm_gene_list()
       genes <- try(dplyr::filter(genes, gs_name == input$gene_set_forFilter2))
       if(length(genes) == 1) if(class(genes)=="try-error") validate("")
       print("e")
@@ -7521,11 +7703,22 @@ shinyServer(function(input, output, session) {
         df <- data.frame(gene = gene_IDs$Transcript_ID, row.names = gene_IDs$Transcript_ID)
       }else{
       if(gene_type3() == "SYMBOL") columns <- c("ENTREZID","SYMBOL") else columns <- c("ENTREZID","ENSEMBL")
+      if(org3()$packageName == "org.At.tair.db") {
+        if(gene_type3() == "SYMBOL"){
+          gene_IDs <- AnnotationDbi::select(org3(), keys = my.symbols,
+                                            keytype = "TAIR",
+                                            columns = c("TAIR","SYMBOL"))
+          colnames(gene_IDs) <- c("TAIR","GeneID")
+        }else{
+          gene_IDs <- data.frame(TAIR = my.symbols, GeneID = my.symbols)
+        }
+      } else {
       gene_IDs <- AnnotationDbi::select(org3(), keys = my.symbols,
                                         keytype = "ENTREZID",
                                         columns = columns)
       print(head(gene_IDs))
       colnames(gene_IDs) <- c("entrezid","GeneID")
+      }
       gene_IDs <- na.omit(gene_IDs)
       gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
       df <- data.frame(gene = gene_IDs$GeneID, row.names = gene_IDs$GeneID)
@@ -10162,10 +10355,15 @@ shinyServer(function(input, output, session) {
     }
   }))
   deg_GOI_color_pathway_list <- reactive({
-    list <- unique(GeneList_for_enrichment(Species = input$Species5, Ortholog = input$Ortholog5,
-                                           Gene_set=input$deg_GOI_color_pathway1, org = org5(), 
-                                           Biomart_archive=input$Biomart_archive5,gene_type=gene_type5())$gs_name)
-    return(list)
+      list <-deg_pathway_color_gene_list()
+      if(!is.null(input$deg_GOI_color_pathway1)){
+        if(input$Species5 == "Xenopus laevis" || input$Ortholog5 == "Arabidopsis thaliana" || input$Species5 == "Arabidopsis thaliana"){
+          if(input$deg_GOI_color_pathway1 == "GO biological process") list <- list %>% dplyr::filter(Ontology == "BP")
+          if(input$deg_GOI_color_pathway1 == "GO cellular component") list <- list %>% dplyr::filter(Ontology == "CC")
+          if(input$deg_GOI_color_pathway1 == "GO molecular function") list <- list %>% dplyr::filter(Ontology == "MF") 
+        }}
+      list <- unique(list$gs_name)
+      return(list)
   })
   observeEvent(input$deg_GOI_color_pathway1, ({
     if(is.null(input$deg_GOI_color_pathway1)){
@@ -10174,15 +10372,19 @@ shinyServer(function(input, output, session) {
       updateSelectInput(session, "deg_GOI_color_pathway2","",deg_GOI_color_pathway_list())
     }
   }))
+  deg_pathway_color_gene_list <- reactive({
+    genes <- GeneList_for_enrichment(Species = input$Species5, Ortholog = input$Ortholog5,
+                                     Gene_set=input$deg_GOI_color_pathway1, org = org5(), 
+                                     Biomart_archive=input$Biomart_archive5,gene_type=gene_type5())
+    return(genes)
+  })
   deg_pathway_color_gene <- reactive({
     ##extract pathway genes
     if(is.null(input$deg_GOI_color_pathway1) || is.null(input$deg_GOI_color_pathway2) ||
        input$deg_GOI_color_pathway1 == "" || input$deg_GOI_color_pathway2 == "" || 
        !input$deg_GOI_color_pathway2 %in% deg_GOI_color_pathway_list()) validate("")
-    genes <- GeneList_for_enrichment(Species = input$Species5, Ortholog = input$Ortholog5,
-                                     Gene_set=input$deg_GOI_color_pathway1, org = org5(), 
-                                     Biomart_archive=input$Biomart_archive5,gene_type=gene_type5())
-    genes <- try(dplyr::filter(genes, gs_name == input$GOI_color_pathway2))
+    genes <- deg_pathway_color_gene_list()
+    genes <- try(dplyr::filter(genes, gs_name == input$deg_GOI_color_pathway2))
     if(length(genes) == 1) if(class(genes)=="try-error") validate("")
     
     my.symbols <- as.character(genes$entrez_gene)
@@ -10196,10 +10398,21 @@ shinyServer(function(input, output, session) {
       df <- data.frame(gene = gene_IDs$Transcript_ID, row.names = gene_IDs$Transcript_ID)
     }else{
       if(gene_type5() == "SYMBOL") columns <- c("ENTREZID","SYMBOL") else columns <- c("ENTREZID","ENSEMBL")
+      if(org5()$packageName == "org.At.tair.db") {
+        if(gene_type5() == "SYMBOL"){
+          gene_IDs <- AnnotationDbi::select(org5(), keys = my.symbols,
+                                            keytype = "TAIR",
+                                            columns = c("TAIR","SYMBOL"))
+          colnames(gene_IDs) <- c("TAIR","GeneID")
+        }else{
+          gene_IDs <- data.frame(TAIR = my.symbols, GeneID = my.symbols)
+        }
+      } else {
       gene_IDs <- AnnotationDbi::select(org5(), keys = my.symbols,
                                         keytype = "ENTREZID",
                                         columns = columns)
       colnames(gene_IDs) <- c("entrezid","GeneID")
+      }
       gene_IDs <- na.omit(gene_IDs)
       gene_IDs <- gene_IDs %>% distinct(GeneID, .keep_all = T)
       df <- data.frame(gene = gene_IDs$GeneID, row.names = gene_IDs$GeneID)
@@ -10350,7 +10563,7 @@ shinyServer(function(input, output, session) {
           for(name2 in label_data){
             if(gsub(".+\\s", "", name2) %in% rownames(df)){
               if(gene_type5() != "SYMBOL"){
-                if(input$Species != "not selected"){
+                if(input$Species5 != "not selected"){
                   data <- data %>% dplyr::mutate(color=if_else(Unique_ID==name2, "GOI", color))
                 }else{
                   data <- data %>% dplyr::mutate(color=if_else(Row.names==name2, "GOI", color))
@@ -10781,7 +10994,7 @@ shinyServer(function(input, output, session) {
     return(org(Species = input$Species_ens,Ortholog = input$Ortholog_ens))
   })
   ortholog_ens <- reactive({
-    return(no_org_ID(gene_list = rownames(input_ens()),Species = input$Species_ens,Ortholog = input$Ortholog_ens,Biomart_archive=input$Biomart_archive_ens))
+    return(no_org_ID(gene_list = data.frame(rownames(input_ens())),Species = input$Species_ens,Ortholog = input$Ortholog_ens,Biomart_archive=input$Biomart_archive_ens))
   })
   gene_type_ens <- reactive({
     data <- input_ens()
