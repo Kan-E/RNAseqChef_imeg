@@ -9914,7 +9914,7 @@ shinyServer(function(input, output, session) {
           }
           for (name in unique(data3$Group)) {
             if(input$Species4 != "Xenopus laevis" && input$Ortholog4 != "Arabidopsis thaliana" && input$Species4 != "Arabidopsis thaliana"){
-              em <- clusterProfiler::enricher(data3$ENTREZID[data3$Group == name], TERM2GENE=H_t2g2, qvalueCutoff = 0.05)
+              em <- clusterProfiler::enricher(data3$ENTREZID[data3$Group == name], TERM2GENE=H_t2g2,pvalueCutoff = 0.5)
             }else{
               if(input$Gene_set3 == "KEGG"){
                 em <- enrichKEGG(data3$ENTREZID[data3$Group == name], organism = org_code(input$Species4, Ortholog= input$Ortholog4), pvalueCutoff = 0.05,keyType = "ncbi-geneid")
@@ -9941,6 +9941,7 @@ shinyServer(function(input, output, session) {
           if(length(df$ID) !=0){
             df["Description"] <- lapply(df["Description"], gsub, pattern="HALLMARK_", replacement = "")
             df$GeneRatio <- DOSE::parse_ratio(df$GeneRatio)
+            print(df)
             return(df)
           }else return(NULL)
         })
@@ -11014,8 +11015,7 @@ shinyServer(function(input, output, session) {
     if(tools::file_ext(tmp) == "txt" || tools::file_ext(tmp) == "tsv") df <- read.table(tmp, header=TRUE, sep = "\t",quote = "")
     if(rownames(df)[1] == 1){
       if(dim(df)[2]==1) df <- data.frame(row.names = df[,1]) else{
-        rownames(df) <- df[,1]
-        df <- df[,-1] 
+        df <- data.frame(row.names = df[,1], gene=df[,2])
       }
     }
     rownames(df) = gsub("\"", "", rownames(df))

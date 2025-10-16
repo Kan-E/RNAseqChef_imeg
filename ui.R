@@ -52,10 +52,8 @@ shinyUI(
                           tags$li(HTML("Function for paired-sample analysis in pair-wise DEG.")),
                           tags$li(HTML("Enrichment analysis using the custom gene set.")),
                         ),
-                        h4("Current version (v1.1.4-beta, 2024/11/25)"),
-                               "Add a filter function in GOI profiling in Pair-wise DEG, 3 conditions DEG, and volcano navi.",br(),
-                               "Add a function to switch unique IDs to short unique IDs in GOI profiling (when using ENSEMBL ID).",br(),
-                               "Add a new function for gene ID conversion, named 'ENSEMBL ID to SYMBOL'.",br(),
+                        h4("Current version (v1.1.5-beta, 2025/10/16)"),
+                               "Fixed the issue where outliers in the boxplot overlapped with individual data points.",br(),
                                "See the details from 'More -> Change log'",
                         h4("Publication"),
                         "Etoh K. & Nakao M. A web-based integrative transcriptome analysis, RNAseqChef, uncovers cell/tissue type-dependent action of sulforaphane. JBC, 299(6), 104810 (2023)", 
@@ -2363,6 +2361,8 @@ shinyUI(
                                    strong("Add a filter function in GOI profiling in Pair-wise DEG, 3 conditions DEG, and volcano navi."),br(),
                                    strong("Add a function to switch unique IDs to short unique IDs in GOI profiling (when using ENSEMBL ID)."),br(),
                                    strong("Add a new function for gene ID conversion, named 'ENSEMBL ID to SYMBOL'."),br(),
+                                   h4("v1.1.5-beta, 2024/10/16"),
+                                   strong("Fixed the issue where outliers in the boxplot overlapped with individual data points."),br(),
                             )
                           )
                  ),

@@ -1,4 +1,4 @@
-## eulerr追加
+## limma, 数字が頭文字だとエラー
 
 ## limma, 数字から始まるサンプル名によるエラー
 ## proteinIDへの対応
@@ -1691,8 +1691,10 @@ GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene
       H_t2g <- H_t2g %>% as.data.frame()
       H_t2g$gs_name <- gsub("_"," ",H_t2g$gs_name)
     }else{
+      print("plant")
       H_t2g <- At_Xl_path(Species,Gene_set)
     }
+    print(head(H_t2g))
     return(H_t2g)
   }else return(NULL)
 }
@@ -1816,7 +1818,7 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",ymin=0, yla
     if (plottype == "Boxplot"){
       if(color_design=="new"){
       p <- ggplot(data, aes(x=sample,y=value))+
-        geom_boxplot(aes(group=sample,colour=sample,fill=after_scale(alpha(colour,0.5))))+
+        geom_boxplot(aes(group=sample,colour=sample,fill=after_scale(alpha(colour,0.5))),outlier.shape = NA)+
         geom_jitter(alpha=1)+
         xlab(NULL)+ylab(ylab)+theme_classic()
       }else{
@@ -1864,7 +1866,7 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",ymin=0, yla
     }
     if(!is.null(pair)){
       if(plottype == "Boxplot"){
-      p <- ggplot(data, aes(x = sample, y = value)) + geom_boxplot(aes(fill=sample))+
+      p <- ggplot(data, aes(x = sample, y = value)) + geom_boxplot(aes(fill=sample),outlier.shape = NA)+
         geom_line(aes(group = pair),alpha = .2) +
         geom_point() + theme_classic() + theme(legend.position = "top")+ 
         xlab(NULL)  + ylab(ylab)
@@ -2040,7 +2042,7 @@ enrich_gene_list <- function(data, Gene_set, H_t2g, org,org_code=NULL){
         df <- list()
         for (name in unique(data$Group)) {
           sum <- length(data$ENTREZID[data$Group == name])
-          em <- clusterProfiler::enricher(data$ENTREZID[data$Group == name], TERM2GENE=H_t2g2, pvalueCutoff = 0.05)
+          em <- clusterProfiler::enricher(data$ENTREZID[data$Group == name], TERM2GENE=H_t2g2, pvalueCutoff = 0.5)
           if (length(as.data.frame(em)$ID) != 0) {
             if(length(colnames(as.data.frame(em))) == 9){
               cnet1 <- clusterProfiler::setReadable(em, org, 'ENTREZID')
@@ -2108,6 +2110,7 @@ enrich_genelist <- function(data, enrich_gene_list, showCategory=5,section=NULL,
               }
             }
           }
+
           if(!is.null(group_order)) group_order <- group_order[group_order %in% cluster_list]
           if ((length(df$Description) == 0) || length(which(!is.na(unique(df$qvalue)))) == 0) {
             p1 <- NULL
@@ -2592,6 +2595,7 @@ corr_plot_pair <- function(data,corr_color,GOI_x,GOI_y,logscale=TRUE){
 
 library(GSVA)
 ssGSEA <- function(norm_count, gene_set,org,gene_type,Species,Ortholog){
+  set.seed(12345)
   genesbyGeneSet <- split(gene_set$GeneID,gene_set$gs_name)
   if(length(grep("SYMBOL", colnames(norm_count))) != 0) norm_count <- norm_count[, - which(colnames(norm_count) == "SYMBOL")]
   
@@ -2641,8 +2645,9 @@ At_Xl_path <- function(Species,Gene_set){
     }else if(Species == "Xenopus laevis") {
       species <- "xla"
       gsub_name <- ' - Xenopus laevis \\(African clawed frog\\)'
-    }
+    }else validate("")
     library(KEGGREST)
+    print("keggrest")
     pathwayList <- keggList("pathway", species)
     df <- data.frame(pathway = names(pathwayList), gs_name = pathwayList)
     df$gs_name <- gsub(gsub_name,"",df$gs_name)
@@ -2651,6 +2656,7 @@ At_Xl_path <- function(Species,Gene_set){
     df2$pathway <- gsub("path:", "", df2$pathway)
     df2$entrez_gene <- as.character(gsub(paste0(species,":"), "", df2$entrez_gene))
     pathwayList <- merge(df,df2,by="pathway")
+    print(pathwayList)
   }
   
   if(Species == "Arabidopsis thaliana") {
@@ -2671,6 +2677,6 @@ At_Xl_path <- function(Species,Gene_set){
       pathwayList <- merge(pathwayList,tb,by="go_id")
       colnames(pathwayList)[2:3] <- c("entrez_gene","gs_name")
     }
-  }
+  }else validate("")
   return(pathwayList)
 }
