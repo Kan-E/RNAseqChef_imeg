@@ -52,8 +52,9 @@ shinyUI(
                           tags$li(HTML("Function for paired-sample analysis in pair-wise DEG.")),
                           tags$li(HTML("Enrichment analysis using the custom gene set.")),
                         ),
-                        h4("Current version (v1.1.5-beta, 2025/10/16)"),
-                               "Fixed the issue where outliers in the boxplot overlapped with individual data points.",br(),
+                        h4("Current version (v1.1.6-beta, 2025/11/9)"),
+                        tags$span("Important update", ": We’ve corrected a PCA plotting bug in RNAseqChef.",br(),
+                        "Previously, we used the rotation (gene loadings) from R’s prcomp() instead of the x matrix (sample scores), which could misrepresent sample separation. The plot now shows correct sample coordinates. Please re-run PCA; PCs and % variance may change.",style = "color:#d00; font-weight:700;"),br(),
                                "See the details from 'More -> Change log'",
                         h4("Publication"),
                         "Etoh K. & Nakao M. A web-based integrative transcriptome analysis, RNAseqChef, uncovers cell/tissue type-dependent action of sulforaphane. JBC, 299(6), 104810 (2023)", 
@@ -2363,6 +2364,9 @@ shinyUI(
                                    strong("Add a new function for gene ID conversion, named 'ENSEMBL ID to SYMBOL'."),br(),
                                    h4("v1.1.5-beta, 2024/10/16"),
                                    strong("Fixed the issue where outliers in the boxplot overlapped with individual data points."),br(),
+                                   h4("v1.1.6-beta, 2024/11/9"),
+                                   tags$span("Important update", ": We’ve corrected a PCA plotting bug in RNAseqChef.",br(),
+                                             "Previously, we used the rotation (gene loadings) from R’s prcomp() instead of the x matrix (sample scores), which could misrepresent sample separation. The plot now shows correct sample coordinates. Please re-run PCA; PCs and % variance may change.",style = "color:#d00; font-weight:700;"),
                             )
                           )
                  ),
