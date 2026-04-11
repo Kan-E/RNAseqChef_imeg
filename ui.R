@@ -55,7 +55,7 @@ shinyUI(
                         h4("Current version (v1.1.6-beta, 2025/11/9)"),
                         tags$span("Important update", ": We’ve corrected a PCA plotting bug in RNAseqChef.",br(),
                         "Previously, we used the rotation (gene loadings) from R’s prcomp() instead of the x matrix (sample scores), which could misrepresent sample separation. The plot now shows correct sample coordinates. Please re-run PCA; PCs and % variance may change.",style = "color:#d00; font-weight:700;"),br(),
-                               "See the details from 'More -> Change log'",),
+                               "See the details from 'More -> Change log'",
                         h4("Publication"),
                         "Etoh K. & Nakao M. A web-based integrative transcriptome analysis, RNAseqChef, uncovers cell/tissue type-dependent action of sulforaphane. JBC, 299(6), 104810 (2023)", 
                         a("https://doi.org/10.1016/j.jbc.2023.104810",href = "https://doi.org/10.1016/j.jbc.2023.104810"),
@@ -1767,8 +1767,13 @@ shinyUI(
           }"
                                                  ))),
                                 column(8, downloadButton("download_norm_kmeans_heatmap", "Download heatmap"),
+                                       downloadButton("download_multi_kmeans_boxplot", "Download boxplots"),
                                        htmlOutput("kmeans_order"),
-                                       plotOutput("norm_kmeans_heatmap"))
+                                       plotOutput("norm_kmeans_heatmap")),
+                              ),
+                              div(
+                                plotOutput("norm_kmeans_boxplot", height = "100%"),
+                                style = "height: calc(100vh  - 100px)"
                               ),
                               bsCollapse(id="norm_kmeans_collapse_panel",open="norm_kmeans_count",multiple = TRUE,
                               bsCollapsePanel(title="k-means clustering result:",
