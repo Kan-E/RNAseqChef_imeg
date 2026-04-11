@@ -1476,8 +1476,31 @@ keggEnrichment2 <- function(data3, data4,cnet_list2){
             length(which(!is.na(unique(cnet_df$qvalue))))==0) {
           c <- NULL
         } else{
-          c <- clusterProfiler::cnetplot(cnet1, cex_label_gene = 0.7, cex_label_category = 0.75,
-                        cex_category = 0.75, colorEdge = TRUE)
+          c <- try(enrichplot::cnetplot(
+            cnet1,
+            cex_label_gene = 0.7,
+            cex_label_category = 0.75,
+            cex_category = 0.75,
+            colorEdge = TRUE
+          ), silent = TRUE)
+          if(inherits(c, "try-error")){
+            c <- try(enrichplot::cnetplot(
+              cnet1,
+              cex_label_gene = 0.7,
+              cex_label_category = 0.75,
+              cex_category = 0.75,
+              color.params = list(edge = TRUE)
+            ), silent = TRUE)
+          }
+          if(inherits(c, "try-error")){
+            c <- clusterProfiler::cnetplot(
+              cnet1,
+              cex_label_gene = 0.7,
+              cex_label_category = 0.75,
+              cex_category = 0.75,
+              colorEdge = TRUE
+            )
+          }
           c <- try(as.grob(c + theme(legend.position = "none")))
 
           if(inherits(c, "try-error")) c <- NULL
@@ -2175,9 +2198,35 @@ cnet_global <- function(data, group, enrich_gene_list, showCategory=5){
         if(length(as.data.frame(cnet1)$ID) == 0) {
           p2 <- NULL
         }else{
-          p2 <- try(as.grob(clusterProfiler::cnetplot(cnet1,
-                                     cex_label_gene = 0.7, cex_label_category = 0.75, showCategory = showCategory,
-                                     cex_category = 0.75, colorEdge = TRUE)+ theme(legend.position = "none")))
+          p2_plot <- try(enrichplot::cnetplot(
+            cnet1,
+            cex_label_gene = 0.7,
+            cex_label_category = 0.75,
+            showCategory = showCategory,
+            cex_category = 0.75,
+            colorEdge = TRUE
+          ), silent = TRUE)
+          if(inherits(p2_plot, "try-error")){
+            p2_plot <- try(enrichplot::cnetplot(
+              cnet1,
+              cex_label_gene = 0.7,
+              cex_label_category = 0.75,
+              showCategory = showCategory,
+              cex_category = 0.75,
+              color.params = list(edge = TRUE)
+            ), silent = TRUE)
+          }
+          if(inherits(p2_plot, "try-error")){
+            p2_plot <- clusterProfiler::cnetplot(
+              cnet1,
+              cex_label_gene = 0.7,
+              cex_label_category = 0.75,
+              showCategory = showCategory,
+              cex_category = 0.75,
+              colorEdge = TRUE
+            )
+          }
+          p2 <- try(as.grob(p2_plot + theme(legend.position = "none")))
           if(inherits(p2, "try-error")) p2 <- NULL
         }
         p <- plot_grid(p2)
