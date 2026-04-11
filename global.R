@@ -87,40 +87,53 @@ species_list <- c("not selected", "Homo sapiens", "Mus musculus", "Rattus norveg
                   "Pan troglodytes","Saccharomyces cerevisiae","Xenopus laevis","Arabidopsis thaliana",
                   no_orgDb)
 species_list_nonmodel <- no_orgDb
+read_by_extension <- function(tmp, use_row_names = FALSE, na_strings = NULL){
+  ext <- tools::file_ext(tmp)
+  if(ext == "xlsx"){
+    df <- try(as.data.frame(readxl::read_xlsx(tmp)), silent = TRUE)
+    if(use_row_names && !inherits(df, "try-error")){
+      original_colnames <- colnames(df)
+      rowname_try <- try(data.frame(row.names = df[,1]), silent = TRUE)
+      if(!inherits(rowname_try, "try-error")){
+        if(dim(df)[2] == 2){
+          df <- data.frame(row.names = df[,1], a = df[,2])
+          colnames(df)[1] <- original_colnames[2]
+        }else{
+          rownames(df) <- df[,1]
+          df <- df[,-1]
+          colnames(df) <- gsub("-",".",colnames(df))
+        }
+      }
+    }
+    return(df)
+  }
+  if(ext == "csv"){
+    return(try(read.csv(tmp, header = TRUE, sep = ",", row.names = if(use_row_names) 1 else NULL, quote = "", na.strings = na_strings), silent = TRUE))
+  }
+  if(ext == "txt" || ext == "tsv"){
+    return(try(read.table(tmp, header = TRUE, sep = "\t", row.names = if(use_row_names) 1 else NULL, quote = "", na.strings = na_strings), silent = TRUE))
+  }
+  try(stop("unsupported extension"), silent = TRUE)
+}
+
+clean_x_prefix <- function(df){
+  if(length(colnames(df)) != 0 && str_detect(colnames(df)[1], "^X\\.")){
+    colnames(df) <- str_sub(colnames(df), start = 3, end = -2)
+  }
+  df
+}
+
 read_df <- function(tmp, Species=NULL){
   if(is.null(tmp)) {
     return(NULL)
   }else{
     if(sum(is.element(c("csv","txt","tsv","xlsx"), tools::file_ext(tmp))) == 0) validate("Error: the file extension is in an unexpected format.")
-    if(tools::file_ext(tmp) == "xlsx") {
-      df2 <- readxl::read_xlsx(tmp) 
-      df2 <- as.data.frame(df2)
-      df <- try(data.frame(row.names = df2[,1]),silent = T)
-      if(class(df) != "try-error") {
-        if(dim(df2)[2] == 2){
-          df <- data.frame(row.names = df2[,1],a = df2[,2])
-          colnames(df)[1] <- colnames(df2)[2]
-        }else{
-          rownames(df2) <- df2[,1]
-        df <- df2[,-1]
-        colnames(df) <- gsub("-",".",colnames(df))
-        }
-      }
-    }
-    if(tools::file_ext(tmp) == "csv") df <- try(read.csv(tmp, header=TRUE, sep = ",", row.names = 1,quote = ""))
-    if(tools::file_ext(tmp) == "txt" || tools::file_ext(tmp) == "tsv") df <- try(read.table(tmp, header=TRUE, sep = "\t", row.names = 1,quote = ""))
-    if(class(df) == "try-error" || length(grep("Protein.Ids", colnames(df))) != 0 || length(grep("First.Protein.Description", colnames(df)))) {
-      if(tools::file_ext(tmp) == "xlsx") df <- try(as.data.frame(readxl::read_xlsx(tmp)))
-      if(tools::file_ext(tmp) == "csv") df <- try(read.csv(tmp, header=TRUE, sep = ",",quote = ""))
-      if(tools::file_ext(tmp) == "txt" || tools::file_ext(tmp) == "tsv") df <- try(read.table(tmp, header=TRUE, sep = "\t",quote = ""))
-      if(class(df) != "try-error") {
+    df <- read_by_extension(tmp, use_row_names = TRUE)
+    if(inherits(df, "try-error") || length(grep("Protein.Ids", colnames(df))) != 0 || length(grep("First.Protein.Description", colnames(df)))) {
+      df <- read_by_extension(tmp, use_row_names = FALSE)
+      if(!inherits(df, "try-error")) {
         if(dim(df)[2] != 0){
           if(length(grep("Protein.Ids", colnames(df))) != 0 || length(grep("First.Protein.Description", colnames(df)))){
-            if(class(df) == "try-error") {
-              if(tools::file_ext(tmp) == "xlsx") df <- try(as.data.frame(readxl::read_xlsx(tmp)))
-              if(tools::file_ext(tmp) == "csv") df <- try(read.csv(tmp, header=TRUE, sep = ",",quote = "", na.strings=c("")))
-              if(tools::file_ext(tmp) == "txt" || tools::file_ext(tmp) == "tsv") df <- try(read.table(tmp, header=TRUE, sep = "\t",quote = "", na.strings=c("")))
-            }
             df <- df %>% distinct(Genes, .keep_all = T)
             df[is.na(df)] <- 0
             if(length(grep("Protein.Ids", colnames(df))) != 0) df[df$Genes == "",]$Genes <- gsub("\\_.+$", "", df[df$Genes == "",]$Protein.Ids)
@@ -145,11 +158,7 @@ read_df <- function(tmp, Species=NULL){
     if(length(grep("SYMBOL", colnames(df))) != 0){
       df <- df[, - which(colnames(df) == "SYMBOL")]
     }
-    if(length(colnames(df)) != 0){
-    if(str_detect(colnames(df)[1], "^X\\.")){
-    colnames(df) = str_sub(colnames(df), start = 3, end = -2) 
-    }
-    }
+    df <- clean_x_prefix(df)
     if(length(grep("padj", colnames(df))) == 0 || length(grep("log2FoldChange", colnames(df))) == 0){
     df[is.na(df)] <- 0
     }
@@ -162,16 +171,10 @@ read_gene_list <- function(tmp){
   if(is.null(tmp)) {
     return(NULL)
   }else{
-    if(tools::file_ext(tmp) == "xlsx") {
-      df <- try(readxl::read_xlsx(tmp))
-      df <- as.data.frame(df)
-    }
-    if(tools::file_ext(tmp) == "csv") df <- read.csv(tmp, header=TRUE, sep = ",",quote = "")
-    if(tools::file_ext(tmp) == "txt" || tools::file_ext(tmp) == "tsv") df <- read.table(tmp, header=TRUE, sep = "\t",quote = "")
+    df <- read_by_extension(tmp, use_row_names = FALSE)
+    if(inherits(df, "try-error")) validate("Error: failed to load the uploaded gene list.")
     rownames(df) = gsub("\"", "", rownames(df))
-    if(str_detect(colnames(df)[1], "^X\\.")){
-      colnames(df) = str_sub(colnames(df), start = 3, end = -2) 
-    }
+    df <- clean_x_prefix(df)
     if(rownames(df)[1] == 1){
       df <- data.frame(Gene = df[,1], Group = df[,2])
     }else{
@@ -190,9 +193,9 @@ anno_rep <- function(row){
     row <- row %>% dplyr::select(all_of(name_list)) 
     unique_col <- unique(colnames(row))
     total <- 0
-    for(i in 1:length(unique_col)){
+    for(i in seq_along(unique_col)){
       cond <- length(which(colnames(row) == unique_col[i]))
-      for(k in 1:cond){
+      for(k in seq_len(cond)){
         colnames(row)[total + k] <- paste0(colnames(row)[total + k], "_", k)
       }
       total <- total + cond
@@ -216,9 +219,9 @@ anno_rep_meta <- function(meta){
     meta <- meta %>% dplyr::arrange(characteristics)
     unique_col <- unique(meta[,1])
     total <- 0
-    for(i in 1:length(unique_col)){
+    for(i in seq_along(unique_col)){
       cond <- length(which(meta[,1] == unique_col[i]))
-      for(k in 1:cond){
+      for(k in seq_len(cond)){
         meta[total + k,1] <- paste0(meta[total + k,1], "_", k)
       }
       total <- total + cond
