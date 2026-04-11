@@ -1478,7 +1478,7 @@ keggEnrichment2 <- function(data3, data4,cnet_list2){
         } else{
           c <- clusterProfiler::cnetplot(cnet1, cex_label_gene = 0.7, cex_label_category = 0.75,
                         cex_category = 0.75, colorEdge = TRUE)
-          c <- try(as.grob(c + theme(legend.position = "none")))
+          c <- try(as.grob(c + guides(edge_color = "none")))
 
           if(inherits(c, "try-error")) c <- NULL
           cnet_list[[name]] = c
@@ -2177,7 +2177,7 @@ cnet_global <- function(data, group, enrich_gene_list, showCategory=5){
         }else{
           p2 <- try(as.grob(clusterProfiler::cnetplot(cnet1,
                                      cex_label_gene = 0.7, cex_label_category = 0.75, showCategory = showCategory,
-                                     cex_category = 0.75, colorEdge = TRUE)+ theme(legend.position = "none")))
+                                     cex_category = 0.75, colorEdge = TRUE)+ guides(edge_color = "none")))
           if(inherits(p2, "try-error")) p2 <- NULL
         }
         p <- plot_grid(p2)
