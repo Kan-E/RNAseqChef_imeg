@@ -1481,9 +1481,17 @@ keggEnrichment2 <- function(data3, data4,cnet_list2){
             cex_label_gene = 0.7,
             cex_label_category = 0.75,
             cex_category = 0.75,
-            colorEdge = TRUE,
-            color_edge = TRUE
+            colorEdge = TRUE
           ), silent = TRUE)
+          if(inherits(c, "try-error")){
+            c <- try(enrichplot::cnetplot(
+              cnet1,
+              cex_label_gene = 0.7,
+              cex_label_category = 0.75,
+              cex_category = 0.75,
+              color.params = list(edge = TRUE)
+            ), silent = TRUE)
+          }
           if(inherits(c, "try-error")){
             c <- clusterProfiler::cnetplot(
               cnet1,
@@ -2196,9 +2204,18 @@ cnet_global <- function(data, group, enrich_gene_list, showCategory=5){
             cex_label_category = 0.75,
             showCategory = showCategory,
             cex_category = 0.75,
-            colorEdge = TRUE,
-            color_edge = TRUE
+            colorEdge = TRUE
           ), silent = TRUE)
+          if(inherits(p2_plot, "try-error")){
+            p2_plot <- try(enrichplot::cnetplot(
+              cnet1,
+              cex_label_gene = 0.7,
+              cex_label_category = 0.75,
+              showCategory = showCategory,
+              cex_category = 0.75,
+              color.params = list(edge = TRUE)
+            ), silent = TRUE)
+          }
           if(inherits(p2_plot, "try-error")){
             p2_plot <- clusterProfiler::cnetplot(
               cnet1,
