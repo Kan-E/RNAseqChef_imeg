@@ -2238,7 +2238,7 @@ shinyServer(function(input, output, session) {
     df <- enrichment_enricher()
     if(!is.null(input$Gene_set) && input$Species != "not selected" && !is.null(df)){
       data <- data.frame(matrix(rep(NA, 10), nrow=1))[numeric(0), ]
-      colnames(data) <- c("ID", "Description", "GeneRatio", "BgRatio", "pvalue", "p.adjust", " qvalue", "geneID", "Count", "Group")
+      colnames(data) <- c("ID", "Description", "GeneRatio", "BgRatio", "pvalue", "p.adjust", "qvalue", "geneID", "Count", "Group")
       for(name in names(df)){
         if(!is.null(df[[name]])) {
           group1 <- as.data.frame(df[[name]])
@@ -2265,20 +2265,20 @@ shinyServer(function(input, output, session) {
           em_down <- try(clusterProfiler::enricher(dplyr::filter(data3, group == "Down")$ENTREZID, TERM2GENE=H_t2g2, pvalueCutoff = 0.05))
         }else{
           if(input$Gene_set == "KEGG"){
-            em_up <- try(enrichKEGG(dplyr::filter(data3, group == "Up")$ENTREZID, organism = org_code(input$Species, Ortholog= input$Ortholog), pvalueCutoff = 0.05,keyType = "ncbi-geneid")) 
-            em_down <- try(enrichKEGG(dplyr::filter(data3, group == "Down")$ENTREZID, organism = org_code(input$Species, Ortholog= input$Ortholog), pvalueCutoff = 0.05,keyType = "ncbi-geneid"))
+            em_up <- try(clusterProfiler::enrichKEGG(dplyr::filter(data3, group == "Up")$ENTREZID, organism = org_code(input$Species, Ortholog= input$Ortholog), pvalueCutoff = 0.05,keyType = "ncbi-geneid")) 
+            em_down <- try(clusterProfiler::enrichKEGG(dplyr::filter(data3, group == "Down")$ENTREZID, organism = org_code(input$Species, Ortholog= input$Ortholog), pvalueCutoff = 0.05,keyType = "ncbi-geneid"))
           }
           if(input$Gene_set == "GO biological process"){
-            em_up <- try(enrichGO(dplyr::filter(data3, group == "Up")$ENTREZID, OrgDb = org(input$Species, Ortholog= input$Ortholog), ont = "BP",pvalueCutoff = 0.05)) 
-            em_down <- try(enrichGO(dplyr::filter(data3, group == "Down")$ENTREZID, OrgDb = org(input$Species, Ortholog= input$Ortholog), ont = "BP",pvalueCutoff = 0.05))
+            em_up <- try(clusterProfiler::enrichGO(dplyr::filter(data3, group == "Up")$ENTREZID, OrgDb = org(input$Species, Ortholog= input$Ortholog), ont = "BP",pvalueCutoff = 0.05)) 
+            em_down <- try(clusterProfiler::enrichGO(dplyr::filter(data3, group == "Down")$ENTREZID, OrgDb = org(input$Species, Ortholog= input$Ortholog), ont = "BP",pvalueCutoff = 0.05))
           }
           if(input$Gene_set == "GO cellular component"){
-            em_up <- try(enrichGO(dplyr::filter(data3, group == "Up")$ENTREZID, OrgDb= org(input$Species, Ortholog= input$Ortholog), ont = "CC",pvalueCutoff = 0.05)) 
-            em_down <- try(enrichGO(dplyr::filter(data3, group == "Down")$ENTREZID,OrgDb= org(input$Species, Ortholog= input$Ortholog), ont = "CC",pvalueCutoff = 0.05))
+            em_up <- try(clusterProfiler::enrichGO(dplyr::filter(data3, group == "Up")$ENTREZID, OrgDb= org(input$Species, Ortholog= input$Ortholog), ont = "CC",pvalueCutoff = 0.05)) 
+            em_down <- try(clusterProfiler::enrichGO(dplyr::filter(data3, group == "Down")$ENTREZID,OrgDb= org(input$Species, Ortholog= input$Ortholog), ont = "CC",pvalueCutoff = 0.05))
           }
           if(input$Gene_set == "GO molecular function"){
-            em_up <- try(enrichGO(dplyr::filter(data3, group == "Up")$ENTREZID, OrgDb = org(input$Species, Ortholog= input$Ortholog), ont = "MF",pvalueCutoff = 0.05)) 
-            em_down <- try(enrichGO(dplyr::filter(data3, group == "Down")$ENTREZID, OrgDb = org(input$Species, Ortholog= input$Ortholog), ont = "MF",pvalueCutoff = 0.05))
+            em_up <- try(clusterProfiler::enrichGO(dplyr::filter(data3, group == "Up")$ENTREZID, OrgDb = org(input$Species, Ortholog= input$Ortholog), ont = "MF",pvalueCutoff = 0.05)) 
+            em_down <- try(clusterProfiler::enrichGO(dplyr::filter(data3, group == "Down")$ENTREZID, OrgDb = org(input$Species, Ortholog= input$Ortholog), ont = "MF",pvalueCutoff = 0.05))
           }
         }
         df <- list()
@@ -2289,9 +2289,7 @@ shinyServer(function(input, output, session) {
             df[[name]] <- NULL
           } else{
             df[[name]] <- try(clusterProfiler::setReadable(df[[name]], org1(), 'ENTREZID'))
-            if(length(class(df[[name]])) == 1){
-              if(class(df[[name]]) == "try-error") df[[name]] <- NULL
-            }
+            if(inherits(df[[name]], "try-error")) df[[name]] <- NULL
           }
         }
         incProgress(1)
@@ -2336,9 +2334,7 @@ shinyServer(function(input, output, session) {
                              minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F))
           }
         }
-        if(length(class(em3)) == 1){
-          if(class(em3) == "try-error") validate(em3)
-        }
+        if(inherits(em3, "try-error")) validate(em3)
         if (length(as.data.frame(em3)$ID) == 0) {
           em4 <- NA
         } else{
@@ -2381,7 +2377,7 @@ shinyServer(function(input, output, session) {
         p1 <- NULL
       } else{
         data <- data.frame(matrix(rep(NA, 10), nrow=1))[numeric(0), ]
-        colnames(data) <- c("ID", "Description", "GeneRatio", "BgRatio", "pvalue", "p.adjust", " qvalue", "geneID", "Count", "Group")
+        colnames(data) <- c("ID", "Description", "GeneRatio", "BgRatio", "pvalue", "p.adjust", "qvalue", "geneID", "Count", "Group")
         for(name in names(df)){
           if(!is.null(df[[name]])) {
             print(df[[name]])
@@ -2473,9 +2469,7 @@ shinyServer(function(input, output, session) {
                                                                                   colours = color,
                                                                                   limits= limits)
                             ))
-          if(length(class(p2)) == 1){
-            if(class(p2) == "try-error") p2 <- NULL
-          }
+          if(inherits(p2, "try-error")) p2 <- NULL
         }
         p[[name]] <- p2
       }
@@ -4766,9 +4760,7 @@ shinyServer(function(input, output, session) {
                              minGSSize = 50, maxGSSize = 500,by = "fgsea",verbose = F))
           }
         }
-        if(length(class(em3)) == 1){
-          if(class(em3) == "try-error") validate(em3)
-        }
+        if(inherits(em3, "try-error")) validate(em3)
         if (length(as.data.frame(em3)$ID) == 0) {
           em4 <- NA
         } else{
