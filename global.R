@@ -1374,8 +1374,7 @@ v1_GetMultiFC<-function(EBMultiOut, collist,count,SmallNum = 0.01,EBSeq_mode=F){
 enrichment3_1 <- function(data3, data4, cnet_list2){
   if(!is.null(cnet_list2)){
         withProgress(message = "dotplot",{
-          data <- data.frame(matrix(rep(NA, 10), nrow=1))[numeric(0), ]
-          colnames(data) <- c("ID", "Description", "GeneRatio", "BgRatio", "pvalue", "p.adjust", " qvalue", "geneID", "Count", "Group")
+          data <- NULL
           for (name in names(cnet_list2)) {
               em <- cnet_list2[[name]]
               sum <- length(data4$ENTREZID[data4$sig == name])
@@ -1385,10 +1384,10 @@ enrichment3_1 <- function(data3, data4, cnet_list2){
                 cnet1 <- as.data.frame(em)
                 cnet1$Group <- paste(name, "\n","(",sum, ")",sep = "")
                 cnet1 <- cnet1[sort(cnet1$qvalue, decreasing = F, index=T)$ix,]
-                data <- rbind(data, cnet1)
+                data <- dplyr::bind_rows(data, cnet1)
               }
           }
-          if(!is.null(data)) data$GeneRatio <- DOSE::parse_ratio(data$GeneRatio)
+          if(!is.null(data) && nrow(data) > 0) data$GeneRatio <- DOSE::parse_ratio(data$GeneRatio)
           return(data)
           incProgress()
         })
@@ -1430,16 +1429,16 @@ keggEnrichment1_xenopus <- function(data3, data4, Species, Gene_set, org, org_co
       for (name in unique(data3$sig)) {
         if (name != "NS"){
             if(Gene_set == "KEGG"){
-              em <- enrichKEGG(data4$ENTREZID[data4$sig == name], organism = org_code, pvalueCutoff = 0.05,keyType = "ncbi-geneid")
+              em <- clusterProfiler::enrichKEGG(data4$ENTREZID[data4$sig == name], organism = org_code, pvalueCutoff = 0.05,keyType = "ncbi-geneid")
             }
             if(Gene_set == "GO biological process"){
-              em <- enrichGO(data4$ENTREZID[data4$sig == name], OrgDb = org, ont = "BP",pvalueCutoff = 0.05)
+              em <- clusterProfiler::enrichGO(data4$ENTREZID[data4$sig == name], OrgDb = org, ont = "BP",pvalueCutoff = 0.05)
             }
             if(Gene_set == "GO cellular component"){
-              em <- enrichGO(data4$ENTREZID[data4$sig == name], OrgDb= org, ont = "CC",pvalueCutoff = 0.05) 
+              em <- clusterProfiler::enrichGO(data4$ENTREZID[data4$sig == name], OrgDb= org, ont = "CC",pvalueCutoff = 0.05) 
             }
             if(Gene_set == "GO molecular function"){
-              em <- enrichGO(data4$ENTREZID[data4$sig == name], OrgDb = org, ont = "MF",pvalueCutoff = 0.05) 
+              em <- clusterProfiler::enrichGO(data4$ENTREZID[data4$sig == name], OrgDb = org, ont = "MF",pvalueCutoff = 0.05) 
             }
             if (length(as.data.frame(em)$ID) == 0) {
               cnet1 <- NULL
@@ -1456,8 +1455,7 @@ keggEnrichment1_xenopus <- function(data3, data4, Species, Gene_set, org, org_co
 
 keggEnrichment2 <- function(data3, data4,cnet_list2){
   if(!is.null(cnet_list2)){
-    data <- data.frame(matrix(rep(NA, 10), nrow=1))[numeric(0), ]
-    colnames(data) <- c("ID", "Description", "GeneRatio", "BgRatio", "pvalue", "p.adjust", " qvalue", "geneID", "Count", "Group")
+    data <- NULL
     cnet_list <- list()
     for (name in names(cnet_list2)) {
       sum <- length(data4$ENTREZID[data4$sig == name])
@@ -1466,25 +1464,29 @@ keggEnrichment2 <- function(data3, data4,cnet_list2){
         cnet1 <- NULL
       } else {
         cnet1 <- em
+        cnet_df <- as.data.frame(cnet1)
+        if(!"qvalue" %in% colnames(cnet_df) && "p.adjust" %in% colnames(cnet_df)){
+          cnet_df$qvalue <- cnet_df$p.adjust
+        }
         if ((length(as.data.frame(cnet1)$ID) == 0) || 
-            length(which(!is.na(unique(as.data.frame(cnet1)$qvalue))))==0) {
+            !("qvalue" %in% colnames(cnet_df)) ||
+            length(which(!is.na(unique(cnet_df$qvalue))))==0) {
           c <- NULL
         } else{
           c <- clusterProfiler::cnetplot(cnet1, cex_label_gene = 0.7, cex_label_category = 0.75,
                         cex_category = 0.75, colorEdge = TRUE)
           c <- try(as.grob(c + guides(edge_color = "none")))
-          if(length(class(c)) == 1){
-            if(class(c) == "try-error") c <- NULL
-          }
+          if(inherits(c, "try-error")) c <- NULL
           cnet_list[[name]] = c
         }
-        cnet1 <- as.data.frame(em)
+        cnet1 <- cnet_df
         cnet1$Group <- paste(name, "\n","(",sum, ")",sep = "")
         cnet1 <- cnet1[sort(cnet1$qvalue, decreasing = F, index=T)$ix,]
         cnet1 <- cnet1[1:5,]
-        data <- rbind(data, cnet1)
+        data <- dplyr::bind_rows(data, cnet1)
       }
     }
+    if(is.null(data) || nrow(data) == 0) return(NULL)
     data <- dplyr::filter(data, !is.na(Group))
     data <- dplyr::filter(data, !is.na(Description))
     data$GeneRatio <- DOSE::parse_ratio(data$GeneRatio)
@@ -1960,21 +1962,19 @@ enrich_viewer_forMulti2 <- function(gene_type,df, Species,Ortholog,Isoform, Gene
             df <- NULL
           }else{
             H_t2g2 <- H_t2g %>% dplyr::select(gs_name, entrez_gene)
-          df <- data.frame(matrix(rep(NA, 10), nrow=1))[numeric(0), ]
-          colnames(df) <- c("ID", "Description", "GeneRatio", "BgRatio", "pvalue", "p.adjust", " qvalue", "geneID", "Count", "Group")
+          df <- NULL
           for (name in unique(data3$Group)) {
             sum <- length(data3$ENTREZID[data3$Group == name])
             em <- clusterProfiler::enricher(data3$ENTREZID[data3$Group == name], TERM2GENE=H_t2g2, pvalueCutoff = 0.05)
             if (length(as.data.frame(em)$ID) != 0) {
-              if(length(colnames(as.data.frame(em))) == 9){
-                cnet1 <- as.data.frame(clusterProfiler::setReadable(em, org, 'ENTREZID'))
-                cnet1$Group <- paste(name, "\n","(",sum, ")",sep = "")
-                df <- rbind(df, cnet1)
-              }
+              cnet1 <- as.data.frame(clusterProfiler::setReadable(em, org, 'ENTREZID'))
+              if(!"qvalue" %in% colnames(cnet1) && "p.adjust" %in% colnames(cnet1)) cnet1$qvalue <- cnet1$p.adjust
+              cnet1$Group <- paste(name, "\n","(",sum, ")",sep = "")
+              df <- dplyr::bind_rows(df, cnet1)
             }
           }
           }
-          if(length(df$ID) !=0){
+          if(!is.null(df) && nrow(df) != 0){
             df$GeneRatio <- DOSE::parse_ratio(df$GeneRatio)
             return(df)
           }else return(NULL)
@@ -1989,31 +1989,29 @@ enrich_viewer_forMulti2_xenopus <- function(df, Species,Ortholog,Isoform, Gene_s
       return(NULL)
     }else{
       withProgress(message = "enrichment analysis",{
-          df <- data.frame(matrix(rep(NA, 10), nrow=1))[numeric(0), ]
-          colnames(df) <- c("ID", "Description", "GeneRatio", "BgRatio", "pvalue", "p.adjust", " qvalue", "geneID", "Count", "Group")
+          df <- NULL
           for (name in unique(data3$Group)) {
             sum <- length(data3$ENTREZID[data3$Group == name])
             if(Gene_set == "KEGG"){
-              em <- enrichKEGG(data3$ENTREZID[data3$Group == name], organism = org_code, pvalueCutoff = 0.05,keyType = "ncbi-geneid")
+              em <- clusterProfiler::enrichKEGG(data3$ENTREZID[data3$Group == name], organism = org_code, pvalueCutoff = 0.05,keyType = "ncbi-geneid")
             }
             if(Gene_set == "GO biological process"){
-              em <- enrichGO(data3$ENTREZID[data3$Group == name], OrgDb = org, ont = "BP",pvalueCutoff = 0.05)
+              em <- clusterProfiler::enrichGO(data3$ENTREZID[data3$Group == name], OrgDb = org, ont = "BP",pvalueCutoff = 0.05)
             }
             if(Gene_set == "GO cellular component"){
-              em <- enrichGO(data3$ENTREZID[data3$Group == name], OrgDb= org, ont = "CC",pvalueCutoff = 0.05) 
+              em <- clusterProfiler::enrichGO(data3$ENTREZID[data3$Group == name], OrgDb= org, ont = "CC",pvalueCutoff = 0.05) 
             }
             if(Gene_set == "GO molecular function"){
-              em <- enrichGO(data3$ENTREZID[data3$Group == name], OrgDb = org, ont = "MF",pvalueCutoff = 0.05) 
+              em <- clusterProfiler::enrichGO(data3$ENTREZID[data3$Group == name], OrgDb = org, ont = "MF",pvalueCutoff = 0.05) 
             }
             if (length(as.data.frame(em)$ID) != 0) {
-              if(length(colnames(as.data.frame(em))) == 9){
-                cnet1 <- as.data.frame(clusterProfiler::setReadable(em, org, 'ENTREZID'))
-                cnet1$Group <- paste(name, "\n","(",sum, ")",sep = "")
-                df <- rbind(df, cnet1)
-              }
+              cnet1 <- as.data.frame(clusterProfiler::setReadable(em, org, 'ENTREZID'))
+              if(!"qvalue" %in% colnames(cnet1) && "p.adjust" %in% colnames(cnet1)) cnet1$qvalue <- cnet1$p.adjust
+              cnet1$Group <- paste(name, "\n","(",sum, ")",sep = "")
+              df <- dplyr::bind_rows(df, cnet1)
             }
           }
-        if(length(df$ID) !=0){
+        if(!is.null(df) && nrow(df) != 0){
           df$GeneRatio <- DOSE::parse_ratio(df$GeneRatio)
           return(df)
         }else return(NULL)
@@ -2027,7 +2025,7 @@ enrich_keggGO_global <- function(formula_res, Gene_set){
         return(NULL)
       }else{
             formula_res <- clusterProfiler.dplyr::filter(formula_res, !is.na(qvalue))
-            p1 <- as.grob(dotplot(formula_res, color ="qvalue", font.size = 10))
+            p1 <- as.grob(enrichplot::dotplot(formula_res, color ="qvalue", font.size = 10))
           p <- plot_grid(p1)
           return(p)
         }
@@ -2048,10 +2046,8 @@ enrich_gene_list <- function(data, Gene_set, H_t2g, org,org_code=NULL){
           sum <- length(data$ENTREZID[data$Group == name])
           em <- clusterProfiler::enricher(data$ENTREZID[data$Group == name], TERM2GENE=H_t2g2, pvalueCutoff = 0.5)
           if (length(as.data.frame(em)$ID) != 0) {
-            if(length(colnames(as.data.frame(em))) == 9){
-              cnet1 <- clusterProfiler::setReadable(em, org, 'ENTREZID')
-              df[[name]] <- cnet1
-            }
+            cnet1 <- clusterProfiler::setReadable(em, org, 'ENTREZID')
+            df[[name]] <- cnet1
           }
         }
       }
@@ -2067,22 +2063,20 @@ enrich_gene_list_xenopus <- function(data, Gene_set, org,org_code=NULL){
         for (name in unique(data$Group)) {
           sum <- length(data$ENTREZID[data$Group == name])
           if(Gene_set == "KEGG"){
-            em <- enrichKEGG(data$ENTREZID[data$Group == name], organism = org_code, pvalueCutoff = 0.05,keyType = "ncbi-geneid")
+            em <- clusterProfiler::enrichKEGG(data$ENTREZID[data$Group == name], organism = org_code, pvalueCutoff = 0.05,keyType = "ncbi-geneid")
           }
           if(Gene_set == "GO biological process"){
-            em <- enrichGO(data$ENTREZID[data$Group == name], OrgDb = org, ont = "BP",pvalueCutoff = 0.05)
+            em <- clusterProfiler::enrichGO(data$ENTREZID[data$Group == name], OrgDb = org, ont = "BP",pvalueCutoff = 0.05)
           }
           if(Gene_set == "GO cellular component"){
-            em <- enrichGO(data$ENTREZID[data$Group == name], OrgDb= org, ont = "CC",pvalueCutoff = 0.05) 
+            em <- clusterProfiler::enrichGO(data$ENTREZID[data$Group == name], OrgDb= org, ont = "CC",pvalueCutoff = 0.05) 
           }
           if(Gene_set == "GO molecular function"){
-            em <- enrichGO(data$ENTREZID[data$Group == name], OrgDb = org, ont = "MF",pvalueCutoff = 0.05) 
+            em <- clusterProfiler::enrichGO(data$ENTREZID[data$Group == name], OrgDb = org, ont = "MF",pvalueCutoff = 0.05) 
           }
           if (length(as.data.frame(em)$ID) != 0) {
-            if(length(colnames(as.data.frame(em))) == 9){
-              cnet1 <- clusterProfiler::setReadable(em, org, 'ENTREZID')
-              df[[name]] <- cnet1
-            }
+            cnet1 <- clusterProfiler::setReadable(em, org, 'ENTREZID')
+            df[[name]] <- cnet1
           }
         }
       return(df)
@@ -2094,27 +2088,26 @@ enrich_genelist <- function(data, enrich_gene_list, showCategory=5,section=NULL,
       if(is.null(data) || is.null(enrich_gene_list)){
         return(NULL)
       }else{
-          df <- data.frame(matrix(rep(NA, 10), nrow=1))[numeric(0), ]
-          colnames(df) <- c("ID", "Description", "GeneRatio", "BgRatio", "pvalue", "p.adjust", " qvalue", "geneID", "Count", "Group")
+          df <- NULL
           cluster_list <- c()
           for (name in names(enrich_gene_list)) {
             sum <- length(data$ENTREZID[data$Group == name])
             em <- enrich_gene_list[[name]]
             if (length(as.data.frame(em)$ID) != 0) {
-              if(length(colnames(as.data.frame(em))) == 9){
-                cnet1 <- as.data.frame(em)
-                cnet1$Group <- paste(name, "\n","(",sum, ")",sep = "")
-                cluster_list <- c(cluster_list, paste(name, "\n","(",sum, ")",sep = ""))
-                if(!is.null(group_order)) group_order[which(group_order == name)] <- paste(name, "\n","(",sum, ")",sep = "")
-                cnet1 <- cnet1[sort(cnet1$pvalue, decreasing = F, index=T)$ix,]
-                if (length(cnet1$pvalue) > showCategory){
-                  cnet1 <- cnet1[1:showCategory,]
-                }
-                df <- rbind(df, cnet1)
+              cnet1 <- as.data.frame(em)
+              if(!"qvalue" %in% colnames(cnet1) && "p.adjust" %in% colnames(cnet1)) cnet1$qvalue <- cnet1$p.adjust
+              cnet1$Group <- paste(name, "\n","(",sum, ")",sep = "")
+              cluster_list <- c(cluster_list, paste(name, "\n","(",sum, ")",sep = ""))
+              if(!is.null(group_order)) group_order[which(group_order == name)] <- paste(name, "\n","(",sum, ")",sep = "")
+              cnet1 <- cnet1[sort(cnet1$pvalue, decreasing = F, index=T)$ix,]
+              if (length(cnet1$pvalue) > showCategory){
+                cnet1 <- cnet1[1:showCategory,]
               }
+              df <- dplyr::bind_rows(df, cnet1)
             }
           }
 
+          if(is.null(df) || nrow(df) == 0) return(NULL)
           if(!is.null(group_order)) group_order <- group_order[group_order %in% cluster_list]
           if ((length(df$Description) == 0) || length(which(!is.na(unique(df$qvalue)))) == 0) {
             p1 <- NULL
@@ -2181,9 +2174,7 @@ cnet_global <- function(data, group, enrich_gene_list, showCategory=5){
           p2 <- try(as.grob(clusterProfiler::cnetplot(cnet1,
                                      cex_label_gene = 0.7, cex_label_category = 0.75, showCategory = showCategory,
                                      cex_category = 0.75, colorEdge = TRUE)+ guides(edge_color = "none")))
-          if(length(class(p2)) == 1){
-            if(class(p2) == "try-error") p2 <- NULL
-          }
+          if(inherits(p2, "try-error")) p2 <- NULL
         }
         p <- plot_grid(p2)
         return(p)
