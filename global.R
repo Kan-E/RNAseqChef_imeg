@@ -25,10 +25,13 @@ library(org.Mmu.eg.db)
 library(org.Pt.eg.db)
 library(org.Sc.sgd.db)
 library(org.At.tair.db)
-library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(tibble)
+library(tidyr)
 library(rstatix)
 library(multcomp)
-library(tools)
 library(ggpubr)
 library(venn)
 library(ggrepel)
@@ -44,7 +47,6 @@ library(DEGreport)
 library(msigdbr)
 library(ComplexHeatmap)
 library(plotly,verbose=FALSE)
-library(BiocManager)
 library(umap)
 library(biomaRt)
 library(limma)
@@ -58,12 +60,46 @@ library(DRIMSeq)
 library(stageR)
 library(ggtranscript) ##devtools::install_github("dzhang32/ggtranscript")
 library(eulerr)
-options(repos = BiocManager::repositories())
-file.copy("Rmd/pair_report.Rmd",file.path(tempdir(),"pair_report.Rmd"), overwrite = TRUE)
-file.copy("Rmd/pair_batch_report.Rmd",file.path(tempdir(),"pair_batch_report.Rmd"), overwrite = TRUE)
-file.copy("Rmd/3conditions_report.Rmd",file.path(tempdir(),"3conditions_report.Rmd"), overwrite = TRUE)
-file.copy("Rmd/multi_report.Rmd",file.path(tempdir(),"multi_report.Rmd"), overwrite = TRUE)
-file.copy("dds.rds",file.path(tempdir(),"dds.rds"), overwrite = TRUE)
+bioc_repos <- tryCatch(
+  suppressWarnings(BiocManager::repositories()),
+  error = function(e) getOption("repos")
+)
+options(repos = bioc_repos)
+app_file <- function(...) {
+  file.path(getwd(), ...)
+}
+
+copy_to_temp_if_exists <- function(source_path, target_name = basename(source_path)) {
+  source_file <- app_file(source_path)
+  if (file.exists(source_file)) {
+    file.copy(source_file, file.path(tempdir(), target_name), overwrite = TRUE)
+  }
+}
+
+read_local_or_remote_table <- function(local_path, remote_path = NULL, ...) {
+  local_file <- app_file(local_path)
+  if (file.exists(local_file)) {
+    return(read.table(local_file, ...))
+  }
+  if (!is.null(remote_path)) {
+    return(read.table(remote_path, ...))
+  }
+  stop("Missing file: ", local_path)
+}
+
+example_data_path <- function(local_path, remote_path = NULL) {
+  local_file <- app_file(local_path)
+  if (file.exists(local_file)) {
+    return(local_file)
+  }
+  remote_path
+}
+
+copy_to_temp_if_exists("Rmd/pair_report.Rmd")
+copy_to_temp_if_exists("Rmd/pair_batch_report.Rmd")
+copy_to_temp_if_exists("Rmd/3conditions_report.Rmd")
+copy_to_temp_if_exists("Rmd/multi_report.Rmd")
+copy_to_temp_if_exists("dds.rds")
 msigdbr_species <- msigdbr::msigdbr_species()$species_name
 gene_set_list <- c("MSigDB Hallmark", "KEGG", "Reactome", "PID (Pathway Interaction Database)",
                    "BioCarta","WikiPathways", "GO biological process", 
@@ -72,21 +108,93 @@ gene_set_list <- c("MSigDB Hallmark", "KEGG", "Reactome", "PID (Pathway Interact
                    "Transcription factor targets", "miRNA target","Position",
                    "CGP (chemical and genetic pertubations)","ImmuneSigDB","Macrophage (444 gene sets from ImmuneSigDB)","VAX (vaccine response)",
                    "Cell type signature","Custom gene set")
-biomart_data <- read.table("https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/non-model.txt",sep = "\t", row.names = 1,header = T,quote = "")
-biomart_plants <- read.table("https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/non-model_plants.txt",sep = "\t",header = T,quote = "")
-biomart_fungi <- read.table("https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/non-model_fungi.txt",sep = "\t",header = T,quote = "")
-biomart_metazoa <- read.table("https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/non-model_metazoa.txt",sep = "\t",header = T)
+biomart_data <- read_local_or_remote_table("data/non-model.txt", "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/non-model.txt", sep = "\t", row.names = 1, header = T, quote = "")
+biomart_plants <- read_local_or_remote_table("data/non-model_plants.txt", "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/non-model_plants.txt", sep = "\t", header = T, quote = "")
+biomart_fungi <- read_local_or_remote_table("data/non-model_fungi.txt", "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/non-model_fungi.txt", sep = "\t", header = T, quote = "")
+biomart_metazoa <- read_local_or_remote_table("data/non-model_metazoa.txt", "https://raw.githubusercontent.com/Kan-E/RNAseqChef/main/data/non-model_metazoa.txt", sep = "\t", header = T)
 no_orgDb_animals<-c(biomart_data$Scientific_common_name)
 no_orgDb_plants<-c(biomart_plants$Scientific_common_name)
 no_orgDb_fungi<-c(biomart_fungi$Scientific_common_name)
 no_orgDb_metazoa<-c(biomart_metazoa$Scientific_common_name)
-no_orgDb <- c(no_orgDb_animals,no_orgDb_metazoa,no_orgDb_plants,no_orgDb_fungi)
+force_orgdb_species <- c("Arabidopsis thaliana")
+build_non_model_species_aliases <- function(...) {
+  tables <- list(...)
+  alias_tables <- lapply(tables, function(df) {
+    canonical <- as.character(df$Scientific_common_name)
+    cols <- intersect(c("Scientific_common_name", "Scientific_name", "Common_name", "description"), colnames(df))
+    do.call(rbind, lapply(cols, function(col) {
+      data.frame(alias = as.character(df[[col]]), canonical = canonical, stringsAsFactors = FALSE)
+    }))
+  })
+  alias_df <- unique(do.call(rbind, alias_tables))
+  alias_df <- alias_df[!is.na(alias_df$alias) & nzchar(alias_df$alias), , drop = FALSE]
+  alias_df$alias_lower <- tolower(alias_df$alias)
+  alias_df
+}
+species_alias_df <- build_non_model_species_aliases(biomart_data, biomart_metazoa, biomart_plants, biomart_fungi)
+species_alias_df <- species_alias_df[!species_alias_df$canonical %in% force_orgdb_species, , drop = FALSE]
+species_list_nonmodel <- setdiff(unique(c(no_orgDb_animals,no_orgDb_metazoa,no_orgDb_plants,no_orgDb_fungi)), force_orgdb_species)
+no_orgDb <- unique(as.character(species_alias_df$alias))
 species_list <- c("not selected", "Homo sapiens", "Mus musculus", "Rattus norvegicus", 
                   "Drosophila melanogaster", "Caenorhabditis elegans","Bos taurus","Canis lupus familiaris",
                   "Danio rerio","Gallus gallus","Macaca mulatta",
                   "Pan troglodytes","Saccharomyces cerevisiae","Xenopus laevis","Arabidopsis thaliana",
-                  no_orgDb)
-species_list_nonmodel <- no_orgDb
+                  species_list_nonmodel)
+normalize_species_name <- function(species){
+  if(length(species) != 1 || is.na(species) || !nzchar(species)) return(species)
+  if(species %in% species_list_nonmodel) return(species)
+  idx <- match(species, species_alias_df$alias)
+  if(!is.na(idx)) return(species_alias_df$canonical[[idx]])
+  idx <- match(tolower(species), species_alias_df$alias_lower)
+  if(!is.na(idx)) return(species_alias_df$canonical[[idx]])
+  species
+}
+normalize_species_input <- function(species){
+  if(is.null(species) || !length(species) || all(is.na(species))) return("not selected")
+  species <- as.character(species[[1]])
+  if(!nzchar(species)) return("not selected")
+  normalize_species_name(species)
+}
+
+normalize_ortholog_input <- function(ortholog){
+  if(is.null(ortholog) || !length(ortholog) || all(is.na(ortholog))) return(NULL)
+  ortholog <- as.character(ortholog[[1]])
+  if(!nzchar(ortholog) || ortholog == "not selected") return(NULL)
+  ortholog
+}
+sgd_symbol_column <- function(org_obj) {
+  if (!is.null(org_obj) &&
+      !is.null(org_obj$packageName) &&
+      identical(org_obj$packageName, "org.Sc.sgd.db")) {
+    "GENENAME"
+  } else {
+    "SYMBOL"
+  }
+}
+gene_primary_key <- function(my.symbols) {
+  if (length(my.symbols) == 0 || is.na(my.symbols[1]) || !nzchar(my.symbols[1])) {
+    return("ENSEMBL")
+  }
+  if (str_detect(my.symbols[1], "^AT.G")) "TAIR" else "ENSEMBL"
+}
+is_ensembl_like_id <- function(my.symbols, org_obj = NULL) {
+  if (length(my.symbols) == 0 || is.na(my.symbols[1]) || !nzchar(my.symbols[1])) {
+    return(FALSE)
+  }
+  first_id <- my.symbols[1]
+  if (str_detect(first_id, "ENS") ||
+      str_detect(first_id, "FBgn") ||
+      str_detect(first_id, "^AT.G")) {
+    return(TRUE)
+  }
+  if (!is.null(org_obj) &&
+      !is.null(org_obj$packageName) &&
+      identical(org_obj$packageName, "org.Sc.sgd.db")) {
+    return(str_detect(first_id, "^Y[A-Z]{2}[0-9]{3}[CW](?:-[A-Z])?$"))
+  }
+  FALSE
+}
+gene_set_cache <- new.env(parent = emptyenv())
 read_by_extension <- function(tmp, use_row_names = FALSE, na_strings = NULL){
   ext <- tools::file_ext(tmp)
   if(ext == "xlsx"){
@@ -118,7 +226,7 @@ read_by_extension <- function(tmp, use_row_names = FALSE, na_strings = NULL){
 
 clean_x_prefix <- function(df){
   if(length(colnames(df)) != 0 && str_detect(colnames(df)[1], "^X\\.")){
-    colnames(df) <- str_sub(colnames(df), start = 3, end = -2)
+    colnames(df) <- sub("^X\\.", "", colnames(df))
   }
   df
 }
@@ -244,8 +352,8 @@ gene_list_convert_for_enrichment <- function(gene_type,data, Ortholog,Isoform,or
         }else if(gene_type == "isoform"){
           gene_IDs <- Isoform
         }else{
-        if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-        if(org$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
+        key <- gene_primary_key(my.symbols)
+        SYMBOL <- sgd_symbol_column(org)
         gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
                                         keytype = key,
                                         columns = c(key,SYMBOL, "ENTREZID"))
@@ -257,7 +365,7 @@ gene_list_convert_for_enrichment <- function(gene_type,data, Ortholog,Isoform,or
         }else if(gene_type == "isoform"){
           gene_IDs <- Isoform[,-1]
         }else{
-          if(org$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
+          SYMBOL <- sgd_symbol_column(org)
         gene_IDs <- AnnotationDbi::select(org, keys = my.symbols,
                                           keytype = SYMBOL,
                                           columns = c("ENTREZID", SYMBOL))
@@ -312,12 +420,12 @@ dorothea <- function(species, confidence = "recommend",type){
             "Monodelphis domestica" = set <- "mdomestica_gene_ensembl",
             "Ornithorhynchus anatinus" = set <- "oanatinus_gene_ensembl",
             "Pan troglodytes" = set <- "ptroglodytes_gene_ensembl")
-    convert = useMart("ensembl", dataset = set, host="https://dec2021.archive.ensembl.org")
-    human = useMart("ensembl", dataset = "hsapiens_gene_ensembl", host="https://dec2021.archive.ensembl.org")
-    genes2 = getLDS(attributes = c("entrezgene_id"), filters = "entrezgene_id",
-                   values = genes ,mart = human,
-                 attributesL = c("entrezgene_id"),
-                   martL = convert, uniqueRows=T)
+    convert <- with_biomart_timeout(useMart("ensembl", dataset = set, host = "https://dec2021.archive.ensembl.org"))
+    human <- with_biomart_timeout(useMart("ensembl", dataset = "hsapiens_gene_ensembl", host = "https://dec2021.archive.ensembl.org"))
+    genes2 <- with_biomart_timeout(getLDS(attributes = c("entrezgene_id"), filters = "entrezgene_id",
+                                          values = genes, mart = human,
+                                          attributesL = c("entrezgene_id"),
+                                          martL = convert, uniqueRows = TRUE))
     colnames(genes2) <- c("entrez_gene", "converted_entrez_gene")
     genes2 <- genes2 %>% distinct(converted_entrez_gene, .keep_all = T)
     merge <- merge(net3, genes2, by = "entrez_gene") 
@@ -338,164 +446,520 @@ ensembl_archive_metazoa <- c("https://metazoa.ensembl.org",
 orgDb_list <- c("Homo sapiens", "Mus musculus", "Rattus norvegicus", 
                 "Drosophila melanogaster", "Caenorhabditis elegans","Bos taurus","Canis lupus familiaris",
                 "Danio rerio","Gallus gallus","Macaca mulatta","Pan troglodytes","Saccharomyces cerevisiae")
+biomart_timeout_seconds <- 15
+
+with_biomart_timeout <- function(expr, seconds = biomart_timeout_seconds) {
+  old_timeout <- getOption("timeout")
+  options(timeout = max(1L, as.integer(seconds)))
+  setTimeLimit(elapsed = seconds, transient = TRUE)
+  on.exit({
+    options(timeout = old_timeout)
+    setTimeLimit(cpu = Inf, elapsed = Inf, transient = FALSE)
+  }, add = TRUE)
+  force(expr)
+}
+
+biomart_host_candidates <- function(mart, host) {
+  if (identical(mart, "plants_mart")) {
+    return(unique(c(host, ensembl_archive_plants)))
+  }
+  if (identical(mart, "fungi_mart")) {
+    return(unique(c(host, ensembl_archive_fungi)))
+  }
+  if (identical(mart, "metazoa_mart")) {
+    return(unique(c(host, ensembl_archive_metazoa)))
+  }
+  unique(c(host))
+}
+
+biomart_prefers_martservice <- function(mart) {
+  identical(mart, "plants_mart")
+}
+
+pick_first_match <- function(x) {
+  if (length(x) == 0) {
+    return(NA_character_)
+  }
+  x[[1]]
+}
+
+ortholog_dataset_name <- function(species) {
+  switch(species,
+         "Mus musculus" = "mmusculus_gene_ensembl",
+         "Homo sapiens" = "hsapiens_gene_ensembl",
+         "Rattus norvegicus" = "rnorvegicus_gene_ensembl",
+         "Drosophila melanogaster" = "dmelanogaster_eg_gene",
+         "Caenorhabditis elegans" = "celegans_eg_gene",
+         "Bos taurus" = "btaurus_gene_ensembl",
+         "Canis lupus familiaris" = "clfamiliaris_gene_ensembl",
+         "Danio rerio" = "drerio_gene_ensembl",
+         "Gallus gallus" = "ggallus_gene_ensembl",
+         "Macaca mulatta" = "mmulatta_gene_ensembl",
+         "Pan troglodytes" = "ptroglodytes_gene_ensembl",
+         "Saccharomyces cerevisiae" = "scerevisiae_eg_gene",
+         "Arabidopsis thaliana" = "athaliana_eg_gene",
+         NULL)
+}
+
+ortholog_orgdb <- function(species) {
+  switch(species,
+         "Mus musculus" = org.Mm.eg.db,
+         "Homo sapiens" = org.Hs.eg.db,
+         "Rattus norvegicus" = org.Rn.eg.db,
+         "Drosophila melanogaster" = org.Dm.eg.db,
+         "Caenorhabditis elegans" = org.Ce.eg.db,
+         "Bos taurus" = org.Bt.eg.db,
+         "Canis lupus familiaris" = org.Cf.eg.db,
+         "Danio rerio" = org.Dr.eg.db,
+         "Gallus gallus" = org.Gg.eg.db,
+         "Macaca mulatta" = org.Mmu.eg.db,
+         "Pan troglodytes" = org.Pt.eg.db,
+         "Saccharomyces cerevisiae" = org.Sc.sgd.db,
+         "Arabidopsis thaliana" = org.At.tair.db,
+         NULL)
+}
+
+ortholog_keytype <- function(species) {
+  switch(species,
+         "Arabidopsis thaliana" = "TAIR",
+         "Saccharomyces cerevisiae" = "ORF",
+         "ENSEMBL")
+}
+
+ortholog_dataset_prefix <- function(dataset) {
+  if (is.null(dataset) || !nzchar(dataset)) {
+    return(dataset)
+  }
+  if (grepl("_eg_gene$", dataset)) {
+    return(sub("_gene$", "", dataset))
+  }
+  sub("_gene_ensembl$", "", dataset)
+}
+
+direct_martservice_query <- function(host, mart, dataset, attributes, filter_name = NULL, values = NULL, unique_rows = TRUE) {
+  host_candidates <- biomart_host_candidates(mart, host)
+  if (length(attributes) == 0) {
+    return(data.frame())
+  }
+
+  attr_xml <- paste0("<Attribute name = '", attributes, "'/>", collapse = "")
+  filter_xml <- ""
+  if (!is.null(filter_name) && length(filter_name) == 1 && !is.null(values)) {
+    values <- unique(as.character(values))
+    values <- values[!is.na(values) & nzchar(values)]
+    filter_xml <- paste0("<Filter name = '", filter_name, "' value = '", paste(values, collapse = ","), "' />")
+  }
+  xml <- paste0(
+    "<?xml version='1.0' encoding='UTF-8'?><!DOCTYPE Query>",
+    "<Query virtualSchemaName = '", mart, "' uniqueRows = '", if (unique_rows) "1" else "0",
+    "' count='0' datasetConfigVersion='0.6' header='1' formatter='TSV'>",
+    "<Dataset name = '", dataset, "'>", attr_xml, filter_xml, "</Dataset></Query>"
+  )
+
+  last_error <- NULL
+  for (candidate in host_candidates) {
+    service_url <- paste0(sub("/+$", "", candidate), "/biomart/martservice?query=", utils::URLencode(xml, reserved = TRUE))
+    result <- try(with_biomart_timeout(utils::read.delim(service_url,
+                                                         header = TRUE,
+                                                         sep = "\t",
+                                                         quote = "",
+                                                         stringsAsFactors = FALSE,
+                                                         check.names = FALSE,
+                                                         fill = TRUE)), silent = TRUE)
+    if (inherits(result, "try-error")) {
+      last_error <- result
+      next
+    }
+    if (ncol(result) == length(attributes)) {
+      colnames(result) <- attributes
+    }
+    if (ncol(result) == 0) {
+      result <- as.data.frame(matrix(nrow = 0, ncol = length(attributes)))
+      colnames(result) <- attributes
+    }
+    return(result)
+  }
+  if (!is.null(last_error)) {
+    stop(last_error)
+  }
+  stop("biomart query failed")
+}
+
+open_biomart_dataset <- function(mart, dataset, host) {
+  host_candidates <- biomart_host_candidates(mart, host)
+
+  primary <- NULL
+  if (identical(mart, "ensembl")) {
+    for (candidate in host_candidates) {
+      primary <- try(with_biomart_timeout(useMart(mart, dataset = dataset, host = candidate)), silent = TRUE)
+      if (!inherits(primary, "try-error")) {
+        return(primary)
+      }
+    }
+  } else {
+    for (candidate in host_candidates) {
+      db <- try(with_biomart_timeout(useMart(mart, host = candidate)), silent = TRUE)
+      if (inherits(db, "try-error")) {
+        primary <- db
+        next
+      }
+      primary <- try(with_biomart_timeout(useDataset(dataset, mart = db)), silent = TRUE)
+      if (!inherits(primary, "try-error")) {
+        return(primary)
+      }
+    }
+  }
+
+  if (identical(mart, "ensembl")) {
+    fallback <- try(with_biomart_timeout(useEnsembl(biomart = "genes", dataset = dataset)), silent = TRUE)
+    if (!inherits(fallback, "try-error")) {
+      return(fallback)
+    }
+  }
+  primary
+}
+
+direct_homolog_map <- function(source_mart, source_ids, source_filter, source_output_col, ortholog_species,
+                               mart_name = "ensembl", dataset = NULL, host = NULL) {
+  ortho_dataset <- ortholog_dataset_name(ortholog_species)
+  ortho_org <- ortholog_orgdb(ortholog_species)
+  ortho_key <- ortholog_keytype(ortholog_species)
+  if (is.null(ortho_dataset) || is.null(ortho_org)) {
+    return(NULL)
+  }
+
+  attr_names <- try(with_biomart_timeout(listAttributes(source_mart)$name), silent = TRUE)
+  if (inherits(attr_names, "try-error")) {
+    return(NULL)
+  }
+
+  prefix <- ortholog_dataset_prefix(ortho_dataset)
+  homolog_gene_attr <- pick_first_match(grep(paste0("^", prefix, "_homolog_ensembl_gene$"), attr_names, value = TRUE))
+  homolog_symbol_attr <- pick_first_match(grep(paste0("^", prefix, "_homolog_(associated_gene_name|gene_name|external_gene_name)$"), attr_names, value = TRUE))
+
+  query_attrs <- unique(c(source_filter, homolog_symbol_attr, homolog_gene_attr))
+  query_attrs <- query_attrs[!is.na(query_attrs) & nzchar(query_attrs)]
+  if (length(query_attrs) <= 1) {
+    return(NULL)
+  }
+
+  if (!is.null(dataset) && !is.null(host) && biomart_prefers_martservice(mart_name)) {
+    homolog_map <- try(direct_martservice_query(host = host,
+                                                mart = mart_name,
+                                                dataset = dataset,
+                                                attributes = query_attrs,
+                                                filter_name = source_filter,
+                                                values = source_ids), silent = TRUE)
+  } else {
+    homolog_map <- try(with_biomart_timeout(getBM(attributes = query_attrs,
+                                                  filters = source_filter,
+                                                  values = source_ids,
+                                                  mart = source_mart)), silent = TRUE)
+    if ((inherits(homolog_map, "try-error") || nrow(homolog_map) == 0) &&
+        !is.null(dataset) && !is.null(host) && mart_name != "ensembl") {
+      homolog_map <- try(direct_martservice_query(host = host,
+                                                  mart = mart_name,
+                                                  dataset = dataset,
+                                                  attributes = query_attrs,
+                                                  filter_name = source_filter,
+                                                  values = source_ids), silent = TRUE)
+    }
+  }
+  if (inherits(homolog_map, "try-error") || nrow(homolog_map) == 0) {
+    return(NULL)
+  }
+
+  homolog_map <- homolog_map %>%
+    distinct(.data[[source_filter]], .keep_all = TRUE)
+  colnames(homolog_map)[colnames(homolog_map) == source_filter] <- source_output_col
+
+  if (!is.na(homolog_symbol_attr) && homolog_symbol_attr %in% colnames(homolog_map)) {
+    colnames(homolog_map)[colnames(homolog_map) == homolog_symbol_attr] <- "SYMBOL"
+  } else {
+    homolog_map$SYMBOL <- NA_character_
+  }
+
+  if (!is.na(homolog_gene_attr) && homolog_gene_attr %in% colnames(homolog_map)) {
+    colnames(homolog_map)[colnames(homolog_map) == homolog_gene_attr] <- "ORTHOLOG_ENSEMBL"
+    ortho_keys <- unique(homolog_map$ORTHOLOG_ENSEMBL)
+    ortho_keys <- ortho_keys[!is.na(ortho_keys) & nzchar(ortho_keys)]
+    if (length(ortho_keys) > 0) {
+      entrez_map <- AnnotationDbi::select(ortho_org,
+                                          keys = ortho_keys,
+                                          keytype = ortho_key,
+                                          columns = c(ortho_key, "ENTREZID"))
+      if (!is.null(entrez_map) && nrow(entrez_map) > 0) {
+        colnames(entrez_map)[1] <- "ORTHOLOG_ENSEMBL"
+        entrez_map <- entrez_map %>%
+          distinct(ORTHOLOG_ENSEMBL, .keep_all = TRUE)
+        homolog_map <- merge(homolog_map, entrez_map,
+                             by = "ORTHOLOG_ENSEMBL", all.x = TRUE)
+      }
+    }
+  }
+
+  if (!"ENTREZID" %in% colnames(homolog_map)) {
+    homolog_map$ENTREZID <- NA_character_
+  }
+
+  homolog_map %>%
+    dplyr::select(all_of(source_output_col), SYMBOL, ENTREZID) %>%
+    distinct(.data[[source_output_col]], .keep_all = TRUE)
+}
+
+resolve_non_model_species <- function(species, bio_data) {
+  species <- normalize_species_name(species)
+  candidates <- as.character(bio_data$Scientific_common_name)
+  if (species %in% candidates) species else species
+}
+
 no_org_ID <- function(count=NULL,gene_list=NULL,Species,Ortholog,Biomart_archive,RNA_type="gene_level"){
+  Species <- normalize_species_input(Species)
+  Ortholog <- normalize_ortholog_input(Ortholog)
   if(Species != "not selected"){
+    Species <- normalize_species_name(Species)
     if(!is.null(Ortholog)){
-    if(sum(is.element(no_orgDb, Species)) == 1){
-      withProgress(message = "preparing a gene annotation. It takes a few minutes.",{
-        if(RNA_type == "gene_level"){
-          ENS <- "ensembl_gene_id"
-          ENT1 <- "external_gene_name"
-          ENT2 <- "external_gene_name"
-          ENT3 <- "external_gene_name"
-        }else{
-          ENS <- "ensembl_transcript_id"
-          ENT1 <- c("refseq_mrna","refseq_ncrna")
-          ENT2 <- "refseq"
-          ENT3 <- c("refseq_mrna","refseq_ncrna","external_gene_name")
-        }
-        
-        mart <- "ensembl"
-        bio_data <- biomart_data
-        if(Ortholog == "Arabidopsis thaliana") {
-          mart <- "plants_mart"
-          bio_data <- biomart_plants
-        }
-        if(Ortholog == "Saccharomyces cerevisiae") {
-          mart <- "fungi_mart"
-          bio_data <- biomart_fungi
-        }
-        if(Ortholog == "Drosophila melanogaster" || Ortholog == "Caenorhabditis elegans") {
-          mart <- "metazoa_mart"
-          bio_data <- biomart_metazoa
-        }
-        db <- useMart(mart, host=Biomart_archive)
-        ensembl <- dplyr::filter(bio_data, Scientific_common_name == Species)$dataset
-        use <- useDataset(ensembl, mart = db)
-        genes_ensembl <- try(getBM(attributes = c(ENS,ENT1), mart = use))
-        if(Ortholog == "Mus musculus") ortho <- "mmusculus_gene_ensembl"
-        if(Ortholog == "Homo sapiens") ortho <- "hsapiens_gene_ensembl"
-        if(Ortholog == "Rattus norvegicus") ortho <- "rnorvegicus_gene_ensembl"
-        if(Ortholog == "Drosophila melanogaster") ortho <- "dmelanogaster_eg_gene"
-        if(Ortholog == "Caenorhabditis elegans") ortho <- "celegans_eg_gene"
-        if(Ortholog == "Bos taurus") ortho <- "btaurus_gene_ensembl"
-        if(Ortholog == "Canis lupus familiaris") ortho <- "clfamiliaris_gene_ensembl"
-        if(Ortholog == "Danio rerio") ortho <- "drerio_gene_ensembl"
-        if(Ortholog == "Gallus gallus") ortho <- "ggallus_gene_ensembl"
-        if(Ortholog == "Macaca mulatta") ortho <- "mmulatta_gene_ensembl"
-        if(Ortholog == "Pan troglodytes") ortho <- "ptroglodytes_gene_ensembl"
-        if(Ortholog == "Saccharomyces cerevisiae") ortho <- "scerevisiae_eg_gene"
-        if(Ortholog == "Arabidopsis thaliana") ortho <- "athaliana_eg_gene"
-        if(class(genes_ensembl) == "try-error") {
-          type <- "ENSEMBL"
-        }else{
-          if(RNA_type != "gene_level"){
-            genes_ensembl <- dplyr::mutate(genes_ensembl, !!ENT2 := gsub("NA","",paste0(genes_ensembl$refseq_mrna,genes_ensembl$refseq_ncrna)))
-          }
-        if(is.null(gene_list)){
-          count <- count %>% dplyr::mutate(!!ENS := rownames(count))
-          count <- count %>% dplyr::mutate(!!ENT2 := rownames(count))
-        ENSEMBL <- merge(genes_ensembl,count,by=ENS)
-        SYMBOL <- merge(genes_ensembl,count,by=ENT2)
-        }else{
-          gene_list <- gene_list %>% dplyr::mutate(!!ENS := gene_list[,1])
-          gene_list <- gene_list %>% dplyr::mutate(!!ENT2 := gene_list[,1])
-          ENSEMBL <- merge(genes_ensembl,gene_list,by=ENS)
-          SYMBOL <- merge(genes_ensembl,gene_list,by=ENT2)
-        }
-        if(dim(ENSEMBL)[1] > dim(SYMBOL)[1]) type <- "ENSEMBL" else type <- "SYMBOL"
-        if(dim(ENSEMBL)[1] == 0 && dim(SYMBOL)[1] == 0) validate("Cannot identify gene IDs. Please check the 'Species' and use the 'Official gene symbol' or 'ENSEMBL ID' for gene names.")
-        }
-        if(type == "ENSEMBL"){
-          attribute <- c(ENS)
+      if(sum(is.element(no_orgDb, Species)) == 1){
+        org_df <- withProgress(message = "preparing a gene annotation. It takes a few minutes.",{
           if(RNA_type == "gene_level"){
+            ENS <- "ensembl_gene_id"
+            ENT1 <- "external_gene_name"
+            ENT2 <- "external_gene_name"
+            ENT3 <- "external_gene_name"
+          }else{
+            ENS <- "ensembl_transcript_id"
+            ENT1 <- c("refseq_mrna","refseq_ncrna")
+            ENT2 <- "refseq"
+            ENT3 <- c("refseq_mrna","refseq_ncrna","external_gene_name")
+          }
+
+          mart <- "ensembl"
+          bio_data <- biomart_data
+          if(Ortholog == "Arabidopsis thaliana") {
+            mart <- "plants_mart"
+            bio_data <- biomart_plants
+          }
+          if(Ortholog == "Saccharomyces cerevisiae") {
+            mart <- "fungi_mart"
+            bio_data <- biomart_fungi
+          }
+          if(Ortholog == "Drosophila melanogaster" || Ortholog == "Caenorhabditis elegans") {
+            mart <- "metazoa_mart"
+            bio_data <- biomart_metazoa
+          }
+
+          species_name <- resolve_non_model_species(Species, bio_data)
+          ensembl <- dplyr::filter(bio_data, Scientific_common_name == species_name)$dataset
+          use <- open_biomart_dataset(mart, ensembl, Biomart_archive)
+          if(inherits(use, "try-error")) {
+            validate("biomart has encountered an unexpected server error.
+                    Please try using a different 'biomart host' or try again later.")
+          }
+          source_ids <- if (is.null(gene_list)) rownames(count) else gene_list[[1]]
+          source_ids <- unique(as.character(source_ids))
+          source_ids <- source_ids[!is.na(source_ids) & nzchar(source_ids)]
+          validate(need(length(source_ids) != 0, "No valid gene IDs were found in the input."))
+
+          if(RNA_type == "gene_level"){
+            if (mart == "ensembl" || !biomart_prefers_martservice(mart)) {
+              genes_ensembl_match <- try(with_biomart_timeout(getBM(attributes = c(ENS,ENT1),
+                                                                    filters = ENS,
+                                                                    values = source_ids,
+                                                                    mart = use)), silent = TRUE)
+              genes_symbol_match <- try(with_biomart_timeout(getBM(attributes = c(ENS,ENT1),
+                                                                   filters = ENT1,
+                                                                   values = source_ids,
+                                                                   mart = use)), silent = TRUE)
+              if (mart != "ensembl") {
+                if (inherits(genes_ensembl_match, "try-error") || nrow(genes_ensembl_match) == 0) {
+                  genes_ensembl_match <- try(direct_martservice_query(host = Biomart_archive,
+                                                                      mart = mart,
+                                                                      dataset = ensembl,
+                                                                      attributes = c(ENS, ENT1),
+                                                                      filter_name = ENS,
+                                                                      values = source_ids), silent = TRUE)
+                }
+                if (inherits(genes_symbol_match, "try-error") || nrow(genes_symbol_match) == 0) {
+                  genes_symbol_match <- try(direct_martservice_query(host = Biomart_archive,
+                                                                     mart = mart,
+                                                                     dataset = ensembl,
+                                                                     attributes = c(ENS, ENT1),
+                                                                     filter_name = ENT1,
+                                                                     values = source_ids), silent = TRUE)
+                }
+              }
+            } else {
+              genes_ensembl_match <- try(direct_martservice_query(host = Biomart_archive,
+                                                                  mart = mart,
+                                                                  dataset = ensembl,
+                                                                  attributes = c(ENS, ENT1),
+                                                                  filter_name = ENS,
+                                                                  values = source_ids), silent = TRUE)
+              genes_symbol_match <- try(direct_martservice_query(host = Biomart_archive,
+                                                                 mart = mart,
+                                                                 dataset = ensembl,
+                                                                 attributes = c(ENS, ENT1),
+                                                                 filter_name = ENT1,
+                                                                 values = source_ids), silent = TRUE)
+              if (inherits(genes_ensembl_match, "try-error") || nrow(genes_ensembl_match) == 0) {
+                genes_ensembl_match <- try(with_biomart_timeout(getBM(attributes = c(ENS,ENT1),
+                                                                      filters = ENS,
+                                                                      values = source_ids,
+                                                                      mart = use)), silent = TRUE)
+              }
+              if (inherits(genes_symbol_match, "try-error") || nrow(genes_symbol_match) == 0) {
+                genes_symbol_match <- try(with_biomart_timeout(getBM(attributes = c(ENS,ENT1),
+                                                                     filters = ENT1,
+                                                                     values = source_ids,
+                                                                     mart = use)), silent = TRUE)
+              }
+            }
+          }else{
+            genes_ensembl <- try(with_biomart_timeout(getBM(attributes = c(ENS,ENT1), mart = use)), silent = TRUE)
+          }
+
+          ortho <- ortholog_dataset_name(Ortholog)
+          if(RNA_type == "gene_level"){
+            ENSEMBL_n <- if(inherits(genes_ensembl_match, "try-error")) 0 else nrow(genes_ensembl_match)
+            SYMBOL_n <- if(inherits(genes_symbol_match, "try-error")) 0 else nrow(genes_symbol_match)
+            if(ENSEMBL_n == 0 && SYMBOL_n == 0) validate("Cannot identify gene IDs. Please check the 'Species' and use the 'Official gene symbol' or 'ENSEMBL ID' for gene names.")
+            if(ENSEMBL_n >= SYMBOL_n) type <- "ENSEMBL" else type <- "SYMBOL"
+          }else if(inherits(genes_ensembl, "try-error")) {
+            type <- "ENSEMBL"
+          }else{
+            if(RNA_type != "gene_level"){
+              genes_ensembl <- dplyr::mutate(genes_ensembl, !!ENT2 := gsub("NA","",paste0(genes_ensembl$refseq_mrna,genes_ensembl$refseq_ncrna)))
+            }
+            if(is.null(gene_list)){
+              count <- count %>% dplyr::mutate(!!ENS := rownames(count))
+              count <- count %>% dplyr::mutate(!!ENT2 := rownames(count))
+              ENSEMBL <- merge(genes_ensembl,count,by=ENS)
+              SYMBOL <- merge(genes_ensembl,count,by=ENT2)
+            }else{
+              gene_list <- gene_list %>% dplyr::mutate(!!ENS := gene_list[,1])
+              gene_list <- gene_list %>% dplyr::mutate(!!ENT2 := gene_list[,1])
+              ENSEMBL <- merge(genes_ensembl,gene_list,by=ENS)
+              SYMBOL <- merge(genes_ensembl,gene_list,by=ENT2)
+            }
+            if(dim(ENSEMBL)[1] > dim(SYMBOL)[1]) type <- "ENSEMBL" else type <- "SYMBOL"
+            if(dim(ENSEMBL)[1] == 0 && dim(SYMBOL)[1] == 0) validate("Cannot identify gene IDs. Please check the 'Species' and use the 'Official gene symbol' or 'ENSEMBL ID' for gene names.")
+          }
+          if(type == "ENSEMBL"){
+            if(RNA_type == "gene_level"){
           colname <- c("ENSEMBL","SYMBOL","ENTREZID")
           colname1<- c("ENSEMBL")
           }else{
             colname <- c("ENSEMBL","refseq_mrna","refseq_ncrna","SYMBOL","ENTREZID")
             colname1<- c("ENSEMBL")
           }
-          genes <- data.frame(ensembl_gene_id = dplyr::select(genes_ensembl, all_of(ENS)))
+          genes <- data.frame(source_id = source_ids, stringsAsFactors = FALSE)
           colnames(genes)[1] <- ENS
           filter <- ENS
         }else{
-          attribute <- c(ENS,"external_gene_name")
-          colname <- c("Original_symbol","SYMBOL","ENTREZID")
-          colname1<- c("Original_symbol")
-          genes <- data.frame(external_gene_name = dplyr::select(genes_ensembl, all_of(ENT2)))
-          colnames(genes)[1] <- ENT2
-          filter <- ENT1
+            colname <- c("Original_symbol","SYMBOL","ENTREZID")
+            colname1<- c("Original_symbol")
+            genes <- data.frame(source_id = source_ids, stringsAsFactors = FALSE)
+            colnames(genes)[1] <- ENT2
+            filter <- ENT1
         }
-        ortho_mart = useMart(mart, dataset = ortho, host=Biomart_archive)
-        genes2 = try(getLDS(attributes = c(ENS),
-                        values = genes ,mart = use,filters = filter,
-                        attributesL = c(ENT3,"entrezgene_id"),
-                        martL = ortho_mart, uniqueRows=T))
-        if(class(genes2) != "try-error") {
-          if(RNA_type != "gene_level"){
-            colnames(genes2) <- colname
-            genes2 <- dplyr::mutate(genes2, !!ENT2 := gsub("NA","",paste0(genes2$refseq_mrna,genes2$refseq_ncrna)))
-            genes2 <- genes2 %>% dplyr::select(all_of(colname[1]), refseq, "SYMBOL","ENTREZID")
-            colname <- colnames(genes2)
+
+          genes2_direct <- NULL
+          if (RNA_type == "gene_level" && (mart != "ensembl" && Ortholog == "Arabidopsis thaliana" || mart == "ensembl")) {
+            genes2_direct <- direct_homolog_map(source_mart = use,
+                                                source_ids = source_ids,
+                                                source_filter = filter,
+                                                source_output_col = colname1[[1]],
+                                                ortholog_species = Ortholog,
+                                                mart_name = mart,
+                                                dataset = ensembl,
+                                                host = Biomart_archive)
           }
-        }else{
-          genes4 = try(getLDS(attributes = c(ENS),
-                              values = genes ,mart = use,filters = filter,
-                              attributesL = c(ENT3,ENS),
-                              martL = ortho_mart, uniqueRows=T))
-          if(class(genes4) == "try-error") {
+          if (!is.null(genes2_direct) && nrow(genes2_direct) != 0) {
+            genes2 <- genes2_direct
+          } else if (mart != "ensembl" && Ortholog == "Arabidopsis thaliana") {
             validate("biomart has encountered an unexpected server error.
                     Please try using a different 'biomart host' or try again later.")
-          }else{
-            if(Ortholog == "Drosophila melanogaster") org <- org.Dm.eg.db
-            if(Ortholog == "Caenorhabditis elegans") org <- org.Ce.eg.db
-            my.symbols <- genes4[,3]
-            if(RNA_type == "gene_level"){
-            ENS_dc <- "ENSEMBL"
-            name_dc <- "Gene.stable.ID.1"
-            }else{
-              ENS_dc <- "ENSEMBLTRANS"
-              name_dc <- "Transcript.stable.ID.1"
+          } else {
+            ortho_mart <- open_biomart_dataset(mart, ortho, Biomart_archive)
+            if(inherits(ortho_mart, "try-error")) {
+              validate("biomart has encountered an unexpected server error.
+                    Please try using a different 'biomart host' or try again later.")
             }
-            gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
-                                            keytype = ENS_dc,
-                                            columns = c(ENS_dc,"ENTREZID"))
-            colnames(gene_IDs) <- c(name_dc,"ENTREZID")
-            gene_IDs <- gene_IDs %>% distinct(!!as.name(name_dc), .keep_all = T)
-            colnames()
-            genes3 <- merge(genes4, gene_IDs, by=name_dc)
-            genes2 <- genes3[,-1]
-            genes2 <- dplyr::mutate(genes2, !!ENT2 := gsub("NA","",paste0(genes2$RefSeq.mRNA.ID,genes2$RefSeq.ncRNA.ID)))
-            genes2 <- genes2 %>% dplyr::select(all_of(colname[1]), refseq, "Gene.name","ENTREZID")
-            colname <- c(colname[1],"refseq","SYMBOL","ENTREZID")
-            colname <- colnames(genes2)
+            genes2 <- try(with_biomart_timeout(getLDS(attributes = c(ENS),
+                                                      values = source_ids, mart = use, filters = filter,
+                                                      attributesL = c(ENT3,"entrezgene_id"),
+                                                      martL = ortho_mart, uniqueRows = TRUE)), silent = TRUE)
+            if(!inherits(genes2, "try-error")) {
+              if(RNA_type != "gene_level"){
+                colnames(genes2) <- colname
+                genes2 <- dplyr::mutate(genes2, !!ENT2 := gsub("NA","",paste0(genes2$refseq_mrna,genes2$refseq_ncrna)))
+                genes2 <- genes2 %>% dplyr::select(all_of(colname[1]), refseq, "SYMBOL","ENTREZID")
+                colname <- colnames(genes2)
+              }
+            }else{
+              genes4 <- try(with_biomart_timeout(getLDS(attributes = c(ENS),
+                                                        values = source_ids, mart = use, filters = filter,
+                                                        attributesL = c(ENT3,ENS),
+                                                        martL = ortho_mart, uniqueRows = TRUE)), silent = TRUE)
+              if(inherits(genes4, "try-error")) {
+                genes2 <- direct_homolog_map(source_mart = use,
+                                             source_ids = source_ids,
+                                             source_filter = filter,
+                                             source_output_col = colname1[[1]],
+                                             ortholog_species = Ortholog,
+                                             mart_name = mart,
+                                             dataset = ensembl,
+                                             host = Biomart_archive)
+                if (is.null(genes2) || nrow(genes2) == 0) {
+                  validate("biomart has encountered an unexpected server error.
+                    Please try using a different 'biomart host' or try again later.")
+                }
+              }else{
+              if(Ortholog == "Drosophila melanogaster") org <- org.Dm.eg.db
+              if(Ortholog == "Caenorhabditis elegans") org <- org.Ce.eg.db
+              my.symbols <- genes4[,3]
+              if(RNA_type == "gene_level"){
+                ENS_dc <- "ENSEMBL"
+                name_dc <- "Gene.stable.ID.1"
+              }else{
+                ENS_dc <- "ENSEMBLTRANS"
+                name_dc <- "Transcript.stable.ID.1"
+              }
+              gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
+                                              keytype = ENS_dc,
+                                              columns = c(ENS_dc,"ENTREZID"))
+              colnames(gene_IDs) <- c(name_dc,"ENTREZID")
+              gene_IDs <- gene_IDs %>% distinct(!!as.name(name_dc), .keep_all = TRUE)
+              genes3 <- merge(genes4, gene_IDs, by=name_dc)
+              genes2 <- genes3[,-1]
+              genes2 <- dplyr::mutate(genes2, !!ENT2 := gsub("NA","",paste0(genes2$RefSeq.mRNA.ID,genes2$RefSeq.ncRNA.ID)))
+              genes2 <- genes2 %>% dplyr::select(all_of(colname[1]), refseq, "Gene.name","ENTREZID")
+              colname <- c(colname[1],"refseq","SYMBOL","ENTREZID")
+              colname <- colnames(genes2)
+            }
           }
-        }
-        colnames(genes) <- colname1
-        colnames(genes2) <- colname
-        gene3<-merge(genes,genes2,by=colname1,all=T)
-        if(type == "ENSEMBL") org <- gene3 %>% distinct(ENSEMBL, .keep_all = T) else org <- gene3 %>% distinct(Original_symbol, .keep_all = T)
-      })
-    }
-    return(org)
+          }
+          colnames(genes) <- colname1
+          colnames(genes2) <- colname
+          gene3<-merge(genes,genes2,by=colname1,all=TRUE)
+          if(type == "ENSEMBL") gene3 %>% distinct(ENSEMBL, .keep_all = TRUE) else gene3 %>% distinct(Original_symbol, .keep_all = TRUE)
+        })
+      }
+      return(org_df)
     }
   }
 }
 #isoform----
 isoform_ID <- function(count=NULL,gene_list=NULL,Species,Ortholog,Biomart_archive,RNA_type="gene_level"){
+  Species <- normalize_species_input(Species)
+  Ortholog <- normalize_ortholog_input(Ortholog)
   if(Species != "not selected"){
-    print(Biomart_archive)
-    print(Ortholog)
-    print(Species)
     if(RNA_type == "transcript_level"){
-        withProgress(message = "preparing a gene annotation. It takes a few minutes.",{
-            if(sum(is.element(no_orgDb, Species)) == 1){
-              gene_id <- no_org_ID(count=count,gene_list=gene_list,Species=Species,Ortholog=Ortholog,
-                                   Biomart_archive=Biomart_archive,RNA_type=RNA_type)
-            }else{
-              print(Biomart_archive)
-              print(Ortholog)
-              print(Species)
+      withProgress(message = "preparing a gene annotation. It takes a few minutes.",{
+        if(sum(is.element(no_orgDb, Species)) == 1){
+          gene_id <- no_org_ID(count=count,gene_list=gene_list,Species=Species,Ortholog=Ortholog,
+                               Biomart_archive=Biomart_archive,RNA_type=RNA_type)
+        }else{
           mart <- "ensembl"
           bio_data <- biomart_data
           if(Species == "Arabidopsis thaliana") {
@@ -510,7 +974,6 @@ isoform_ID <- function(count=NULL,gene_list=NULL,Species,Ortholog,Biomart_archiv
             mart <- "metazoa_mart"
             bio_data <- biomart_metazoa
           }
-          db <- useMart(mart, host=Biomart_archive)
           switch (Species,
                   "Homo sapiens" = ensembl <- "hsapiens_gene_ensembl",
                   "Mus musculus" = ensembl <- "mmusculus_gene_ensembl",
@@ -529,17 +992,28 @@ isoform_ID <- function(count=NULL,gene_list=NULL,Species,Ortholog,Biomart_archiv
                   "Monodelphis domestica" = ensembl <- "mdomestica_gene_ensembl",
                   "Ornithorhynchus anatinus" = ensembl <- "oanatinus_gene_ensembl",
                   "Pan troglodytes" = ensembl <- "ptroglodytes_gene_ensembl")
-          use <- useDataset(ensembl, mart = db)
-          genes_ensembl <- try(getBM(attributes = c("ensembl_transcript_id","external_gene_name","entrezgene_id"), mart = use)) %>% 
-            distinct(ensembl_transcript_id, .keep_all = T) %>%
-            dplyr::filter(!is.na(ensembl_transcript_id))
-          genes_refseq <- try(getBM(attributes = c("refseq_mrna","refseq_ncrna","external_gene_name","entrezgene_id"), mart = use))
-            if(class(genes_refseq) == "try-error") {
-              type <- "ENSEMBL"
-            }else{
+          use <- open_biomart_dataset(mart, ensembl, Biomart_archive)
+          if(inherits(use, "try-error")) {
+            validate("biomart has encountered an unexpected server error. Please try using a different 'biomart host' or try again later.")
+          }
+          genes_ensembl <- try(with_biomart_timeout(getBM(attributes = c("ensembl_transcript_id","external_gene_name","entrezgene_id"), mart = use)), silent = TRUE)
+          if (!inherits(genes_ensembl, "try-error")) {
+            genes_ensembl <- genes_ensembl %>%
+              distinct(ensembl_transcript_id, .keep_all = TRUE) %>%
+              dplyr::filter(!is.na(ensembl_transcript_id))
+          } else {
+            genes_ensembl <- NULL
+          }
+          genes_refseq <- try(with_biomart_timeout(getBM(attributes = c("refseq_mrna","refseq_ncrna","external_gene_name","entrezgene_id"), mart = use)), silent = TRUE)
+          if(inherits(genes_refseq, "try-error")) {
+            if (is.null(genes_ensembl)) {
+              validate("biomart has encountered an unexpected server error. Please try using a different 'biomart host' or try again later.")
+            }
+            type <- "ENSEMBL"
+          }else{
             genes_refseq <- dplyr::mutate(genes_refseq, refseq = gsub("NA","",paste0(genes_refseq$refseq_mrna,genes_refseq$refseq_ncrna))) %>%
-              dplyr::filter(!is.na(refseq)) %>% 
-              distinct(refseq, .keep_all = T) %>% 
+              dplyr::filter(!is.na(refseq)) %>%
+              distinct(refseq, .keep_all = TRUE) %>%
               dplyr::select(refseq,external_gene_name,entrezgene_id)
             if(is.null(gene_list)){
               count <- count %>% dplyr::mutate(ensembl_transcript_id = rownames(count))
@@ -550,26 +1024,27 @@ isoform_ID <- function(count=NULL,gene_list=NULL,Species,Ortholog,Biomart_archiv
               gene_list <- gene_list %>% dplyr::mutate(refseq = gene_list[,1])
               table <- gene_list
             }
-            ENSEMBL <- merge(genes_ensembl,table,by="ensembl_transcript_id")
+            ENSEMBL <- if (is.null(genes_ensembl)) table[0, , drop = FALSE] else merge(genes_ensembl,table,by="ensembl_transcript_id")
             REFSEQ <- merge(genes_refseq,table,by="refseq")
-            if(dim(ENSEMBL)[1] > dim(REFSEQ)[1]) type <- "ENSEMBL" else type <- "REFSEQ"
+            if(is.null(genes_ensembl) || dim(ENSEMBL)[1] <= dim(REFSEQ)[1]) type <- "REFSEQ" else type <- "ENSEMBL"
             if(dim(ENSEMBL)[1] == 0 && dim(REFSEQ)[1] == 0) validate("Cannot identify gene IDs. Please check the 'Species' and use the 'Official gene symbol' or 'ENSEMBL ID' for gene names.")
-            }
+          }
           table$check <- TRUE
           if(type == "ENSEMBL"){
-              gene_id <- merge(genes_ensembl,table,by="ensembl_transcript_id",all=T) %>%
-                distinct(ensembl_transcript_id, .keep_all = T) %>% 
-                dplyr::filter(check==TRUE) %>%
-                dplyr::select(ensembl_transcript_id, external_gene_name,entrezgene_id)
+            validate(need(!is.null(genes_ensembl), "biomart failed to retrieve transcript annotation. Please try a different 'biomart host' or try again later."))
+            gene_id <- merge(genes_ensembl,table,by="ensembl_transcript_id",all=TRUE) %>%
+              distinct(ensembl_transcript_id, .keep_all = TRUE) %>%
+              dplyr::filter(check==TRUE) %>%
+              dplyr::select(ensembl_transcript_id, external_gene_name,entrezgene_id)
           }else{
-            gene_id <- merge(genes_refseq,table,by="refseq",all=T) %>%
-              distinct(refseq, .keep_all = T) %>% 
+            gene_id <- merge(genes_refseq,table,by="refseq",all=TRUE) %>%
+              distinct(refseq, .keep_all = TRUE) %>%
               dplyr::filter(check==TRUE) %>%
               dplyr::select(refseq, external_gene_name,entrezgene_id)
           }
           colnames(gene_id) <- c("Transcript_ID","SYMBOL","ENTREZID")
-            }
-        })
+        }
+      })
       return(gene_id)
     }
   }
@@ -635,6 +1110,8 @@ barplot_forTranscript <- function(table,name){
 }
 #-----------
 org <- function(Species, Ortholog=NULL){
+  Species <- normalize_species_input(Species)
+  Ortholog <- normalize_ortholog_input(Ortholog)
   if(Species != "not selected"){
     if(sum(is.element(no_orgDb, Species)) == 0){
     switch (Species,
@@ -672,6 +1149,8 @@ org <- function(Species, Ortholog=NULL){
   }
 }
 org_code <- function(Species,Ortholog){
+  Species <- normalize_species_input(Species)
+  Ortholog <- normalize_ortholog_input(Ortholog)
   if(Species != "not selected"){
     if(sum(is.element(no_orgDb, Species)) == 0){
     switch (Species,
@@ -791,7 +1270,7 @@ PCAplot <- function(data,legend=NULL){
   rho <- cor(data,method="spearman")
   d <- as.dist(1-rho)
   mds <- try(as.data.frame(cmdscale(d)))
-  if(class(mds) != "try-error"){
+  if(!inherits(mds, "try-error")){
   g2 <- ggplot(mds, aes(x = mds[,1], y = mds[,2],
                         col = gsub("\\_.+$", "", label), label = label2)) +
     geom_point()+
@@ -827,24 +1306,54 @@ PCAplot <- function(data,legend=NULL){
   p2 <- plot_grid(g1, g2, g3, nrow = 1)
   return(p2)
 }
+umap_neighbor_info <- function(data, default = 15L){
+  item_count <- if(is.null(data)) 0L else ncol(data)
+  if(is.na(item_count) || item_count < 3L){
+    return(list(valid = FALSE, value = NA_integer_, max = NA_integer_,
+                message = "umap: at least 3 samples are required"))
+  }
+  max_neighbors <- item_count - 1L
+  value <- min(as.integer(default), max_neighbors)
+  value <- max(2L, value)
+  list(valid = TRUE, value = value, max = max_neighbors, message = NULL)
+}
+
+umap_error_message <- function(data, n_neighbors = NULL){
+  default_neighbors <- if(is.null(n_neighbors)) 15L else as.integer(n_neighbors)
+  info <- umap_neighbor_info(data, default = default_neighbors)
+  if(!info$valid){
+    return(info$message)
+  }
+  if(is.null(n_neighbors)){
+    return(NULL)
+  }
+  if(is.na(as.integer(n_neighbors)) || as.integer(n_neighbors) > info$max){
+    return("umap: number of neighbors must be smaller than number of items")
+  }
+  NULL
+}
+
 umap_plot <- function(data, n_neighbors,lab=NULL){
+  err <- umap_error_message(data, n_neighbors)
+  if(!is.null(err)){
+    stop(err, call. = FALSE)
+  }
+  info <- umap_neighbor_info(data, default = n_neighbors)
+  n_neighbors <- info$value
   umap <- umap::umap(t(data),n_neighbors = n_neighbors, random_state = 123)
   data2 <- umap$layout %>% as.data.frame()
-  label<- colnames(data)
-  if(!is.null(lab)) {
-    if(lab == "Legend"){
-      label2<- NULL
-    }else{
-      label2<- label
-    }
+  label <- colnames(data)
+  label2 <- NULL
+  if(!is.null(lab) && identical(lab, "Label")){
+    label2 <- label
   }
-  p<- ggplot(data2, mapping = aes(V1,V2, color = gsub("\\_.+$", "", label), label = label2))+
+  p <- ggplot(data2, mapping = aes(V1,V2, color = gsub("\\_.+$", "", label), label = label2))+
     geom_point()+xlab("UMAP_1") + ylab("UMAP_2")+
     theme(panel.background =element_rect(fill=NA,color=NA),panel.border = element_rect(fill = NA),
           aspect.ratio=1)+ 
     guides(color=guide_legend(title=""))
-  if(!is.null(lab)){
-    if(lab == "Label") p <- p + geom_text_repel(show.legend = NULL)
+  if(!is.null(lab) && identical(lab, "Label")){
+    p <- p + geom_text_repel(show.legend = NULL)
   }
   return(p)
 }
@@ -1030,8 +1539,8 @@ data_3degcount2 <- function(gene_type,data3, Species, Ortholog,Isoform,org){
             gene_IDs <- Isoform
           }else{
           my.symbols <- data4$Row.names
-          if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-          if(org$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
+          key <- gene_primary_key(my.symbols)
+          SYMBOL <- sgd_symbol_column(org)
           gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
                                           keytype = key,
                                           columns = c(key,SYMBOL, "ENTREZID"))
@@ -1048,7 +1557,7 @@ data_3degcount2 <- function(gene_type,data3, Species, Ortholog,Isoform,org){
             gene_IDs <- Isoform[,-1]
           }else{
           my.symbols <- data4$Row.names
-          if(org$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
+          SYMBOL <- sgd_symbol_column(org)
           gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
                                           keytype = SYMBOL,
                                           columns = c(SYMBOL, "ENTREZID"))
@@ -1118,10 +1627,9 @@ cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, 
     result <- dplyr::filter(data2, apply(data2[,2:(Cond_1 + Cond_2 + Cond_3)],1,mean) > basemean)
     if(GOI_color_type == "default"){
       sig <- rep(3, nrow(result))
-    sig[which(result$FDR <= fdr & result$FC_x < log2(1/fc) & result$FC_y < log2(1/fc) & (result$MAP == Pattern1 | result$MAP == Pattern2))] = 2
-    sig[which(result$FDR <= fdr & result$FC_x > log2(fc) & result$FC_y > log2(fc) & (result$MAP == Pattern1 | result$MAP == Pattern2))] = 1
-    new.levels <- c()
-    col = NULL
+      sig[which(result$FDR <= fdr & result$FC_x < log2(1/fc) & result$FC_y < log2(1/fc) & (result$MAP == Pattern1 | result$MAP == Pattern2))] = 2
+      sig[which(result$FDR <= fdr & result$FC_x > log2(fc) & result$FC_y > log2(fc) & (result$MAP == Pattern1 | result$MAP == Pattern2))] = 1
+      df <- NULL
     }else{
       sig <- rep(3, nrow(result))
       df <- cond3_pathway_color_gene
@@ -1130,24 +1638,25 @@ cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, 
         sig[which(result$Row.names == name & result$FDR <= fdr & result$FC_x < log2(1/fc) & result$FC_y < log2(1/fc) & (result$MAP == Pattern1 | result$MAP == Pattern2))] = 2
         sig[which(result$Row.names == name & result$FDR <= fdr & result$FC_x > log2(fc) & result$FC_y > log2(fc) & (result$MAP == Pattern1 | result$MAP == Pattern2))] = 1
       }
-      new.levels <- c("others")
-      col = c("lightgray")
     }
     data3 <- data.frame(Row.names = result$Row.names, FC_x = result$FC_x,
                         FC_y = result$FC_y, padj = result$FDR, sig = sig, FC_xy = result$FC_x * result$FC_y)
-    if((sum(sig == 1) >= 1) && (sum(sig == 2) >= 1)){
-      new.levels <- c(paste0(paste0(specific,"_high: "), sum(sig == 1)), paste0(paste0(specific,"_low: "), sum(sig == 2)), "NS", new.levels)
-      col = c("red","blue", col,"darkgray")}
-    if((sum(sig == 1) >= 1) && (sum(sig == 2) == 0)){
-      new.levels <- c(paste0(paste0(specific,"_high: "), sum(sig == 1)), "NS", new.levels)
-      col = c("red",col, "darkgray")}
-    if((sum(sig == 1) == 0) && (sum(sig == 2) >= 1)){
-      new.levels <- c(paste0(paste0(specific,"_low: "), sum(sig == 2)), "NS", new.levels)
-      col = c("blue", col,"darkgray")}
-    if((sum(sig == 1) == 0) && (sum(sig == 2) == 0)){
-      new.levels <- c("NS", new.levels)
-      col = c(col,"darkgray")}
-    data3$sig <- factor(data3$sig, labels = new.levels)
+    high_label <- NULL
+    low_label <- NULL
+    if(sum(sig == 1) >= 1) high_label <- paste0(specific, "_high: ", sum(sig == 1))
+    if(sum(sig == 2) >= 1) low_label <- paste0(specific, "_low: ", sum(sig == 2))
+    label_map <- c()
+    if(!is.null(high_label)) label_map["1"] <- high_label
+    if(!is.null(low_label)) label_map["2"] <- low_label
+    label_map["3"] <- "NS"
+    if(GOI_color_type != "default") label_map["4"] <- "others"
+    color_map <- c()
+    if(!is.null(high_label)) color_map[high_label] <- "red"
+    if(!is.null(low_label)) color_map[low_label] <- "blue"
+    color_map["NS"] <- if (GOI_color_type == "default") "darkgray" else "gray1"
+    if(GOI_color_type != "default") color_map["others"] <- "lightgray"
+    legend_breaks <- unname(label_map)
+    data3$sig <- factor(data3$sig, levels = as.integer(names(label_map)), labels = legend_breaks)
     if(gene_type != "SYMBOL"){
       if(Species != "not selected"){
         data3 <- merge(data3, data, by="Row.names")
@@ -1166,7 +1675,7 @@ cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, 
     p <- p  + geom_hline(yintercept = c(-log2(fc), log2(fc)), linetype = c(2, 2), color = c("black", "black"))+
       geom_vline(xintercept = c(-log2(fc), log2(fc)),linetype = c(2, 2), color = c("black", "black"))
     p <- p +
-      theme_bw()+ scale_color_manual(values = col)+
+      theme_bw()+ scale_color_manual(values = color_map, breaks = legend_breaks)+
       theme(legend.position = "top" , legend.title = element_blank(),
             axis.text.x= ggplot2::element_text(size = 12),
             axis.text.y= ggplot2::element_text(size = 12),
@@ -1174,17 +1683,17 @@ cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, 
             title = ggplot2::element_text(size = 15)) +
       xlab(FC_xlab) + ylab(FC_ylab)
     if((sum(sig == 1) >= 1) && (sum(sig == 2) >= 1)){
-      if(GOI_color_type != "default") p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[4]),color = "gray1", size= 0.4 )
-      p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[1]),color = "red", size= 0.4 )
-      p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[2]),color = "blue", size= 0.4 )
+      if(GOI_color_type != "default") p <- p + geom_point(data=dplyr::filter(data3, sig == label_map[["4"]]),color = "gray1", size= 0.4 )
+      p <- p + geom_point(data=dplyr::filter(data3, sig == label_map[["1"]]),color = "red", size= 0.4 )
+      p <- p + geom_point(data=dplyr::filter(data3, sig == label_map[["2"]]),color = "blue", size= 0.4 )
     }
     if((sum(sig == 1) >= 1) && (sum(sig == 2) == 0)){
-      if(GOI_color_type != "default") p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[4]),color = "gray1", size= 0.4 )
-      p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[1]),color = "red", size= 0.4 )
+      if(GOI_color_type != "default") p <- p + geom_point(data=dplyr::filter(data3, sig == label_map[["4"]]),color = "gray1", size= 0.4 )
+      p <- p + geom_point(data=dplyr::filter(data3, sig == label_map[["1"]]),color = "red", size= 0.4 )
     }
     if((sum(sig == 1) == 0) && (sum(sig == 2) >= 1)){
-      if(GOI_color_type != "default") p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[4]),color = "gray1", size= 0.4 )
-      p <- p + geom_point(data=dplyr::filter(data3, sig == new.levels[1]),color = "blue", size= 0.4 )
+      if(GOI_color_type != "default") p <- p + geom_point(data=dplyr::filter(data3, sig == label_map[["4"]]),color = "gray1", size= 0.4 )
+      p <- p + geom_point(data=dplyr::filter(data3, sig == label_map[["2"]]),color = "blue", size= 0.4 )
     }
     if (heatmap==TRUE) {
       if(!is.null(labs_data)) {
@@ -1266,17 +1775,23 @@ cond3_scatter_plot <- function(gene_type,data, data4, result_Condm, result_FDR, 
             }
           }
           p <- p + geom_point(data=dplyr::filter(data3, color == "GOI"),color="green", size=1)
-          p <- p + ggrepel::geom_label_repel(data = dplyr::filter(data3, color == "GOI"), mapping = aes(label = Unique_ID),alpha = 0.6,label.size = NA, 
-                                            box.padding = unit(0.35, "lines"), point.padding = unit(0.3,"lines"), force = 1, fontface = "bold.italic")
+          p <- p + ggrepel::geom_text_repel(data = dplyr::filter(data3, color == "GOI"), mapping = aes(label = Unique_ID),
+                                            box.padding = unit(0.35, "lines"), point.padding = unit(0.3,"lines"),
+                                            force = 1, fontface = "bold.italic",
+                                            bg.color = grDevices::adjustcolor("white", alpha.f = 0.6), bg.r = 0.15)
         }else{
           p <- p + geom_point(data=dplyr::filter(data3, color == "GOI"),color="green", size=1)
-          p <- p + ggrepel::geom_label_repel(data = dplyr::filter(data3, color == "GOI"), mapping = aes(label = Row.names),alpha = 0.6,label.size = NA, 
-                                            box.padding = unit(0.35, "lines"), point.padding = unit(0.3,"lines"), force = 1, fontface = "bold.italic")
+          p <- p + ggrepel::geom_text_repel(data = dplyr::filter(data3, color == "GOI"), mapping = aes(label = Row.names),
+                                            box.padding = unit(0.35, "lines"), point.padding = unit(0.3,"lines"),
+                                            force = 1, fontface = "bold.italic",
+                                            bg.color = grDevices::adjustcolor("white", alpha.f = 0.6), bg.r = 0.15)
         }
       }else{
         p <- p + geom_point(data=dplyr::filter(data3, color == "GOI"),color="green", size=1)
-        p <- p + ggrepel::geom_label_repel(data = dplyr::filter(data3, color == "GOI"), mapping = aes(label = Row.names),alpha = 0.6,label.size = NA, 
-                                          box.padding = unit(0.35, "lines"), point.padding = unit(0.3,"lines"), force = 1, fontface = "bold.italic")
+        p <- p + ggrepel::geom_text_repel(data = dplyr::filter(data3, color == "GOI"), mapping = aes(label = Row.names),
+                                          box.padding = unit(0.35, "lines"), point.padding = unit(0.3,"lines"),
+                                          force = 1, fontface = "bold.italic",
+                                          bg.color = grDevices::adjustcolor("white", alpha.f = 0.6), bg.r = 0.15)
       }
     }
     }
@@ -1456,6 +1971,68 @@ keggEnrichment1_xenopus <- function(data3, data4, Species, Gene_set, org, org_co
   }else return(NULL)
 }
 
+build_cnetplot <- function(cnet, foldChange = NULL, showCategory = NULL,
+                           cex_label_gene = 0.7, cex_label_category = 0.75,
+                           cex_category = 0.75) {
+  args_core <- list(x = cnet)
+  if (!is.null(showCategory)) args_core$showCategory <- showCategory
+  if (!is.null(foldChange)) args_core$foldChange <- foldChange
+  args_label <- c(
+    args_core,
+    list(
+      cex_label_gene = cex_label_gene,
+      cex_label_category = cex_label_category,
+      cex_category = cex_category
+    )
+  )
+
+  candidates <- list(
+    list(pkg = "enrichplot", args = args_core),
+    list(pkg = "clusterProfiler", args = args_core),
+    list(pkg = "enrichplot", args = c(args_core, list(colorEdge = TRUE))),
+    list(pkg = "enrichplot", args = c(args_core, list(color.params = list(edge = TRUE)))),
+    list(pkg = "clusterProfiler", args = c(args_core, list(colorEdge = TRUE))),
+    list(pkg = "enrichplot", args = args_label),
+    list(pkg = "clusterProfiler", args = args_label),
+    list(pkg = "enrichplot", args = c(args_label, list(colorEdge = TRUE))),
+    list(pkg = "enrichplot", args = c(args_label, list(color.params = list(edge = TRUE)))),
+    list(pkg = "clusterProfiler", args = c(args_label, list(colorEdge = TRUE)))
+  )
+
+  for (candidate in candidates) {
+    if (!requireNamespace(candidate$pkg, quietly = TRUE)) next
+    plot_obj <- try(do.call(get("cnetplot", envir = asNamespace(candidate$pkg)), candidate$args), silent = TRUE)
+    if (!inherits(plot_obj, "try-error")) {
+      return(plot_obj)
+    }
+  }
+
+  NULL
+}
+
+as_cnet_grob <- function(plot_obj, remove_all_legend = FALSE) {
+  if (is.null(plot_obj)) return(NULL)
+
+  plot_no_legend <- if (remove_all_legend) {
+    try(plot_obj + theme(legend.position = "none"), silent = TRUE)
+  } else {
+    plot_edge_hidden <- try(plot_obj + guides(edge_colour = "none"), silent = TRUE)
+    if (inherits(plot_edge_hidden, "try-error")) {
+      plot_edge_hidden <- try(plot_obj + guides(edge_color = "none"), silent = TRUE)
+    }
+    plot_edge_hidden
+  }
+
+  if (!inherits(plot_no_legend, "try-error")) {
+    grob_obj <- try(as.grob(plot_no_legend), silent = TRUE)
+    if (!inherits(grob_obj, "try-error")) return(grob_obj)
+  }
+
+  grob_obj <- try(as.grob(plot_obj), silent = TRUE)
+  if (inherits(grob_obj, "try-error")) return(NULL)
+  grob_obj
+}
+
 keggEnrichment2 <- function(data3, data4,cnet_list2){
   if(!is.null(cnet_list2)){
     data <- NULL
@@ -1476,34 +2053,11 @@ keggEnrichment2 <- function(data3, data4,cnet_list2){
             length(which(!is.na(unique(cnet_df$qvalue))))==0) {
           c <- NULL
         } else{
-          c <- try(enrichplot::cnetplot(
-            cnet1,
-            cex_label_gene = 0.7,
-            cex_label_category = 0.75,
-            cex_category = 0.75,
-            colorEdge = TRUE
-          ), silent = TRUE)
-          if(inherits(c, "try-error")){
-            c <- try(enrichplot::cnetplot(
-              cnet1,
-              cex_label_gene = 0.7,
-              cex_label_category = 0.75,
-              cex_category = 0.75,
-              color.params = list(edge = TRUE)
-            ), silent = TRUE)
-          }
-          if(inherits(c, "try-error")){
-            c <- clusterProfiler::cnetplot(
-              cnet1,
-              cex_label_gene = 0.7,
-              cex_label_category = 0.75,
-              cex_category = 0.75,
-              colorEdge = TRUE
-            )
-          }
-          c <- try(as.grob(c + theme(legend.position = "none")))
-
-          if(inherits(c, "try-error")) c <- NULL
+          c_plot <- build_cnetplot(cnet1,
+                                   cex_label_gene = 0.7,
+                                   cex_label_category = 0.75,
+                                   cex_category = 0.75)
+          c <- as_cnet_grob(c_plot, remove_all_legend = TRUE)
           cnet_list[[name]] = c
         }
         cnet1 <- cnet_df
@@ -1574,102 +2128,194 @@ enrich_for_table <- function(data, H_t2g, Gene_set){
     }
   }
 }
+empty_enrichment_gene_set <- function() {
+  data.frame(
+    gs_name = character(),
+    entrez_gene = integer(),
+    gs_id = character(),
+    gs_description = character(),
+    stringsAsFactors = FALSE
+  )
+}
+
+msigdbr_subcollection_column <- function(df) {
+  if ("gs_subcollection" %in% colnames(df)) {
+    return("gs_subcollection")
+  }
+  if ("gs_subcat" %in% colnames(df)) {
+    return("gs_subcat")
+  }
+  NULL
+}
+
+standardize_msigdbr_table <- function(df) {
+  if (is.null(df) || !nrow(df)) {
+    return(empty_enrichment_gene_set())
+  }
+  if (!"entrez_gene" %in% colnames(df) && "ncbi_gene" %in% colnames(df)) {
+    df$entrez_gene <- df$ncbi_gene
+  }
+  if (!"gs_id" %in% colnames(df)) {
+    df$gs_id <- NA_character_
+  }
+  if (!"gs_description" %in% colnames(df)) {
+    df$gs_description <- NA_character_
+  }
+  as.data.frame(df)
+}
+
+msigdbr_fetch_compat <- function(species, collection, subcollection = NULL) {
+  msigdbr_args <- names(formals(msigdbr::msigdbr))
+  supports_new_args <- all(c("collection", "subcollection") %in% msigdbr_args)
+  if (supports_new_args) {
+    if (is.null(subcollection)) {
+      res <- try(msigdbr::msigdbr(species = species, collection = collection), silent = TRUE)
+    } else {
+      res <- try(msigdbr::msigdbr(species = species, collection = collection, subcollection = subcollection), silent = TRUE)
+    }
+  } else {
+    if (is.null(subcollection)) {
+      res <- try(msigdbr::msigdbr(species = species, category = collection), silent = TRUE)
+    } else {
+      res <- try(msigdbr::msigdbr(species = species, category = collection, subcategory = subcollection), silent = TRUE)
+    }
+  }
+  if (inherits(res, "try-error") || is.null(res) || !nrow(res)) {
+    return(empty_enrichment_gene_set())
+  }
+  standardize_msigdbr_table(res)
+}
+
+msigdbr_fetch_with_fallbacks <- function(species, collection, subcollections) {
+  for (subcollection in subcollections) {
+    res <- msigdbr_fetch_compat(species = species, collection = collection, subcollection = subcollection)
+    if (nrow(res)) {
+      return(res)
+    }
+  }
+  empty_enrichment_gene_set()
+}
+
+msigdbr_filter_compat <- function(df, subcollections) {
+  if (is.null(df) || !nrow(df)) {
+    return(empty_enrichment_gene_set())
+  }
+  sub_col <- msigdbr_subcollection_column(df)
+  if (is.null(sub_col)) {
+    return(empty_enrichment_gene_set())
+  }
+  filtered <- df[df[[sub_col]] %in% subcollections, , drop = FALSE]
+  if (!nrow(filtered)) {
+    return(empty_enrichment_gene_set())
+  }
+  filtered
+}
+
 GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene_list,Biomart_archive,gene_type=NULL){
-  if(Species != "not selected" || is.null(Gene_set) || is.null(org)){
+  if(Species != "not selected" && !is.null(Gene_set) && !is.null(org)){
     if(Species != "Xenopus laevis" && Ortholog != "Arabidopsis thaliana" && Species != "Arabidopsis thaliana"){
     if(Species %in% orgDb_list == TRUE) species <- Species else species <- Ortholog
+    ortholog_key <- if (is.null(Ortholog)) "" else Ortholog
+    cache_key <- paste(species, ortholog_key, Gene_set, sep = "|")
+    if(Gene_set != "Custom gene set" && exists(cache_key, envir = gene_set_cache, inherits = FALSE)) {
+      return(get(cache_key, envir = gene_set_cache, inherits = FALSE))
+    }
     H_t2g <- NULL
       if(Gene_set == "MSigDB Hallmark"){
-        H_t2g <- msigdbr::msigdbr(species = species, category = "H") %>%
+        H_t2g <- msigdbr_fetch_compat(species = species, collection = "H") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description) 
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="HALLMARK_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="P53", replacement = "p53")
       }
       if(Gene_set == "KEGG"){
-        H_t2g <- msigdbr::msigdbr(species = species, category = "C2", subcategory = "CP:KEGG") %>%
+        H_t2g <- msigdbr_fetch_with_fallbacks(
+          species = species,
+          collection = "C2",
+          subcollections = c("CP:KEGG", "CP:KEGG_LEGACY", "CP:KEGG_MEDICUS")
+        ) %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="KEGG_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
       }
     if(Gene_set == "Position"){
-      H_t2g <- msigdbr::msigdbr(species = species, category = "C1") %>%
+      H_t2g <- msigdbr_fetch_compat(species = species, collection = "C1") %>%
         dplyr::select(gs_name, entrez_gene, gs_id, gs_description) 
     }
       if(Gene_set == "Transcription factor targets"){
-        H_t2g <- msigdbr::msigdbr(species = species, category = "C3")
-        H_t2g <- H_t2g %>% dplyr::filter(gs_subcat == "TFT:GTRD" | gs_subcat == "TFT:TFT_Legacy") %>%
+        H_t2g <- msigdbr_fetch_compat(species = species, collection = "C3")
+        H_t2g <- msigdbr_filter_compat(H_t2g, c("TFT:GTRD", "TFT:TFT_LEGACY")) %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
       }
     if(Gene_set == "CGP (chemical and genetic pertubations)"){
-      H_t2g <- msigdbr(species = species, category = "C2", subcategory = "CGP") %>%
+      H_t2g <- msigdbr_fetch_compat(species = species, collection = "C2", subcollection = "CGP") %>%
         dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
     }
     if(Gene_set == "ImmuneSigDB"){
-      H_t2g <- msigdbr(species = species, category = "C7")
-      H_t2g <- H_t2g %>% dplyr::filter(gs_subcat == "C7" | gs_subcat == "IMMUNESIGDB") %>%
+      H_t2g <- msigdbr_fetch_compat(species = species, collection = "C7")
+      H_t2g <- msigdbr_filter_compat(H_t2g, c("C7", "IMMUNESIGDB")) %>%
         dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
     }
     if(Gene_set == "Macrophage (444 gene sets from ImmuneSigDB)"){
-      H_t2g <- msigdbr(species = species, category = "C7")
-      H_t2g <- H_t2g %>% dplyr::filter(gs_subcat == "C7" | gs_subcat == "IMMUNESIGDB") %>%
+      H_t2g <- msigdbr_fetch_compat(species = species, collection = "C7")
+      H_t2g <- msigdbr_filter_compat(H_t2g, c("C7", "IMMUNESIGDB")) %>%
         dplyr::select(gs_name, entrez_gene, gs_id, gs_description) %>% as.data.frame()
       macrophages <- H_t2g %>% dplyr::filter(grepl(x = gs_name,pattern="MACROPHAGE"))
       BMDMs <- H_t2g %>% dplyr::filter(grepl(x = gs_name,pattern="BMDM"))
       H_t2g <- rbind(macrophages, BMDMs)
     }
     if(Gene_set == "VAX (vaccine response)"){
-      H_t2g <- msigdbr(species = species, category = "C7")
-      H_t2g <- H_t2g %>% dplyr::filter(gs_subcat == "C7" | gs_subcat == "VAX") %>%
+      H_t2g <- msigdbr_fetch_compat(species = species, collection = "C7")
+      H_t2g <- msigdbr_filter_compat(H_t2g, c("C7", "VAX")) %>%
         dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
     }
     if(Gene_set == "Cell type signature"){
-      H_t2g <- msigdbr(species = species, category = "C8") %>%
+      H_t2g <- msigdbr_fetch_compat(species = species, collection = "C8") %>%
         dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
     }
       if(Gene_set == "Reactome"){
-        H_t2g <- msigdbr::msigdbr(species = species, category = "C2", subcategory = "CP:REACTOME") %>%
+        H_t2g <- msigdbr_fetch_compat(species = species, collection = "C2", subcollection = "CP:REACTOME") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="REACTOME_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
       }
       if(Gene_set == "miRNA target"){
-        H_t2g <- msigdbr::msigdbr(species = species, category = "C3")
-        H_t2g <- H_t2g %>% dplyr::filter(gs_subcat == "MIR:MIRDB" | gs_subcat == "MIR:MIR_Legacy") %>%
+        H_t2g <- msigdbr_fetch_compat(species = species, collection = "C3")
+        H_t2g <- msigdbr_filter_compat(H_t2g, c("MIR:MIRDB", "MIR:MIR_LEGACY")) %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
       }
       if(Gene_set == "GO biological process"){
-        H_t2g <- msigdbr::msigdbr(species = species, category = "C5", subcategory = "GO:BP") %>%
+        H_t2g <- msigdbr_fetch_compat(species = species, collection = "C5", subcollection = "GO:BP") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="GOBP_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
       }
       if(Gene_set == "GO cellular component"){
-        H_t2g <- msigdbr::msigdbr(species = species, category = "C5", subcategory = "GO:CC") %>%
+        H_t2g <- msigdbr_fetch_compat(species = species, collection = "C5", subcollection = "GO:CC") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="GOCC_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
       }
       if(Gene_set == "GO molecular function"){
-        H_t2g <- msigdbr::msigdbr(species = species, category = "C5", subcategory = "GO:MF") %>%
+        H_t2g <- msigdbr_fetch_compat(species = species, collection = "C5", subcollection = "GO:MF") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="GOMF_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
       }
       if(Gene_set == "Human phenotype ontology"){
-        H_t2g <- msigdbr::msigdbr(species = species, category = "C5", subcategory = "HPO") %>%
+        H_t2g <- msigdbr_fetch_compat(species = species, collection = "C5", subcollection = "HPO") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="HP_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
       }
       if(Gene_set == "WikiPathways"){
-        H_t2g <- msigdbr::msigdbr(species = species, category = "C2", subcategory = "CP:WIKIPATHWAYS") %>%
+        H_t2g <- msigdbr_fetch_compat(species = species, collection = "C2", subcollection = "CP:WIKIPATHWAYS") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="WP_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
       }
       if(Gene_set == "BioCarta"){
-        H_t2g <- msigdbr::msigdbr(species = species, category = "C2", subcategory = "CP:BIOCARTA") %>%
+        H_t2g <- msigdbr_fetch_compat(species = species, collection = "C2", subcollection = "CP:BIOCARTA") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="BIOCARTA_", replacement = "")
         H_t2g$gs_name <- H_t2g$gs_name %>% str_to_lower() %>% str_to_title()
@@ -1716,13 +2362,16 @@ GeneList_for_enrichment <- function(Species, Ortholog,Gene_set, org, Custom_gene
         H_t2g$entrez_gene <- as.integer(H_t2g$entrez_gene)
       }
       if(Gene_set == "PID (Pathway Interaction Database)"){
-        H_t2g <- msigdbr::msigdbr(species = species, category = "C2", subcategory = "CP:PID") %>%
+        H_t2g <- msigdbr_fetch_compat(species = species, collection = "C2", subcollection = "CP:PID") %>%
           dplyr::select(gs_name, entrez_gene, gs_id, gs_description)
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="PID_", replacement = "")
         H_t2g["gs_name"] <- lapply(H_t2g["gs_name"], gsub, pattern="PATHWAY", replacement = "pathway")
       }
       H_t2g <- H_t2g %>% as.data.frame()
       H_t2g$gs_name <- gsub("_"," ",H_t2g$gs_name)
+      if(Gene_set != "Custom gene set") {
+        assign(cache_key, H_t2g, envir = gene_set_cache)
+      }
     }else{
       print("plant")
       H_t2g <- At_Xl_path(Species,Gene_set)
@@ -1793,8 +2442,7 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",ymin=0, yla
         null.value <- c()
         xmin <- c()
         xmax <- c()
-        if(length(class(dunnette2)) == 1){
-        if(class(dunnette2) == "try-error"){
+        if(inherits(dunnette2, "try-error")){
           for (i in 1:(length(collist)-1)){
             p.adj <- c(p.adj, NA)
             coefficients <- c(coefficients, NA)
@@ -1807,7 +2455,7 @@ GOIboxplot <- function(data,statistical_test=NULL,plottype="Boxplot",ymin=0, yla
             xmin <- c(xmin, c(1))
             xmax <- c(xmax, c(i+1))
           }
-        }}else{
+        }else{
         for (i in 1:(length(collist)-1)){
           p.adj <- c(p.adj, dunnette2[["test"]][["pvalues"]][i])
           coefficients <- c(coefficients, dunnette2[["test"]][["coefficients"]][i])
@@ -1954,8 +2602,8 @@ enrich_viewer_forMulti1 <- function(gene_type,df, Species, Ortholog,Isoform, org
       }else if(gene_type == "isoform"){
         gene_IDs <- Isoform
       }else{
-      if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-      if(org$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
+      key <- gene_primary_key(my.symbols)
+      SYMBOL <- sgd_symbol_column(org)
       gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
                                       keytype = key,
                                       columns = c(key,SYMBOL, "ENTREZID"))
@@ -1967,9 +2615,10 @@ enrich_viewer_forMulti1 <- function(gene_type,df, Species, Ortholog,Isoform, org
       }else if(gene_type == "isoform"){
         gene_IDs <- Isoform[,-1]
       }else{
+      SYMBOL <- sgd_symbol_column(org)
       gene_IDs <- AnnotationDbi::select(org, keys = my.symbols,
-                                        keytype = "SYMBOL",
-                                        columns = c("ENTREZID", "SYMBOL"))
+                                        keytype = SYMBOL,
+                                        columns = c("ENTREZID", SYMBOL))
       }
       colnames(gene_IDs) <- c("GeneID","ENTREZID")
     }
@@ -2198,36 +2847,12 @@ cnet_global <- function(data, group, enrich_gene_list, showCategory=5){
         if(length(as.data.frame(cnet1)$ID) == 0) {
           p2 <- NULL
         }else{
-          p2_plot <- try(enrichplot::cnetplot(
-            cnet1,
-            cex_label_gene = 0.7,
-            cex_label_category = 0.75,
-            showCategory = showCategory,
-            cex_category = 0.75,
-            colorEdge = TRUE
-          ), silent = TRUE)
-          if(inherits(p2_plot, "try-error")){
-            p2_plot <- try(enrichplot::cnetplot(
-              cnet1,
-              cex_label_gene = 0.7,
-              cex_label_category = 0.75,
-              showCategory = showCategory,
-              cex_category = 0.75,
-              color.params = list(edge = TRUE)
-            ), silent = TRUE)
-          }
-          if(inherits(p2_plot, "try-error")){
-            p2_plot <- clusterProfiler::cnetplot(
-              cnet1,
-              cex_label_gene = 0.7,
-              cex_label_category = 0.75,
-              showCategory = showCategory,
-              cex_category = 0.75,
-              colorEdge = TRUE
-            )
-          }
-          p2 <- try(as.grob(p2_plot + theme(legend.position = "none")))
-          if(inherits(p2, "try-error")) p2 <- NULL
+          p2_plot <- build_cnetplot(cnet1,
+                                    showCategory = showCategory,
+                                    cex_label_gene = 0.7,
+                                    cex_label_category = 0.75,
+                                    cex_category = 0.75)
+          p2 <- as_cnet_grob(p2_plot, remove_all_legend = TRUE)
         }
         p <- plot_grid(p2)
         return(p)
@@ -2309,13 +2934,12 @@ MotifAnalysis <- function(data, Species, org,x){
     data <- dplyr::filter(df, Group == name)
     my.symbols <- data$GeneID
     group.name <- paste(name, "\n(", length(my.symbols),")",sep = "")
-    if(str_detect(my.symbols[1], "ENS") || str_detect(my.symbols[1], "FBgn") ||
-       str_detect(my.symbols[1], "^AT.G")){
+    if(is_ensembl_like_id(my.symbols, org)){
       if(sum(is.element(no_orgDb, Species)) == 1){
         gene_IDs <- org(Species)
         gene_IDs <- gene_IDs[,-2]
       }else{
-      if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
+      key <- gene_primary_key(my.symbols)
       gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
                                       keytype = key,
                                       columns = c("ENTREZID",key))
@@ -2326,9 +2950,10 @@ MotifAnalysis <- function(data, Species, org,x){
         gene_IDs <- org(Species)
         gene_IDs <- gene_IDs[,-1]
       }else{
+      SYMBOL <- sgd_symbol_column(org)
       gene_IDs <- AnnotationDbi::select(org, keys = my.symbols,
-                                        keytype = "SYMBOL",
-                                        columns = c("SYMBOL","ENTREZID"))
+                                        keytype = SYMBOL,
+                                        columns = c(SYMBOL,"ENTREZID"))
       }
       colnames(gene_IDs) <- c("SYMBOL","gene_id")
     }
@@ -2370,13 +2995,12 @@ MotifRegion <- function(data, target_motif, Species, x){
   name <- gsub("\\\n.+$", "", target_motif$Group)
   data <- dplyr::filter(df, Group %in% name)
   my.symbols <- data$GeneID
-  if(str_detect(my.symbols[1], "ENS") || str_detect(my.symbols[1], "FBgn") ||
-     str_detect(my.symbols[1], "^AT.G")){
+  if(is_ensembl_like_id(my.symbols, org(Species))){
     if(sum(is.element(no_orgDb, Species)) == 1){
       gene_IDs <- org(Species)
       gene_IDs <- data.frame(gene_id = gene_IDs$ENTREZID, ENSEMBL = gene_IDs$ENSEMBL)
     }else{
-    if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
+    key <- gene_primary_key(my.symbols)
     gene_IDs<-AnnotationDbi::select(org(Species),keys = my.symbols,
                                     keytype = key,
                                     columns = c("ENTREZID",key))
@@ -2387,7 +3011,7 @@ MotifRegion <- function(data, target_motif, Species, x){
       gene_IDs <- org(Species)
       gene_IDs <- gene_IDs[,-1]
     }else{
-      if(org$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
+      SYMBOL <- sgd_symbol_column(org(Species))
     gene_IDs <- AnnotationDbi::select(org(Species), keys = my.symbols,
                                       keytype = SYMBOL,
                                       columns = c(SYMBOL,"ENTREZID"))
@@ -2405,9 +3029,10 @@ MotifRegion <- function(data, target_motif, Species, x){
                        method = "matchPWM",
                        BPPARAM = BiocParallel::SerialParam()) %>% as.data.frame()
   my.symbols <- as.character(res$seqnames)
+  SYMBOL <- sgd_symbol_column(org(Species))
   gene_IDs <- AnnotationDbi::select(org(Species), keys = my.symbols,
                                     keytype = "ENTREZID",
-                                    columns = c("SYMBOL","ENTREZID"))
+                                    columns = c(SYMBOL,"ENTREZID"))
   colnames(gene_IDs) <- c("seqnames","SYMBOL")
   res2<-merge(gene_IDs,res,by="seqnames")
   res2 <- res2[,-1]
@@ -2519,25 +3144,21 @@ ensembl2symbol <- function(data,Species,Ortholog,Isoform,gene_type,org, merge=TR
   data <- as.data.frame(data)
   if(sum(is.element(no_orgDb, Species)) == 1){
     gene_IDs <- try(Ortholog[,-3])
-    if(length(class(gene_IDs)) == 1){
-      if(class(gene_IDs) == "try-error") validate("biomart has encountered an unexpected server error.
+    if(inherits(gene_IDs, "try-error")) validate("biomart has encountered an unexpected server error.
                                                 \nPlease try using a different 'biomart host' or try again later.")
-    }
   }else{
     if(gene_type == "ENSEMBL"){
       my.symbols <- gsub("\\..*","", rownames(data))
-      if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-      if(org$packageName == "org.Sc.sgd.db") SYMBOL <- "GENENAME" else SYMBOL <- "SYMBOL"
+      key <- gene_primary_key(my.symbols)
+      SYMBOL <- sgd_symbol_column(org)
       gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
                                       keytype = key,
                                       columns = c(key,SYMBOL))
     }
     if(gene_type == "isoform"){
       gene_IDs <- try(Isoform[,-3])
-      if(length(class(gene_IDs)) == 1){
-        if(class(gene_IDs) == "try-error") validate("biomart has encountered an unexpected server error.
+      if(inherits(gene_IDs, "try-error")) validate("biomart has encountered an unexpected server error.
                                                 \nPlease try using a different 'biomart host' or try again later.")
-      }
     }
   }
     colnames(gene_IDs) <- c("Row.names","SYMBOL")
@@ -2558,24 +3179,23 @@ ensembl2symbol <- function(data,Species,Ortholog,Isoform,gene_type,org, merge=TR
   }
 
 gene_type <- function(my.symbols,org,Species,RNA_type="gene_level"){
+    Species <- normalize_species_input(Species)
     if(Species != "not selected"){
   if(RNA_type == "gene_level") {
     ENS <- "ENSEMBL"
     ENT <- "SYMBOL"
     if(sum(is.element(no_orgDb, Species)) != 1){
-      if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
-      print("a")
-      if(org$packageName == "org.Sc.sgd.db") SYMBOLa <- "GENENAME" else SYMBOLa <- "SYMBOL"
-      print("b")
+      key <- gene_primary_key(my.symbols)
+      SYMBOLa <- sgd_symbol_column(org)
     ENSEMBL<-try(AnnotationDbi::select(org,keys = my.symbols,
                                        keytype = key,
                                        columns = c(key, "ENTREZID")))
     SYMBOL <-try(AnnotationDbi::select(org,keys = my.symbols,
                                        keytype = SYMBOLa,
                                        columns = c(SYMBOLa, "ENTREZID")))
-    if(class(ENSEMBL) == "try-error" && class(SYMBOL) != "try-error") {type <- "SYMBOL"
-    }else if(class(ENSEMBL) != "try-error" && class(SYMBOL) == "try-error") {type <- "ENSEMBL"
-    }else if(class(ENSEMBL) == "try-error" && class(SYMBOL) == "try-error") {validate("Cannot identify gene IDs. Please check the 'Species' and use the 'Official gene symbol' or 'ENSEMBL ID' for gene names.")
+    if(inherits(ENSEMBL, "try-error") && !inherits(SYMBOL, "try-error")) {type <- "SYMBOL"
+    }else if(!inherits(ENSEMBL, "try-error") && inherits(SYMBOL, "try-error")) {type <- "ENSEMBL"
+    }else if(inherits(ENSEMBL, "try-error") && inherits(SYMBOL, "try-error")) {validate("Cannot identify gene IDs. Please check the 'Species' and use the 'Official gene symbol' or 'ENSEMBL ID' for gene names.")
     }else{
       if(dim(ENSEMBL)[1] > dim(SYMBOL)[1]) type <- "ENSEMBL" else type <- "SYMBOL"
     }
@@ -2660,10 +3280,11 @@ geneid_convert_ssGSEA <- function(norm_count,gene_type,Species,Ortholog,Isoform,
     }else if(gene_type == "isoform"){
       gene_IDs <- Isoform
     }else{
-      if(str_detect(my.symbols[1], "^AT.G")) key = "TAIR" else key = "ENSEMBL"
+      key <- gene_primary_key(my.symbols)
+      SYMBOL <- sgd_symbol_column(org)
       gene_IDs<-AnnotationDbi::select(org,keys = my.symbols,
-                                      keytype = "SYMBOL",
-                                      columns = c("SYMBOL",key, "ENTREZID"))
+                                      keytype = SYMBOL,
+                                      columns = c(SYMBOL,key, "ENTREZID"))
     }
     colnames(gene_IDs) <- c("SYMBOL","GeneID", "ENTREZID")
   }else{
@@ -2672,9 +3293,10 @@ geneid_convert_ssGSEA <- function(norm_count,gene_type,Species,Ortholog,Isoform,
     }else if(gene_type == "isoform"){
       gene_IDs <- Isoform
     }else{
+      SYMBOL <- sgd_symbol_column(org)
       gene_IDs <- AnnotationDbi::select(org, keys = my.symbols,
-                                        keytype = "SYMBOL",
-                                        columns = c("SYMBOL","ENTREZID"))
+                                        keytype = SYMBOL,
+                                        columns = c(SYMBOL,"ENTREZID"))
     }
     colnames(gene_IDs) <- c("GeneID","ENTREZID")
   }
@@ -2713,7 +3335,7 @@ At_Xl_path <- function(Species,Gene_set){
       pathwayList <- toTable(org.At.tairARACYC)
     }else if(str_detect(Gene_set, "GO")){
       pathwayList <- toTable(org.At.tairGO2TAIR)[,1:2]
-      tb = toTable(GOTERM)[,-1]
+      tb = AnnotationDbi::toTable(GO.db::GOTERM)[,-1]
       pathwayList <- merge(pathwayList,tb,by="go_id")
       colnames(pathwayList)[2:3] <- c("entrez_gene","gs_name")
     }
@@ -2721,7 +3343,7 @@ At_Xl_path <- function(Species,Gene_set){
     ##GO
     if(str_detect(Gene_set, "GO")){
       pathwayList <- toTable(org.Xl.egGO2EG)[,1:2]
-      tb = toTable(GOTERM)[,-1]
+      tb = AnnotationDbi::toTable(GO.db::GOTERM)[,-1]
       pathwayList <- merge(pathwayList,tb,by="go_id")
       colnames(pathwayList)[2:3] <- c("entrez_gene","gs_name")
     }
