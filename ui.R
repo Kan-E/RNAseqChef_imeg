@@ -236,7 +236,7 @@ shinyUI(
                                     radioButtons("cutoff_limma", "parameter for cut-off (fdr or pval)", c('fdr'="fdr",'pval'="pval"), selected = "fdr")
                    ),
                    fluidRow(
-                     column(6, selectizeInput("Species", "Species", species_list, selected = "not selected")),
+                     column(6, selectInput("Species", "Species", species_list, selected = "not selected")),
                      conditionalPanel(condition=c("input.Species != 'not selected' && input.Species != 'Homo sapiens' &&
                    input.Species != 'Mus musculus' && input.Species != 'Rattus norvegicus' &&
                    input.Species != 'Drosophila melanogaster' && input.Species != 'Caenorhabditis elegans' &&
@@ -618,7 +618,7 @@ shinyUI(
                                   'Transcript level'="transcript_level"
                                 ),selected = "gene_level",inline = TRUE),
                    fluidRow(
-                     column(6, selectizeInput("Species2", "Species", species_list, selected = "not selected")),
+                     column(6, selectInput("Species2", "Species", species_list, selected = "not selected")),
                      conditionalPanel(condition=c("input.Species2 != 'not selected' && input.Species2 != 'Homo sapiens' &&
                    input.Species2 != 'Mus musculus' && input.Species2 != 'Rattus norvegicus' &&
                    input.Species2 != 'Drosophila melanogaster' && input.Species2 != 'Caenorhabditis elegans' &&
@@ -943,7 +943,7 @@ shinyUI(
                                     )
                    ),
                    fluidRow(
-                            column(6, selectizeInput("Species6", "Species", species_list, selected = "not selected")),
+                            column(6, selectInput("Species6", "Species", species_list, selected = "not selected")),
                             conditionalPanel(condition=c("input.Species6 != 'not selected' && input.Species6 != 'Homo sapiens' &&
                    input.Species6 != 'Mus musculus' && input.Species6 != 'Rattus norvegicus' &&
                    input.Species6 != 'Drosophila melanogaster' && input.Species6 != 'Caenorhabditis elegans' &&
@@ -1429,7 +1429,7 @@ shinyUI(
                                            img(src="input_format1.png", width = 400,height = 250)), 
                              placement = "right",options = list(container = "body")),
                    fluidRow(
-                     column(6, selectizeInput("Species7", "Species", species_list, selected = "not selected")),
+                     column(6, selectInput("Species7", "Species", species_list, selected = "not selected")),
                      conditionalPanel(condition=c("input.Species7 != 'not selected' && input.Species6 != 'Homo sapiens' &&
                    input.Species7 != 'Mus musculus' && input.Species7 != 'Rattus norvegicus' &&
                    input.Species7 != 'Drosophila melanogaster' && input.Species7 != 'Caenorhabditis elegans' &&
@@ -1610,7 +1610,7 @@ shinyUI(
                                   'Transcript level'="transcript_level"
                                 ),selected = "gene_level",inline = TRUE),
                    fluidRow(
-                     column(6, selectizeInput("Species3", "Species", species_list, selected = "not selected")),
+                     column(6, selectInput("Species3", "Species", species_list, selected = "not selected")),
                      conditionalPanel(condition=c("input.Species3 != 'not selected' && input.Species3 != 'Homo sapiens' &&
                    input.Species3 != 'Mus musculus' && input.Species3 != 'Rattus norvegicus' &&
                    input.Species3 != 'Drosophila melanogaster' && input.Species3 != 'Caenorhabditis elegans' &&
@@ -1943,7 +1943,7 @@ shinyUI(
                                   'Transcript level'="transcript_level"
                                 ),selected = "gene_level",inline = TRUE),
                    fluidRow(
-                     column(6, selectizeInput("Species4", "Species", species_list, selected = "not selected")),
+                     column(6, selectInput("Species4", "Species", species_list, selected = "not selected")),
                      conditionalPanel(condition=c("input.Species4 != 'not selected' && input.Species4 != 'Homo sapiens' &&
                    input.Species4 != 'Mus musculus' && input.Species4 != 'Rattus norvegicus' &&
                    input.Species4 != 'Drosophila melanogaster' && input.Species4 != 'Caenorhabditis elegans' &&
@@ -2107,7 +2107,7 @@ shinyUI(
                                         multiple = FALSE,
                                         width = "80%"),
                               fluidRow(
-                                column(6, selectizeInput("Species5", "Species", species_list, selected = "not selected")),
+                                column(6, selectInput("Species5", "Species", species_list, selected = "not selected")),
                                 conditionalPanel(condition=c("input.Species5 != 'not selected' && input.Species5 != 'Homo sapiens' &&
                    input.Species5 != 'Mus musculus' && input.Species5 != 'Rattus norvegicus' &&
                    input.Species5 != 'Drosophila melanogaster' && input.Species5 != 'Caenorhabditis elegans' &&
@@ -2233,7 +2233,7 @@ shinyUI(
                                                        img(src="venn_input.png", width = 400,height = 300)),
                                         placement = "right",options = list(container = "body")),
                               fluidRow(
-                                column(6, selectizeInput("Species_ens", "Species", species_list, selected = "not selected")),
+                                column(6, selectInput("Species_ens", "Species", species_list, selected = "not selected")),
                                 conditionalPanel(condition=c("input.Species_ens != 'not selected' && input.Species_ens != 'Homo sapiens' &&
                    input.Species_ens != 'Mus musculus' && input.Species_ens != 'Rattus norvegicus' &&
                    input.Species_ens != 'Drosophila melanogaster' && input.Species_ens != 'Caenorhabditis elegans' &&

@@ -37,19 +37,6 @@ shinyServer(function(input, output, session) {
     res
   }
 
-  ensure_species_selected <- function(input_id) {
-    observeEvent(input[[input_id]], ignoreInit = FALSE, priority = 1000, {
-      current <- input[[input_id]]
-      if (is.null(current) || !length(current) || anyNA(current) || !nzchar(as.character(current[[1]]))) {
-        updateSelectizeInput(session, inputId = input_id, selected = "not selected")
-      }
-    })
-  }
-
-  invisible(lapply(c("Species", "Species2", "Species3", "Species4", "Species5", "Species6", "Species7", "Species_ens"),
-                   ensure_species_selected))
-  
-  
   observeEvent(input$Species,({
     if(sum(is.element(no_orgDb_plants,input$Species)) == 1){
       updateSelectInput(session,inputId = "Ortholog", 
