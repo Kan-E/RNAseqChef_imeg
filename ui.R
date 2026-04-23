@@ -15,6 +15,36 @@ shinyUI(
     tags$head(
         includeScript("navAppend.js")
       ),
+    tags$head(tags$script(HTML("
+      Shiny.addCustomMessageHandler('pdf_preview_resize', function(x) {
+        (x.plots || []).forEach(function(plot) {
+          var el = document.getElementById(plot.id);
+          if (!el) return;
+          if (!el.dataset.defaultWidth) el.dataset.defaultWidth = el.style.width || '';
+          if (!el.dataset.defaultHeight) el.dataset.defaultHeight = el.style.height || '';
+          var widthPx = parseFloat(plot.width_px);
+          var heightPx = parseFloat(plot.height_px);
+          if (!(widthPx > 0 && heightPx > 0)) return;
+          var parent = el.parentElement;
+          var maxWidth = parent && parent.clientWidth > 0 ? parent.clientWidth : widthPx;
+          var scale = Math.min(1, maxWidth / widthPx);
+          el.style.width = (widthPx * scale) + 'px';
+          el.style.height = (heightPx * scale) + 'px';
+        });
+        window.dispatchEvent(new Event('resize'));
+      });
+    "))),
+    tags$head(tags$style(HTML("
+      #pair_pdf_exact_preview_image img,
+      #shared_pdf_exact_preview_image img {
+        max-width: 100%;
+        max-height: 65vh;
+        width: auto;
+        height: auto;
+        display: block;
+        margin: 0 auto;
+      }
+    "))),
     tags$head(includeHTML(("google-analytics.html"))),
     tags$style(
       type = 'text/css',
@@ -289,17 +319,6 @@ shinyUI(
                                             strong("The column names of the normalized count data must match those of the uploaded raw count data.")), 
                              placement = "right",options = list(container = "body"))
                    ),
-                   strong(span("Output plot size setting for pdf (0: default)"),
-                          span(icon("info-circle"), id = "pair_pdf_icon", 
-                               options = list(template = popoverTempate))),
-                   fluidRow(
-                     column(5, numericInput("pair_pdf_height", "pdf_height", value = 0, min = 0)),
-                     column(5, numericInput("pair_pdf_width", "pdf_width", value = 0, min = 0))
-                   ),
-                   bsPopover("pair_pdf_icon", "Output plot size setting for pdf (default: 0): ", 
-                             content=paste("You can adjust the plot size by using", strong('pdf_height'), "and", strong('pdf_width'), "parameters.<br>", 
-                                           "Default size: <br>",strong("Clustering:"), "height = 3.5, width = 9<br>", strong("MA-plot:"), "height = 4, width = 7 <br>",strong("Volcano plot:"), "height = 5, width = 5 <br>",pdfSize_for_GOI,
-                                           strong("Enrichment analysis:"), "height = 10, width = 12 <br>"),trigger = "click"), 
                    actionButton("goButton", "example data (mouse)"),
                    tags$head(tags$style("#goButton{color: black;
                                  font-size: 12px;
@@ -369,7 +388,7 @@ shinyUI(
                      ),
                      tabPanel("Result overview", value = "pair_result_overview_tab",
                               fluidRow(
-                                column(6, downloadButton("download_pair_PCA", "Download clustering analysis"),
+                                column(6, actionButton("preview_pair_pca", "Download clustering analysis"),
                                        textOutput("not_cond2"),
                                        tags$head(tags$style("#not_cond2{color: red;
                                  font-size: 20px;
@@ -379,7 +398,7 @@ shinyUI(
                               ),
                               plotOutput("PCA"),
                               fluidRow(
-                                column(4, downloadButton("download_pair_MA", "Download MA-plot"))
+                                column(4, actionButton("preview_pair_ma", "Download MA-plot"))
                               ),
                               plotOutput("MA"),
                               bsCollapse(id="input_collapse_pair_DEG",open="DEG_panel",multiple = TRUE,
@@ -421,14 +440,15 @@ shinyUI(
                               )),
                      tabPanel("GOI profiling", value = "pair_goi_tab",
                               fluidRow(
-                                column(4, downloadButton("download_pair_volcano", "Download volcano plot / MA plot")),
-                                column(4, downloadButton("download_pair_GOIheatmap", "Download heatmap"))
+                                column(4, actionButton("preview_pair_volcano", "Download volcano plot / MA plot")),
+                                column(4, actionButton("preview_pair_goi_heat", "Download heatmap"))
                               ),
                               fluidRow(
                                 column(4, selectInput("GOI_plot_select","Plot type",c("Volcano plot","MA plot"),
                                                       selected = "Volcano plot",multiple = F),
                                        htmlOutput("GOI_color_type")),
-                                column(4, htmlOutput("volcano_x"), htmlOutput("GOIreset_pair")),
+                                column(4, htmlOutput("volcano_x"),
+                                       actionButton("GOIreset_pair", "GOI reset")),
                                 column(4, htmlOutput("volcano_y"))
                               ),
                               conditionalPanel(condition="input.GOI_color_type=='pathway'",
@@ -452,7 +472,7 @@ shinyUI(
                                 style = "height: calc(100vh  - 100px)"
                               ),
                               fluidRow(
-                                column(4, downloadButton("download_pair_GOIbox", "Download boxplot"))
+                                column(4, actionButton("preview_pair_goi_box", "Download boxplot"))
                               )),
                      tabPanel("Enrichment analysis", value = "pair_enrichment_tab",
                               fluidRow(
@@ -461,9 +481,9 @@ shinyUI(
                                  font-size: 20px;
             font-style: bold;
             }"))),
-                                column(4, htmlOutput("Gene_set")),
+                                column(4, selectInput("Gene_set", "Gene Set", gene_set_list)),
                                 column(4, htmlOutput("Custom_input_pair")),
-                                column(4, downloadButton("download_pair_enrichment", "Download"))
+                                column(4, actionButton("preview_pair_enrichment", "Download"))
                               ),
                               plotOutput("enrichment1"),
                               plotOutput("enrichment2"),
@@ -517,14 +537,14 @@ shinyUI(
                                          actionButton("GOIreset_DTU_manual", "GOI reset")
                                        ))
                               ),
-                              downloadButton("download_DRIMSeq_barplot", "Download barplot"),
+                              actionButton("preview_pair_dtu_bar", "Download barplot"),
                               div(
                                 plotOutput("DRIMSeq_barplot", height = "100%"),
                                 style = "height: calc(100vh  - 100px)"
                               ),
                               downloadButton("download_DRIMSeq_table", "Download table"),
                               DTOutput('DRIMSeq_table'),
-                              downloadButton("download_DRIMSeq_GOIboxplot", "Download boxplot"),
+                              actionButton("preview_pair_dtu_goi_box", "Download boxplot"),
                               plotOutput("DRIMSeq_GOIboxplot"),
                               fileInput("GTF_file",
                                         strong(
@@ -657,17 +677,6 @@ shinyUI(
                              content=paste0("You can use a normalized count data (e.g. TPM count) for basemean cutoff and boxplot.<br>",
                                             strong("The column names of the normalized count data must match those of the uploaded raw count data.")), 
                              placement = "right",options = list(container = "body")),
-                   strong(span("Output plot size setting for pdf (0: default)"),
-                          span(icon("info-circle"), id = "cond3_pdf_icon", 
-                               options = list(template = popoverTempate))),
-                   fluidRow(
-                     column(5, numericInput("cond3_pdf_height", "pdf_height", value = 0, min = 0)),
-                     column(5, numericInput("cond3_pdf_width", "pdf_width", value = 0, min = 0))
-                   ),
-                   bsPopover("cond3_pdf_icon", "Output plot size setting for pdf (default: 0): ", 
-                             content=paste("You can adjust the plot size by using", strong('pdf_height'), "and", strong('pdf_width'), "parameters.<br>", 
-                                           "Default size: <br>",strong("Clustering:"), "height = 3.5, width = 9<br>", strong("scatter plot:"), "height = 6, width = 10 <br>",pdfSize_for_GOI,
-                                           strong("Enrichment analysis:"), "height = 12, width = 15 <br>"),trigger = "click"), 
                    actionButton("goButton2", "example data (mouse)"),
                    tags$head(tags$style("#goButton{color: black;
                                  font-size: 12px;
@@ -725,7 +734,7 @@ shinyUI(
                      ),
                      tabPanel("Result overview",
                               fluidRow(
-                                column(6, downloadButton("download_3cond_PCA", "Download clustering analysis"),
+                                column(6, actionButton("preview_cond3_pca", "Download clustering analysis"),
                                        textOutput("not_cond3"),
                                        tags$head(tags$style("#not_cond3{color: red;
                                  font-size: 20px;
@@ -735,7 +744,7 @@ shinyUI(
                               ),
                               plotOutput("PCA2"),
                               fluidRow(
-                                column(4, downloadButton("download_3cond_scatter1", "Download DEG overview"))
+                                column(4, actionButton("preview_cond3_overview", "Download DEG overview"))
                               ),
                               plotOutput("scatter_1"),
                               plotOutput("scatter_2"),
@@ -785,13 +794,15 @@ shinyUI(
                               )),
                      tabPanel("GOI profiling",
                               fluidRow(
-                                column(4, downloadButton("download_3cond_scatter", "Download scatter plot")),
-                                column(4, downloadButton("download_3cond_GOIheat", "Download heatmap"))
+                                column(4, actionButton("preview_cond3_goi_scatter", "Download scatter plot")),
+                                column(4, actionButton("preview_cond3_goi_heat", "Download heatmap"))
                               ),
                               fluidRow(
                                 column(4,
                                        htmlOutput("cond3_GOI_color_type")),
-                                column(4, htmlOutput("cond3_xrange"), htmlOutput("GOIreset_cond3")),
+                                column(4,
+                                       htmlOutput("cond3_xrange"),
+                                       actionButton("GOIreset_cond3", "GOI reset")),
                                 column(4, htmlOutput("cond3_yrange"))
                               ),
                               conditionalPanel(condition="input.cond3_GOI_color_type=='pathway'",
@@ -812,7 +823,7 @@ shinyUI(
                                 style = "height: calc(100vh  - 100px)"
                               ),
                               fluidRow(
-                                column(4, downloadButton("download_3cond_GOIbox", "Download boxplot"))
+                                column(4, actionButton("preview_cond3_goi_box", "Download boxplot"))
                               )
                      ),
                      tabPanel("Enrichment analysis",
@@ -822,8 +833,8 @@ shinyUI(
                                  font-size: 20px;
             font-style: bold;
             }"))),
-                                column(4, htmlOutput("Gene_set2")),
-                                column(4, downloadButton("download_cond3_enrichment", "Download"))
+                                column(4, selectInput("Gene_set2", "Gene Set", gene_set_list)),
+                                column(4, actionButton("preview_cond3_enrich", "Download"))
                               ),
                               plotOutput("keggenrichment2_1"),
                               plotOutput("keggenrichment2_2"),
@@ -982,17 +993,6 @@ shinyUI(
                              content="You can use a normalized count data (e.g. TPM count) for basemean cutoff and boxplot.", 
                              placement = "right",options = list(container = "body"))
                    ),
-                   strong(span("Output plot size setting for pdf (0: default)"),
-                          span(icon("info-circle"), id = "multi_pdf_icon", 
-                               options = list(template = popoverTempate))),
-                   fluidRow(
-                     column(5, numericInput("multi_pdf_height", "pdf_height", value = 0, min = 0)),
-                     column(5, numericInput("multi_pdf_width", "pdf_width", value = 0, min = 0))
-                   ),
-                   bsPopover("multi_pdf_icon", "Output plot size setting for pdf (default: 0): ", 
-                             content=paste("You can adjust the plot size by using", strong('pdf_height'), "and", strong('pdf_width'), "parameters.<br>", 
-                                           "Default size: <br>",strong("Clustering:"), "height = 9, width = 7<br>", strong("UMAP:"), "height = 3.5, width = 4.7 <br>",pdfSize_for_GOI,
-                                           strong("Enrichment analysis:"), "height = 6, width = 8 <br>",strong("cnet plot:"), "height = 6, width = 6 <br>",strong("GSEA:"), "height = 5, width = 7 <br>"),trigger = "click"), 
                    actionButton("goButton6", "example data (mouse)"),
                    tags$head(tags$style("#goButton{color: black;
                                  font-size: 12px;
@@ -1040,13 +1040,13 @@ shinyUI(
                      ),
                     tabPanel("Result overview", value = "multi_result_overview_tab",
                               fluidRow(
-                                column(4, downloadButton("download_multi_PCA", "Download clustering analysis")),
+                                column(4, actionButton("preview_multi_pca", "Download clustering analysis")),
                                 column(6, selectInput("PCA_legend_multi","Label",c("Label","Legend"),selected = "Label"))
                               ),
                               plotOutput("multi_PCA"),
                               fluidRow(
                                 column(6, htmlOutput("multi_umap_n"),
-                                       downloadButton("download_multi_umap", "Download umap"),
+                                       actionButton("preview_multi_umap", "Download umap"),
                                        textOutput("multi_umap_error"),
                                        tags$head(tags$style("#multi_umap_error{color: red;
                                  font-size: 20px;
@@ -1105,7 +1105,7 @@ shinyUI(
                                                  ))),
                               ),
                               fluidRow(
-                                column(4, downloadButton("download_multi_boxplot", "Download boxplots"))
+                                column(4, actionButton("preview_multi_div_box", "Download boxplots"))
                               ),
                               div(
                                 plotOutput("multi_boxplot", height = "100%"),
@@ -1138,7 +1138,7 @@ shinyUI(
                                                         placement = "right",options = list(container = "body")),
                                               value="multi_deg_pattern_boxplot_panel",
                                               fluidRow(
-                                                column(4, downloadButton("download_deg_pattern_boxplot", "Download boxplot"))
+                                                column(4, actionButton("preview_multi_div_goi_box", "Download boxplot"))
                                               ),
                                               plotOutput("multi_pattern_boxplot")
                               ),
@@ -1146,8 +1146,8 @@ shinyUI(
                                               value="multi_deg_pattern_enrichment_panel",
                                               fluidRow(
                                                 column(4, htmlOutput("multi_whichGroup1_1")),
-                                                column(4, htmlOutput("Gene_set7")),
-                                                column(4, downloadButton("download_multi_cluster_enrichment", "Download dot plot"))
+                                                column(4, selectInput("Gene_set7", "Gene Set", gene_set_list)),
+                                                column(4, actionButton("preview_multi_div_enrich", "Download dot plot"))
                                               ),
                                               fluidRow(
                                                 column(4, textOutput("multi_Spe"),
@@ -1159,7 +1159,7 @@ shinyUI(
                                               plotOutput("multi_enrichment3"),
                                               fluidRow(
                                                 column(4, htmlOutput("multi_whichGroup1_2")),
-                                                column(4, downloadButton("download_multi_enrichment_cnet", "Download cnet plot"))
+                                                column(4, actionButton("preview_multi_div_cnet", "Download cnet plot"))
                                               ),
                                               plotOutput("multi_enrichment4"),
                                               fluidRow(
@@ -1202,8 +1202,8 @@ shinyUI(
             padding: 0 !important;
           }"
                                                  )),
-                                       downloadButton("download_multi_kmeans_heatmap", "Download heatmap"),
-                                       downloadButton("download_multi_kmeans_boxplot", "Download boxplots")),
+                                       actionButton("preview_multi_kmeans_heat", "Download heatmap"),
+                                       actionButton("preview_multi_kmeans_box", "Download boxplots")),
                                 column(8, htmlOutput("kmeans_order_multi"),
                                        plotOutput("multi_kmeans_heatmap"))
                               ),
@@ -1235,7 +1235,7 @@ shinyUI(
                                                         placement = "right",options = list(container = "body")),
                                               value="multi_deg_kmeans_boxplot_panel",
                                               fluidRow(
-                                                column(4, downloadButton("download_deg_kmeans_boxplot", "Download boxplot"))
+                                                column(4, actionButton("preview_multi_kmeans_goi_box", "Download boxplot"))
                                               ),
                                               plotOutput("multi_kmeans_GOIboxplot")
                               ),
@@ -1243,8 +1243,8 @@ shinyUI(
                                               value="multi_deg_kmeans_pattern_enrichment_panel",
                                               fluidRow(
                                                 column(4, htmlOutput("multi_whichGroup2_1")),
-                                                column(4, htmlOutput("Gene_set8")),
-                                                column(4, downloadButton("download_multi_cluster_enrichment2", "Download dot plot"))
+                                                column(4, selectInput("Gene_set8", "Gene Set", gene_set_list)),
+                                                column(4, actionButton("preview_multi_kmeans_enrich", "Download dot plot"))
                                               ),
                                               fluidRow(
                                                 column(4, textOutput("multi_Spe2"),
@@ -1256,7 +1256,7 @@ shinyUI(
                                               plotOutput("multi_enrichment5"),
                                               fluidRow(
                                                 column(4, htmlOutput("multi_whichGroup2_2")),
-                                                column(4, downloadButton("download_multi_enrichment_cnet2", "Download cnet plot"))
+                                                column(4, actionButton("preview_multi_kmeans_cnet", "Download cnet plot"))
                                               ),
                                               plotOutput("multi_enrichment6"),
                                               fluidRow(
@@ -1271,7 +1271,7 @@ shinyUI(
                                 column(3, selectizeInput("selectEnrich_pair", "Select a pair for GSEA", choices = NULL,
                                                          multiple = TRUE, options = list(maxItems = 2))),
                                 column(4, selectInput("Gene_set6", "Gene Set", choices = "")),
-                                column(4, downloadButton("download_multi_enrichment", "Download"))
+                                column(4, actionButton("preview_multi_gsea", "Download"))
                               ),
                               fluidRow(
                                 column(4, textOutput("multi_Spe1"),
@@ -1327,7 +1327,7 @@ shinyUI(
                                          )
                               ),
                               fluidRow(
-                                column(4, downloadButton("download_multi_ssGSEA_GOIheat", "Download heatmap"))
+                                column(4, actionButton("preview_multi_ssgsea_heat", "Download heatmap"))
                               ),
                               fluidRow(
                                 column(4, 
@@ -1349,7 +1349,7 @@ shinyUI(
                               fluidRow(
                                 column(4, htmlOutput("statistics_multi_ssGSEA")),
                                 column(4, selectInput('PlotType_multi_ssGSEA', 'PlotType', c("Boxplot", "Barplot", "Violin plot","Errorplot"))),
-                                column(4, downloadButton("download_multi_ssGSEA_GOIbox", "Download boxplot"))
+                                column(4, actionButton("preview_multi_ssgsea_box", "Download boxplot"))
                               ),
                               div(
                                 plotOutput("multi_ssGSEA_GOIboxplot", height = "100%"),
@@ -1364,7 +1364,7 @@ shinyUI(
                                                                         choices = NULL, multiple = FALSE,
                                                                         options = list(create = FALSE, persist = FALSE)),
                                                          fluidRow(
-                                                           column(4, downloadButton("download_multi_ssGSEA_contribute", "Download"))
+                                                           column(4, actionButton("preview_multi_ssgsea_contrib", "Download"))
                                                          ),
                                                          div(
                                                            plotOutput("multi_ssGSEA_contribute", height = "100%"),
@@ -1376,7 +1376,7 @@ shinyUI(
                                          bsCollapsePanel(title="Correlation between ssGSEA score and expression level of TFs:",
                                                          value="ssGSEA_dorothea_panel",
                                                          fluidRow(
-                                                           column(4, downloadButton("download_multi_ssGSEA_dorothea", "Download"))
+                                                           column(4, actionButton("preview_multi_ssgsea_dorothea", "Download"))
                                                          ),
                                                          plotOutput('multi_ssGSEA_dorothea'),
                                                          downloadButton("download_multi_ssGSEA_dorothea_table", "Download"),
@@ -1461,17 +1461,6 @@ shinyUI(
                              content=paste("If True, each count data is z-scored before integrating multiple count data.<br><br>",
                                            img(src="pre-zscoring.png", width = 450,height = 200)), 
                              placement = "right",options = list(container = "body")),
-                   strong(span("Output plot size setting for pdf (0: default)"),
-                          span(icon("info-circle"), id = "venn_pdf_icon", 
-                               options = list(template = popoverTempate))),
-                   fluidRow(
-                     column(5, numericInput("venn_pdf_height", "pdf_height", value = 0, min = 0)),
-                     column(5, numericInput("venn_pdf_width", "pdf_width", value = 0, min = 0))
-                   ),
-                   bsPopover("venn_pdf_icon", "Output plot size setting for pdf (default: 0): ", 
-                             content=paste("You can adjust the plot size by using", strong('pdf_height'), "and", strong('pdf_width'), "parameters.<br>", 
-                                           "Default size: <br>",strong("Venn diagram:"), "height = 3, width = 3<br>", strong("Integrated heatmap:"), "height = 8, width = 8 <br>",
-                                           strong("Enrichment analysis:"), "height = 6, width = 8 <br>",strong("cnet plot:"), "height = 6, width = 6 <br>"),trigger = "click"), 
                    actionButton("goButton_venn", "example data"),
                    tags$head(tags$style("#goButton{color: black;
                                  font-size: 12px;
@@ -1491,7 +1480,7 @@ shinyUI(
                      type = "tabs",
                      tabPanel("Venn diagram analysis",
                               fluidRow(
-                                column(4, downloadButton("download_vennplot", "Download venn diagram"))
+                                column(4, actionButton("preview_venn_diagram", "Download venn diagram"))
                               ),
                               fluidRow(
                                 column(4,radioButtons("venn_type","venn_type",c("default"="default","eulerr package"="eulerr"),"default")),
@@ -1504,7 +1493,7 @@ shinyUI(
                      tabPanel("integrated_heatmap",
                               fluidRow(
                                 column(4, htmlOutput("select_file2")),
-                                column(4, downloadButton("download_integrated_heatmap", "download integrated heatmap"))
+                                column(4, actionButton("preview_venn_heat", "download integrated heatmap"))
                               ),
                               plotOutput("intheatmap"),
                               bsCollapse(id="int_result_collapse_panel",open="integrated_count_panel",multiple = TRUE,
@@ -1525,7 +1514,7 @@ shinyUI(
                                                                         img(src="venn_boxplot.png", width = 450,height = 640)), 
                                                           placement = "right",options = list(container = "body")),
                                                          value="integrated_count_box_panel",
-                                                         downloadButton("download_GOIbox_venn", "Download boxplot"),
+                                                         actionButton("preview_venn_box", "Download boxplot"),
                                                          plotOutput("GOIbox_venn")
                                          )
                               ),
@@ -1533,8 +1522,8 @@ shinyUI(
                      tabPanel("Enrichment analysis",
                               fluidRow(
                                 column(4, htmlOutput("venn_whichGroup1")),
-                                column(4, htmlOutput("Gene_set9")),
-                                column(4, downloadButton("download_venn_cluster_enrichment", "Download dot plot"))
+                                column(4, selectInput("Gene_set9", "Gene Set", gene_set_list)),
+                                column(4, actionButton("preview_venn_enrich", "Download dot plot"))
                               ),
                               fluidRow(
                                 column(4, textOutput("venn_Spe"),
@@ -1546,7 +1535,7 @@ shinyUI(
                               plotOutput("venn_enrichment1"),
                               fluidRow(
                                 column(4, htmlOutput("venn_whichGroup2")),
-                                column(4, downloadButton("download_venn_enrichment_cnet", "Download cnet plot"))
+                                column(4, actionButton("preview_venn_cnet", "Download cnet plot"))
                               ),
                               plotOutput("venn_enrichment2"),
                               fluidRow(
@@ -1654,18 +1643,6 @@ shinyUI(
                      column(4, numericInput("basemean3", "Basemean", min   = 0, max   = NA, value = 0),
                      )
                    ),
-                   strong(span("Output plot size setting for pdf (0: default)"),
-                          span(icon("info-circle"), id = "norm_pdf_icon", 
-                               options = list(template = popoverTempate))),
-                   fluidRow(
-                     column(5, numericInput("norm_pdf_height", "pdf_height", value = 0, min = 0)),
-                     column(5, numericInput("norm_pdf_width", "pdf_width", value = 0, min = 0))
-                   ),
-                   bsPopover("norm_pdf_icon", "Output plot size setting for pdf (default: 0): ", 
-                             content=paste("You can adjust the plot size by using", strong('pdf_height'), "and", strong('pdf_width'), "parameters.<br>", 
-                                           "Default size: <br>",strong("Clustering:"), "height = 3.5, width = 9<br>", 
-                                           strong("UMAP:"), "height = 3.5, width = 4.7 <br>", 
-                                           strong("Correlation plot:"), "height = 5, width = 5 <br>",pdfSize_for_GOI),trigger = "click"), 
                    actionButton("goButton3", "example data"),
                    tags$head(tags$style("#goButton{color: black;
                                  font-size: 12px;
@@ -1709,13 +1686,13 @@ shinyUI(
                      ),
                      tabPanel("Clustering",
                               fluidRow(
-                                column(3, downloadButton("download_norm_PCA", "Download Clustering")),
+                                column(3, actionButton("preview_norm_pca", "Download Clustering")),
                                 column(6, selectInput("PCA_legend_norm","Label",c("Label","Legend"),selected = "Label"))
                               ),
                               plotOutput("norm_PCA"),
                               fluidRow(
                                 column(6, htmlOutput("norm_umap_n"),
-                                       downloadButton("download_norm_umap", "Download umap"),
+                                       actionButton("preview_norm_umap", "Download umap"),
                                        textOutput("norm_umap_error"),
                                        tags$head(tags$style("#norm_umap_error{color: red;
                                  font-size: 20px;
@@ -1743,7 +1720,7 @@ shinyUI(
                      ),
                      tabPanel("GOI profiling",
                               fluidRow(
-                                column(4, downloadButton("download_norm_GOIheat", "Download heatmap"))
+                                column(4, actionButton("preview_norm_goi_heat", "Download heatmap"))
                               ),
                               fluidRow(
                                 column(4, 
@@ -1762,7 +1739,7 @@ shinyUI(
                                                     ),selected = "custom"),
                                        selectizeInput("GOI3", "genes of interest (GOI)", choices = NULL, multiple = TRUE,
                                                       options = list(delimiter = " ", create = TRUE, plugins = list("remove_button"), persist = FALSE)),
-                                       htmlOutput("GOIreset_norm"),
+                                       actionButton("GOIreset_norm", "GOI reset"),
                                        htmlOutput("norm_uniqueID_cut")),
                                 column(8, plotOutput("norm_GOIheatmap"))
                               ),
@@ -1780,7 +1757,7 @@ shinyUI(
                                 column(3, textInput("norm_ylab","title of y-axis","Normalized count"))
                               ),
                               htmlOutput("statistics"),
-                              downloadButton("download_norm_GOIbox", "Download boxplot"),
+                              actionButton("preview_norm_goi_box", "Download boxplot"),
                               div(
                                 plotOutput("norm_GOIboxplot", height = "100%"),
                                 style = "height: calc(100vh  - 100px)"
@@ -1790,7 +1767,7 @@ shinyUI(
                      ),
                      tabPanel("Correlation analysis",
                               fluidRow(
-                                column(4, downloadButton("download_norm_corr", "Download correlation plot"))
+                                column(4, actionButton("preview_norm_corr", "Download correlation plot"))
                               ),
                               fluidRow(
                                 column(4,
@@ -1836,7 +1813,7 @@ shinyUI(
                                        selectizeInput("corr_color_selected","Color", choices = NULL, multiple = FALSE,
                                                       options = list(create = FALSE, persist = FALSE))
                                      ),
-                                     downloadButton("download_norm_corr_selected", "Download correlation plot (all genes from 'select GOI')"))
+                                     actionButton("preview_norm_corr_selected", "Download correlation plot (all genes from 'select GOI')"))
                               ),
                               plotOutput("norm_corrplot_selected")
                      ),
@@ -1871,10 +1848,9 @@ shinyUI(
             padding: 0 !important;
           }"
                                                  ))),
-                                column(8, downloadButton("download_norm_kmeans_heatmap", "Download heatmap"),
-                                       downloadButton("download_norm_kmeans_boxplot", "Download boxplots"),
-                                       selectInput("kmeans_order", "Order of clusters on heatmap",
-                                                   choices = character(0), selected = character(0), multiple = TRUE),
+                                column(8, actionButton("preview_norm_kmeans_heat", "Download heatmap"),
+                                       actionButton("preview_norm_kmeans_box", "Download boxplots"),
+                                       htmlOutput("kmeans_order"),
                                        plotOutput("norm_kmeans_heatmap")),
                               ),
                               div(
@@ -1894,16 +1870,13 @@ shinyUI(
                                                                       img(src="norm_GOIboxplot.png", width = 450,height = 640)), 
                                                         placement = "right",options = list(container = "body")),
                                               value="kmeans_box_panel",
-                                              downloadButton("download_norm_kmeans_box", "Download boxplot"),
+                                              actionButton("preview_norm_kmeans_goi_box", "Download boxplot"),
                                               plotOutput("norm_kmeans_box")
                               ),
                               bsCollapsePanel(title="cluster count data:",
                                               value="norm_kmeans_extract_count",
                                               fluidRow(
-                                                column(4, selectInput("norm_select_kmean", "cluster_list",
-                                                                      choices = character(0),
-                                                                      selected = character(0),
-                                                                      multiple = TRUE))
+                                                column(4, htmlOutput("norm_select_file2"))
                                               ),
                                               downloadButton("download_norm_kmeans_extract_count", "Download cluster count data"),
                                               DTOutput("norm_kmeans_extract_table")
@@ -1964,16 +1937,6 @@ shinyUI(
                      ),
                    sliderInput("enrich_showCategory", "Most significant pathways",
                               min = 1, max = 20, value = 5,step = 1),
-                   strong(span("Output plot size setting for pdf (0: default)"),
-                      span(icon("info-circle"), id = "enrich_pdf_icon", 
-                           options = list(template = popoverTempate))),
-                   fluidRow(
-                     column(5, numericInput("enrich_pdf_height", "pdf_height", value = 0, min = 0)),
-                     column(5, numericInput("enrich_pdf_width", "pdf_width", value = 0, min = 0))
-                   ),
-                   bsPopover("enrich_pdf_icon", "Output plot size setting for pdf (default: 0): ", 
-                             content=paste("You can adjust the plot size by using", strong('pdf_height'), "and", strong('pdf_width'), "parameters.<br>", 
-                                           "Default size: <br>","Dotplot:", "height = 5, width = 6.5 <br>", "cnet plot:","height = 6, width = 6 <br><br>"), trigger = "click"), 
                    actionButton("goButton4", "example data (mouse)"),
                    tags$head(tags$style("#goButton{color: black;
                                  font-size: 12px;
@@ -2002,14 +1965,14 @@ shinyUI(
                                        tags$head(tags$style("#Spe3{color: red;
                                  font-size: 20px;
             font-style: bold;
-            }")), downloadButton("download_enrichment", "Download dot plot")),
-                                column(4, htmlOutput("Gene_set3")),
+            }")), actionButton("preview_enrich_dot", "Download dot plot")),
+                                column(4, selectInput("Gene_set3", "Gene Set", gene_set_list)),
                                 column(4, htmlOutput("Custom_input"))
                               ),
                               plotOutput("enrichment3"),
                               fluidRow(
                                 column(4, htmlOutput("whichGroup")),
-                                column(4, downloadButton("download_enrichment_cnet", "Download cnet plot"))
+                                column(4, actionButton("preview_enrich_cnet", "Download cnet plot"))
                               ),
                               plotOutput("enrichment4"),
                               fluidRow(
@@ -2024,7 +1987,7 @@ shinyUI(
                                  font-size: 20px;
             font-style: bold;
             }"))),
-                                column(3, downloadButton("download_motif_plot", "Download motif plot"))
+                                column(3, actionButton("preview_enrich_motif", "Download motif plot"))
                               ),
                               fluidRow(
                                 column(4, htmlOutput("promoter_upstream")),
@@ -2130,16 +2093,6 @@ shinyUI(
                                 column(4, numericInput("fc4", "Fold Change", min   = 1, max   = NA, value = 2)),
                                 column(4, numericInput("fdr4", "FDR", min   = 0, max   = 1, value = 0.05))
                               ),
-                              strong(span("Output plot size setting for pdf (0: default)"),
-                                     span(icon("info-circle"), id = "volcano_pdf_icon", 
-                                          options = list(template = popoverTempate))),
-                              fluidRow(
-                                column(5, numericInput("volcano_pdf_height", "pdf_height", value = 0, min = 0)),
-                                column(5, numericInput("volcano_pdf_width", "pdf_width", value = 0, min = 0))
-                              ),
-                              bsPopover("volcano_pdf_icon", "Output plot size setting for pdf (default: 0): ", 
-                                        content=paste("You can adjust the plot size by using", strong('pdf_height'), "and", strong('pdf_width'), "parameters.<br>", 
-                                                      "Default size: <br>","Volcano plot:", "height = 5, width = 5 <br>",pdfSize_for_GOI), trigger = "click"), 
                               actionButton("goButton5", "example data (mouse)"),
                               tags$head(tags$style("#goButton{color: black;
                                  font-size: 12px;
@@ -2171,12 +2124,12 @@ shinyUI(
                                 ),
                                 tabPanel("GOI profiling",
                                          fluidRow(
-                                           column(4, downloadButton("download_volcano_navi", "Download volcano plot")),
-                                           column(4, downloadButton("download_deg_heatmap", "Download heatmap"))
+                                           column(4, actionButton("preview_volcano_plot", "Download volcano plot")),
+                                           column(4, actionButton("preview_volcano_heat", "Download heatmap"))
                                          ),
                                          fluidRow(
                                            column(4, htmlOutput("deg_GOI_color_type")),
-                                           column(4, htmlOutput("deg_volcano_x"),htmlOutput("GOIreset_deg")),
+                                           column(4, htmlOutput("deg_volcano_x"),actionButton("GOIreset_deg", "GOI reset")),
                                            column(4, htmlOutput("deg_volcano_y"))
                                          ),
                                          conditionalPanel(condition="input.deg_GOI_color_type=='pathway'",
@@ -2195,7 +2148,7 @@ shinyUI(
                                            style = "height: calc(100vh  - 100px)"
                                          ),
                                          fluidRow(
-                                           column(4, downloadButton("download_deg_GOIbox", "Download boxplot"))
+                                           column(4, actionButton("preview_volcano_box", "Download boxplot"))
                                          ),
                                          bsCollapse(id="DEGlist_volcano_collapse_panel",open="up_panel",multiple = FALSE,
                                                     bsCollapsePanel(title="up (red) list:",

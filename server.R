@@ -36,6 +36,1140 @@ shinyServer(function(input, output, session) {
     colnames(res)[seq_len(limit)] <- base_cols[seq_len(limit)]
     res
   }
+  pdf_offset_value <- function(x) {
+    if (is.null(x) || !length(x)) {
+      return(0)
+    }
+    x <- suppressWarnings(as.numeric(x[[1]]))
+    if (!length(x) || is.na(x)) {
+      return(0)
+    }
+    x
+  }
+  resolve_pdf_dim <- function(default, offset, min_value = 1.5, max_value = 40) {
+    default <- suppressWarnings(as.numeric(default[[1]]))
+    if (is.na(default) || default <= 0) {
+      return(NULL)
+    }
+    value <- default + pdf_offset_value(offset)
+    value <- min(max(value, min_value), max_value)
+    value
+  }
+  resolve_pdf_dims <- function(default_height, default_width, height_offset, width_offset,
+                               min_value = 1.5, max_value = 40) {
+    list(
+      height = resolve_pdf_dim(default_height, height_offset, min_value = min_value, max_value = max_value),
+      width = resolve_pdf_dim(default_width, width_offset, min_value = min_value, max_value = max_value)
+    )
+  }
+  pdf_dims_from_items <- function(items, fallback_height, fallback_width,
+                                  height_multiplier = 1, width_multiplier = 1,
+                                  height_offset = 0, width_offset = 0) {
+    if (is.null(items)) {
+      return(list(height = fallback_height, width = fallback_width))
+    }
+    if (!length(items)) {
+      return(list(height = fallback_height, width = fallback_width))
+    }
+    numeric_value <- suppressWarnings(as.numeric(items[[1]]))
+    if (length(items) == 1 && !is.na(numeric_value) && numeric_value > 0) {
+      base <- numeric_value
+    } else {
+      items <- items[!is.na(items)]
+      if (is.numeric(items)) {
+        items <- items[items > 0]
+      }
+      if (!length(items)) {
+        return(list(height = fallback_height, width = fallback_width))
+      }
+      base <- items
+    }
+    list(
+      height = pdf_h(base) * height_multiplier + height_offset,
+      width = pdf_w(base) * width_multiplier + width_offset
+    )
+  }
+  safe_pdf_dims_from_items <- function(expr, fallback_height, fallback_width,
+                                       height_multiplier = 1, width_multiplier = 1,
+                                       height_offset = 0, width_offset = 0) {
+    items <- tryCatch({
+      if (is.function(expr)) {
+        expr()
+      } else {
+        force(expr)
+      }
+    }, error = function(e) NULL)
+    pdf_dims_from_items(
+      items,
+      fallback_height = fallback_height,
+      fallback_width = fallback_width,
+      height_multiplier = height_multiplier,
+      width_multiplier = width_multiplier,
+      height_offset = height_offset,
+      width_offset = width_offset
+    )
+  }
+  safe_nrow <- function(x) {
+    if (is.null(x)) {
+      return(NULL)
+    }
+    nrow(x)
+  }
+  safe_unique_count <- function(x) {
+    if (is.null(x)) {
+      return(NULL)
+    }
+    x <- unique(x[!is.na(x)])
+    if (!length(x)) {
+      return(NULL)
+    }
+    length(x)
+  }
+  preview_plot_spec <- function(id, default_height, default_width, height_offset, width_offset,
+                                scale = 72, max_width = 900, max_height = 700) {
+    dims <- resolve_pdf_dims(default_height, default_width, height_offset, width_offset)
+    if (is.null(dims$height) || is.null(dims$width)) {
+      return(NULL)
+    }
+    width_px <- dims$width * scale
+    height_px <- dims$height * scale
+    scale_down <- min(1, max_width / width_px, max_height / height_px)
+    list(
+      id = id,
+      width_px = width_px * scale_down,
+      height_px = height_px * scale_down
+    )
+  }
+  send_pdf_preview_specs <- function(specs) {
+    specs <- Filter(Negate(is.null), specs)
+    if (!length(specs)) {
+      return(invisible(NULL))
+    }
+    session$sendCustomMessage("pdf_preview_resize", list(plots = specs))
+    invisible(NULL)
+  }
+  pair_pdf_dims <- function(default_height, default_width) {
+    resolve_pdf_dims(default_height, default_width, input$pair_modal_pdf_height, input$pair_modal_pdf_width)
+  }
+  cond3_pdf_dims <- function(default_height, default_width) {
+    resolve_pdf_dims(default_height, default_width, input$cond3_pdf_height, input$cond3_pdf_width)
+  }
+  multi_pdf_dims <- function(default_height, default_width) {
+    resolve_pdf_dims(default_height, default_width, input$multi_pdf_height, input$multi_pdf_width)
+  }
+  venn_pdf_dims <- function(default_height, default_width) {
+    resolve_pdf_dims(default_height, default_width, input$venn_pdf_height, input$venn_pdf_width)
+  }
+  norm_pdf_dims <- function(default_height, default_width) {
+    resolve_pdf_dims(default_height, default_width, input$norm_pdf_height, input$norm_pdf_width)
+  }
+  enrich_pdf_dims <- function(default_height, default_width) {
+    resolve_pdf_dims(default_height, default_width, input$enrich_pdf_height, input$enrich_pdf_width)
+  }
+  volcano_pdf_dims <- function(default_height, default_width) {
+    resolve_pdf_dims(default_height, default_width, input$volcano_pdf_height, input$volcano_pdf_width)
+  }
+  cond3_pdf_spec <- function(id, default_height, default_width) {
+    preview_plot_spec(id, default_height, default_width, input$cond3_pdf_height, input$cond3_pdf_width)
+  }
+  multi_pdf_spec <- function(id, default_height, default_width) {
+    preview_plot_spec(id, default_height, default_width, input$multi_pdf_height, input$multi_pdf_width)
+  }
+  venn_pdf_spec <- function(id, default_height, default_width) {
+    preview_plot_spec(id, default_height, default_width, input$venn_pdf_height, input$venn_pdf_width)
+  }
+  norm_pdf_spec <- function(id, default_height, default_width) {
+    preview_plot_spec(id, default_height, default_width, input$norm_pdf_height, input$norm_pdf_width)
+  }
+  enrich_pdf_spec <- function(id, default_height, default_width) {
+    preview_plot_spec(id, default_height, default_width, input$enrich_pdf_height, input$enrich_pdf_width)
+  }
+  volcano_pdf_spec <- function(id, default_height, default_width) {
+    preview_plot_spec(id, default_height, default_width, input$volcano_pdf_height, input$volcano_pdf_width)
+  }
+  require_plot_value <- function(x, message = "Preview is not available.") {
+    if (is.null(x)) {
+      stop(message, call. = FALSE)
+    }
+    x
+  }
+  render_pdf_preview_png <- function(height, width, draw_expr, dpi = 144) {
+    pdf_file <- tempfile(fileext = ".pdf")
+    png_file <- tempfile(fileext = ".png")
+    grDevices::pdf(pdf_file, height = height, width = width, onefile = TRUE)
+    tryCatch(
+      {
+        draw_expr()
+        grDevices::dev.off()
+      },
+      error = function(e) {
+        try(grDevices::dev.off(), silent = TRUE)
+        stop(e)
+      }
+    )
+    bitmap <- pdftools::pdf_render_page(pdf_file, page = 1, dpi = dpi, numeric = TRUE)
+    png::writePNG(bitmap, target = png_file)
+    unlink(pdf_file)
+    png_file
+  }
+  require_plot_ready <- function(x, message = "Preview is not available.") {
+    if (inherits(x, "try-error")) {
+      err <- attr(x, "condition")
+      if (!is.null(err)) {
+        stop(conditionMessage(err), call. = FALSE)
+      }
+      stop(as.character(x), call. = FALSE)
+    }
+    require_plot_value(x, message)
+  }
+  pair_pdf_preview_state <- reactiveValues(
+    target = NULL,
+    title = NULL,
+    download_id = NULL
+  )
+  output$pair_pdf_preview_size <- renderText({
+    req(pair_pdf_preview_state$target)
+    request <- pair_pdf_preview_request(pair_pdf_preview_state$target)
+    sprintf("Rendered from the PDF device at %.1f x %.1f in", request$dims$height, request$dims$width)
+  })
+  output$pair_pdf_preview_download_button <- renderUI({
+    req(pair_pdf_preview_state$download_id)
+    downloadButton(pair_pdf_preview_state$download_id, "Download PDF")
+  })
+  output$pair_pdf_exact_preview_image <- renderImage({
+    req(pair_pdf_preview_state$target)
+    request <- pair_pdf_preview_request(pair_pdf_preview_state$target)
+    png_file <- render_pdf_preview_png(request$dims$height, request$dims$width, request$draw)
+    list(
+      src = png_file,
+      contentType = "image/png",
+      alt = request$title
+    )
+  }, deleteFile = TRUE)
+  show_pair_pdf_preview_modal <- function() {
+    showModal(modalDialog(
+      title = pair_pdf_preview_state$title,
+      tags$p("Adjust the offsets below while checking the exact PDF rendering."),
+      textOutput("pair_pdf_preview_size"),
+      fluidRow(
+        column(6, sliderInput("pair_modal_pdf_height", "pdf_height offset", value = 0, min = -5, max = 10, step = 0.5)),
+        column(6, sliderInput("pair_modal_pdf_width", "pdf_width offset", value = 0, min = -5, max = 10, step = 0.5))
+      ),
+      div(
+        style = "max-height: 70vh; overflow: auto; text-align: center;",
+        imageOutput("pair_pdf_exact_preview_image", width = "100%")
+      ),
+      easyClose = TRUE,
+      size = "l",
+      footer = tagList(
+        modalButton("Close"),
+        uiOutput("pair_pdf_preview_download_button")
+      )
+    ))
+  }
+  open_pair_pdf_preview <- function(target) {
+    request <- pair_pdf_preview_request(target)
+    if (is.null(request)) {
+      showNotification("Preview target is not available.", type = "error")
+      return(invisible(NULL))
+    }
+    pair_pdf_preview_state$target <- target
+    pair_pdf_preview_state$title <- request$title
+    pair_pdf_preview_state$download_id <- request$download_id
+    show_pair_pdf_preview_modal()
+    invisible(NULL)
+  }
+  shared_pdf_preview_state <- reactiveValues(
+    request_fun = NULL,
+    target = NULL,
+    title = NULL,
+    download_id = NULL,
+    height_id = NULL,
+    width_id = NULL
+  )
+  output$shared_pdf_preview_size <- renderText({
+    req(shared_pdf_preview_state$request_fun, shared_pdf_preview_state$target)
+    request <- shared_pdf_preview_state$request_fun(shared_pdf_preview_state$target)
+    sprintf("Rendered from the PDF device at %.1f x %.1f in", request$dims$height, request$dims$width)
+  })
+  output$shared_pdf_exact_preview_image <- renderImage({
+    req(shared_pdf_preview_state$request_fun, shared_pdf_preview_state$target)
+    request <- shared_pdf_preview_state$request_fun(shared_pdf_preview_state$target)
+    png_file <- render_pdf_preview_png(request$dims$height, request$dims$width, request$draw)
+    list(
+      src = png_file,
+      contentType = "image/png",
+      alt = request$title
+    )
+  }, deleteFile = TRUE)
+  show_shared_pdf_preview_modal <- function() {
+    showModal(modalDialog(
+      title = shared_pdf_preview_state$title,
+      tags$p("Adjust the offsets below while checking the exact PDF rendering."),
+      textOutput("shared_pdf_preview_size"),
+      fluidRow(
+        column(6, sliderInput(shared_pdf_preview_state$height_id, "pdf_height offset", value = 0, min = -5, max = 10, step = 0.5)),
+        column(6, sliderInput(shared_pdf_preview_state$width_id, "pdf_width offset", value = 0, min = -5, max = 10, step = 0.5))
+      ),
+      div(
+        style = "max-height: 70vh; overflow: auto; text-align: center;",
+        imageOutput("shared_pdf_exact_preview_image", width = "100%")
+      ),
+      easyClose = TRUE,
+      size = "l",
+      footer = tagList(
+        modalButton("Close"),
+        downloadButton("shared_pdf_preview_download", "Download PDF")
+      )
+    ))
+  }
+  open_shared_pdf_preview <- function(request_fun, target, height_id, width_id) {
+    request <- request_fun(target)
+    if (is.null(request)) {
+      showNotification("Preview target is not available.", type = "error")
+      return(invisible(NULL))
+    }
+    shared_pdf_preview_state$request_fun <- request_fun
+    shared_pdf_preview_state$target <- target
+    shared_pdf_preview_state$title <- request$title
+    shared_pdf_preview_state$download_id <- request$download_id
+    shared_pdf_preview_state$height_id <- height_id
+    shared_pdf_preview_state$width_id <- width_id
+    show_shared_pdf_preview_modal()
+    invisible(NULL)
+  }
+  output$shared_pdf_preview_download <- downloadHandler(
+    filename = function() {
+      req(shared_pdf_preview_state$request_fun, shared_pdf_preview_state$target)
+      request <- shared_pdf_preview_state$request_fun(shared_pdf_preview_state$target)
+      title <- if (is.null(request$title) || !nzchar(request$title)) "preview" else request$title
+      paste0(gsub("[^A-Za-z0-9_-]+", "_", title), ".pdf")
+    },
+    content = function(file) {
+      req(shared_pdf_preview_state$request_fun, shared_pdf_preview_state$target)
+      request <- shared_pdf_preview_state$request_fun(shared_pdf_preview_state$target)
+      if (is.null(request$dims$height) || is.null(request$dims$width)) {
+        stop("Preview size is not available.", call. = FALSE)
+      }
+      grDevices::pdf(file, height = request$dims$height, width = request$dims$width, onefile = TRUE)
+      on.exit(grDevices::dev.off(), add = TRUE)
+      request$draw()
+    },
+    contentType = "application/pdf"
+  )
+  pair_pdf_preview_request <- function(target) {
+    transcript_mode <- if (is.null(input$Transcript_top) || input$Transcript_top == "") "Top10" else input$Transcript_top
+    transcript_count <- switch(
+      transcript_mode,
+      Top10 = 10,
+      Top20 = 20,
+      Top40 = 40,
+      manual = max(length(input$transcript_manual), 1),
+      10
+    )
+    dtu_mode <- if (is.null(input$DTU_top) || input$DTU_top == "") "Top10" else input$DTU_top
+    dtu_count <- switch(
+      dtu_mode,
+      Top10 = 10,
+      Top20 = 20,
+      Top40 = 40,
+      manual = max(length(input$DTU_manual), 1),
+      10
+    )
+    switch(target,
+           pair_volcano = list(
+             title = "Exact PDF preview: Pair-wise volcano plot",
+             download_id = "download_pair_volcano",
+             dims = pair_pdf_dims(5, 5),
+             draw = function() {
+               print(require_plot_value(pair_volcano(), "Volcano plot is not available."))
+             }
+           ),
+           pair_pca = list(
+             title = "Exact PDF preview: Pair-wise PCA / MDS / dendrogram",
+             download_id = "download_pair_PCA",
+             dims = pair_pdf_dims(3.5, 9),
+             draw = function() {
+               print(require_plot_value(pair_pca_plot(), "Clustering plot is not available."))
+             }
+           ),
+           pair_ma = list(
+             title = "Exact PDF preview: Pair-wise MA plot + heatmap",
+             download_id = "download_pair_MA",
+             dims = pair_pdf_dims(4, 7),
+             draw = function() {
+               print(require_plot_value(ma_heatmap_plot(), "MA plot is not available."))
+             }
+           ),
+           pair_goi_heat = list(
+             title = "Exact PDF preview: Pair-wise GOI heatmap",
+             download_id = "download_pair_GOIheatmap",
+             dims = pair_pdf_dims(10, 7),
+             draw = function() {
+               print(require_plot_value(pair_GOIheatmap(), "GOI heatmap is not available."))
+             }
+           ),
+           pair_goi_box = list(
+             title = "Exact PDF preview: Pair-wise GOI boxplot",
+             download_id = "download_pair_GOIbox",
+             dims = pair_pdf_dims(
+               safe_pdf_dims_from_items(function() rownames(pair_GOIcount()), 6, 6)$height,
+               safe_pdf_dims_from_items(function() rownames(pair_GOIcount()), 6, 6)$width
+             ),
+             draw = function() {
+               print(require_plot_value(pair_GOIbox(), "GOI boxplot is not available."))
+             }
+           ),
+           pair_enrich = list(
+             title = "Exact PDF preview: Pair-wise enrichment analysis",
+             download_id = "download_pair_enrichment",
+             dims = pair_pdf_dims(10, 12),
+             draw = function() {
+               print(plot_grid(
+                 require_plot_value(pair_enrich1_H(), "Enrichment dot plot is not available."),
+                 require_plot_value(pair_enrich2(), "Enrichment cnet plot is not available."),
+                 nrow = 2
+               ))
+             }
+           ),
+           pair_transcript_bar = list(
+             title = "Exact PDF preview: Transcript barplot",
+             download_id = "download_transcript_barplot",
+             dims = pair_pdf_dims(
+               safe_pdf_dims_from_items(transcript_count, 6, 6, height_multiplier = 2, width_multiplier = 3)$height,
+               safe_pdf_dims_from_items(transcript_count, 6, 6, height_multiplier = 2, width_multiplier = 3)$width
+             ),
+             draw = function() {
+               print(require_plot_value(DETs_plot(), "Transcript barplot is not available."))
+             }
+           ),
+           pair_transcript_box = list(
+             title = "Exact PDF preview: Transcript GOI boxplot",
+             download_id = "download_transcript_GOIboxplot",
+             dims = pair_pdf_dims(
+               safe_pdf_dims_from_items(function() safe_nrow(transcript_GOIbox()), 6, 6, height_multiplier = 2, width_multiplier = 3)$height,
+               safe_pdf_dims_from_items(function() safe_nrow(transcript_GOIbox()), 6, 6, height_multiplier = 2, width_multiplier = 3)$width
+             ),
+             draw = function() {
+               print(
+                 GOIboxplot(data = require_plot_value(transcript_GOIbox(), "Transcript GOI boxplot is not available.")) +
+                   scale_fill_manual(values = c("gray", "#ff8082"))
+               )
+             }
+           ),
+           pair_dtu_bar = list(
+             title = "Exact PDF preview: DTU barplot",
+             download_id = "download_DRIMSeq_barplot",
+             dims = pair_pdf_dims(
+               safe_pdf_dims_from_items(dtu_count, 6, 6, height_multiplier = 2, width_multiplier = 3)$height,
+               safe_pdf_dims_from_items(dtu_count, 6, 6, height_multiplier = 2, width_multiplier = 3)$width
+             ),
+             draw = function() {
+               print(require_plot_value(DTU_plot(), "DTU barplot is not available."))
+             }
+           ),
+           pair_dtu_box = list(
+             title = "Exact PDF preview: DTU GOI boxplot",
+             download_id = "download_DRIMSeq_GOIboxplot",
+             dims = pair_pdf_dims(
+               safe_pdf_dims_from_items(function() safe_nrow(DTU_GOIbox()), 6, 6, height_multiplier = 2, width_multiplier = 3)$height,
+               safe_pdf_dims_from_items(function() safe_nrow(DTU_GOIbox()), 6, 6, height_multiplier = 2, width_multiplier = 3)$width
+             ),
+             draw = function() {
+               print(
+                 GOIboxplot(data = require_plot_value(DTU_GOIbox(), "DTU GOI boxplot is not available.")) +
+                   scale_fill_manual(values = c("gray", "#ff8082"))
+               )
+             }
+           ),
+           NULL)
+  }
+  cond3_pdf_preview_request <- function(target) {
+    switch(target,
+           cond3_overview = list(
+             title = "Exact PDF preview: 3 conditions DEG overview",
+             download_id = "download_3cond_scatter1",
+             dims = cond3_pdf_dims(6, 10),
+             draw = function() {
+               print(cond3_scatter1_plot())
+               print(cond3_scatter2_plot())
+               print(cond3_scatter3_plot())
+             }
+           ),
+           cond3_goi_scatter = list(
+             title = "Exact PDF preview: 3 conditions GOI scatter plot",
+             download_id = "download_3cond_scatter",
+             dims = cond3_pdf_dims(6, 10),
+             draw = function() {
+               print(require_plot_value(cond3_scatter_plot(
+                 gene_type = gene_type2(), data = deg_norm_count2(), data4 = data_3degcount2_1(),
+                 result_Condm = deg_result2_condmean(), result_FDR = deg_result2(),
+                 fc = input$fc2, fdr = input$fdr2, basemean = input$basemean2,
+                 y_axis = input$cond3_scatter_yrange, x_axis = input$cond3_scatter_xrange,
+                 heatmap = FALSE, id_cut = input$cond3_uniqueID_cut,
+                 specific = cond3_specific_group2(), GOI = cond3_goi_selection(), Species = input$Species2,
+                 brush = brush_info_cond3(), GOI_color_type = input$cond3_GOI_color_type,
+                 cond3_pathway_color_gene = cond3_pathway_color_gene()
+               ), "GOI scatter plot is not available."))
+             }
+           ),
+           cond3_pca = list(
+             title = "Exact PDF preview: 3 conditions PCA / MDS / dendrogram",
+             download_id = "download_3cond_PCA",
+             dims = cond3_pdf_dims(3.5, 9),
+             draw = function() {
+               print(require_plot_value(cond3_pca_plot(), "Clustering plot is not available."))
+             }
+           ),
+           cond3_goi_heat = list(
+             title = "Exact PDF preview: 3 conditions GOI heatmap",
+             download_id = "download_3cond_GOIheat",
+             dims = cond3_pdf_dims(10, 7),
+             draw = function() {
+               print(require_plot_value(cond3_GOIheat(), "GOI heatmap is not available."))
+             }
+           ),
+           cond3_goi_box = list(
+             title = "Exact PDF preview: 3 conditions GOI boxplot",
+             download_id = "download_3cond_GOIbox",
+             dims = cond3_pdf_dims(
+               safe_pdf_dims_from_items(function() rownames(cond3_GOIcount()), 6, 6)$height,
+               safe_pdf_dims_from_items(function() rownames(cond3_GOIcount()), 6, 6)$width
+             ),
+             draw = function() {
+               print(require_plot_value(cond3_GOIbox(), "GOI boxplot is not available."))
+             }
+           ),
+           cond3_enrich = list(
+             title = "Exact PDF preview: 3 conditions enrichment analysis",
+             download_id = "download_cond3_enrichment",
+             dims = cond3_pdf_dims(12, 15),
+             draw = function() {
+               print(plot_grid(
+                 require_plot_value(keggEnrichment2_1(), "Enrichment plot 1 is not available."),
+                 require_plot_value(keggEnrichment2_2(), "Enrichment plot 2 is not available."),
+                 require_plot_value(keggEnrichment2_3(), "Enrichment plot 3 is not available."),
+                 nrow = 3
+               ))
+             }
+           ),
+           NULL)
+  }
+  multi_pdf_preview_request <- function(target) {
+    switch(target,
+           multi_pca = list(
+             title = "Exact PDF preview: Multi DEG PCA / MDS / dendrogram",
+             download_id = "download_multi_PCA",
+             dims = multi_pdf_dims(3.5, 9),
+             draw = function() {
+               print(require_plot_value(multi_pca_plot(), "Clustering plot is not available."))
+             }
+           ),
+           multi_umap = list(
+             title = "Exact PDF preview: Multi DEG UMAP",
+             download_id = "download_multi_umap",
+             dims = multi_pdf_dims(3.5, 4.7),
+             draw = function() {
+               print(require_plot_ready(multi_umap_plot(), "UMAP plot is not available."))
+             }
+           ),
+           multi_div_box = list(
+             title = "Exact PDF preview: Multi DEG divisive clustering boxplots",
+             download_id = "download_multi_boxplot",
+             dims = multi_pdf_dims(
+               safe_pdf_dims_from_items(
+                 safe_unique_count(tryCatch(multi_pattern2()$df$cluster, error = function(e) NULL)),
+                 10, 7, height_offset = 2, width_offset = 2
+               )$height,
+               safe_pdf_dims_from_items(
+                 safe_unique_count(tryCatch(multi_pattern2()$df$cluster, error = function(e) NULL)),
+                 10, 7, height_offset = 2, width_offset = 2
+               )$width
+             ),
+             draw = function() {
+               print(
+                 require_plot_value(multi_boxplot_reactive(), "Divisive clustering boxplots are not available.") +
+                   theme(axis.text.x = element_text(size = 8),
+                         axis.text.y = element_text(size = 8),
+                         title = element_text(size = 8),
+                         text = element_text(size = 8))
+               )
+             }
+           ),
+           multi_div_goi_box = list(
+             title = "Exact PDF preview: Multi DEG divisive selected GOI boxplot",
+             download_id = "download_deg_pattern_boxplot",
+             dims = multi_pdf_dims(
+               safe_pdf_dims_from_items(function() rownames(multi_GOIbox()), 6, 6)$height,
+               safe_pdf_dims_from_items(function() rownames(multi_GOIbox()), 6, 6)$width
+             ),
+             draw = function() {
+               print(GOIboxplot(data = require_plot_value(multi_GOIbox(), "Selected GOI boxplot is not available.")))
+             }
+           ),
+           multi_div_enrich = list(
+             title = "Exact PDF preview: Multi DEG divisive enrichment dot plot",
+             download_id = "download_multi_cluster_enrichment",
+             dims = multi_pdf_dims(6, 8),
+             draw = function() {
+               print(require_plot_value(multi_enrich_H(), "Divisive enrichment dot plot is not available."))
+             }
+           ),
+           multi_div_cnet = list(
+             title = "Exact PDF preview: Multi DEG divisive enrichment cnet plot",
+             download_id = "download_multi_enrichment_cnet",
+             dims = multi_pdf_dims(6, 6),
+             draw = function() {
+               print(require_plot_value(multi_enrich2(), "Divisive enrichment cnet plot is not available."))
+             }
+           ),
+           multi_kmeans_heat = list(
+             title = "Exact PDF preview: Multi DEG k-means heatmap",
+             download_id = "download_multi_kmeans_heatmap",
+             dims = multi_pdf_dims(10, 7),
+             draw = function() {
+               ht <- if(is.null(multi_kmeans_selected_rows())) multi_kmeans() else multi_kmeans_GOI()
+               ht <- require_plot_value(ht, "k-means heatmap is not available.")
+               set.seed(123)
+               draw(ht)
+             }
+           ),
+           multi_kmeans_box = list(
+             title = "Exact PDF preview: Multi DEG k-means boxplots",
+             download_id = "download_multi_kmeans_boxplot",
+             dims = multi_pdf_dims(
+               safe_pdf_dims_from_items(
+                 safe_unique_count(tryCatch(multi_kmeans_cluster()$Cluster, error = function(e) NULL)),
+                 10, 7, height_offset = 2, width_offset = 2
+               )$height,
+               safe_pdf_dims_from_items(
+                 safe_unique_count(tryCatch(multi_kmeans_cluster()$Cluster, error = function(e) NULL)),
+                 10, 7, height_offset = 2, width_offset = 2
+               )$width
+             ),
+             draw = function() {
+               print(
+                 require_plot_value(multi_kmeans_box(), "k-means boxplots are not available.") +
+                   theme(axis.text.x = element_text(size = 8),
+                         axis.text.y = element_text(size = 8),
+                         title = element_text(size = 8),
+                         text = element_text(size = 8))
+               )
+             }
+           ),
+           multi_kmeans_goi_box = list(
+             title = "Exact PDF preview: Multi DEG k-means selected GOI boxplot",
+             download_id = "download_deg_kmeans_boxplot",
+             dims = multi_pdf_dims(
+               safe_pdf_dims_from_items(function() rownames(multi_kmeans_GOIbox()), 6, 6)$height,
+               safe_pdf_dims_from_items(function() rownames(multi_kmeans_GOIbox()), 6, 6)$width
+             ),
+             draw = function() {
+               print(GOIboxplot(data = require_plot_value(multi_kmeans_GOIbox(), "Selected k-means GOI boxplot is not available.")))
+             }
+           ),
+           multi_kmeans_enrich = list(
+             title = "Exact PDF preview: Multi DEG k-means enrichment dot plot",
+             download_id = "download_multi_cluster_enrichment2",
+             dims = multi_pdf_dims(6, 8),
+             draw = function() {
+               print(require_plot_value(multi_enrich_H2(), "k-means enrichment dot plot is not available."))
+             }
+           ),
+           multi_kmeans_cnet = list(
+             title = "Exact PDF preview: Multi DEG k-means enrichment cnet plot",
+             download_id = "download_multi_enrichment_cnet2",
+             dims = multi_pdf_dims(6, 6),
+             draw = function() {
+               print(require_plot_value(multi_enrich12(), "k-means enrichment cnet plot is not available."))
+             }
+           ),
+           multi_gsea = list(
+             title = "Exact PDF preview: Multi DEG GSEA plot",
+             download_id = "download_multi_enrichment",
+             dims = multi_pdf_dims(5, 7),
+             draw = function() {
+               print(require_plot_value(multi_enrich1_H(), "GSEA plot is not available."))
+             }
+           ),
+           multi_ssgsea_heat = list(
+             title = "Exact PDF preview: Multi DEG ssGSEA heatmap",
+             download_id = "download_multi_ssGSEA_GOIheat",
+             dims = multi_pdf_dims(10, 7),
+             draw = function() {
+               print(require_plot_value(multi_ssGSEA_GOIheat(), "ssGSEA heatmap is not available."))
+             }
+           ),
+           multi_ssgsea_box = list(
+             title = "Exact PDF preview: Multi DEG ssGSEA GOI boxplot",
+             download_id = "download_multi_ssGSEA_GOIbox",
+             dims = multi_pdf_dims(
+               safe_pdf_dims_from_items(function() rownames(multi_ssGSEA_GOIcount()), 6, 6)$height,
+               safe_pdf_dims_from_items(function() rownames(multi_ssGSEA_GOIcount()), 6, 6)$width
+             ),
+             draw = function() {
+               print(require_plot_value(multi_ssGSEA_GOIbox(), "ssGSEA GOI boxplot is not available."))
+             }
+           ),
+           multi_ssgsea_contrib = list(
+             title = "Exact PDF preview: Multi DEG ssGSEA contribution plot",
+             download_id = "download_multi_ssGSEA_contribute",
+             dims = multi_pdf_dims(
+               safe_pdf_dims_from_items(function() rownames(multi_ssGSEA_contribute_cor_count()), 6, 6)$height,
+               safe_pdf_dims_from_items(function() rownames(multi_ssGSEA_contribute_cor_count()), 6, 6)$width
+             ),
+             draw = function() {
+               print(require_plot_value(multi_ssGSEA_contribute_corplot(), "ssGSEA contribution plot is not available."))
+             }
+           ),
+           multi_ssgsea_dorothea = list(
+             title = "Exact PDF preview: Multi DEG ssGSEA DoRothEA plot",
+             download_id = "download_multi_ssGSEA_dorothea",
+             dims = multi_pdf_dims(
+               safe_pdf_dims_from_items(function() rownames(multi_ssGSEA_TF_cor_count()), 6, 6)$height,
+               safe_pdf_dims_from_items(function() rownames(multi_ssGSEA_TF_cor_count()), 6, 6)$width
+             ),
+             draw = function() {
+               print(require_plot_value(multi_ssGSEA_TF_corplot(), "DoRothEA plot is not available."))
+             }
+           ),
+           NULL)
+  }
+  venn_pdf_preview_request <- function(target) {
+    switch(target,
+           venn_diagram = list(
+             title = "Exact PDF preview: Venn diagram",
+             download_id = "download_vennplot",
+             dims = venn_pdf_dims(3, 3),
+             draw = function() {
+               gene_list <- require_plot_value(files_table(), "Venn diagram is not available.")
+               names(gene_list) <- vapply(names(gene_list), function(x) {
+                 x <- gsub("_", " ", x)
+                 paste(strwrap(x, width = 15), collapse = "\n")
+               }, character(1))
+               if(input$venn_type == "default" || is.null(input$eulerr_label)) {
+                 print(venn::venn(gene_list, ilabels = TRUE, zcolor = "style", opacity = 0, ilcs = 1.5, sncs = 1.5))
+               } else {
+                 if(input$eulerr_label == "ON") {
+                   label <- list(cex = 0.8)
+                 } else {
+                   label <- NULL
+                 }
+                 print(plot(
+                   euler(gene_list, shape = "ellipse"),
+                   labels = label,
+                   quantities = list(type = "counts", cex = 0.8),
+                   edges = list(col = as.vector(seq(1, length(names(gene_list)))), lex = 0.8),
+                   fills = list(fill = rep("white", length(names(gene_list)))),
+                   legend = list(side = "right", cex = 0.8)
+                 ))
+               }
+             }
+           ),
+           venn_heat = list(
+             title = "Exact PDF preview: Integrated heatmap",
+             download_id = "download_integrated_heatmap",
+             dims = venn_pdf_dims(8, 8),
+             draw = function() {
+               print(require_plot_value(integrated_heatmap(), "Integrated heatmap is not available."))
+             }
+           ),
+           venn_box = list(
+             title = "Exact PDF preview: Integrated GOI boxplot",
+             download_id = "download_GOIbox_venn",
+             dims = venn_pdf_dims(
+               safe_pdf_dims_from_items(
+                 function() {
+                   data <- as.data.frame(integrated_count())
+                   rownames(data[input$integrated_count_table_rows_selected, , drop = FALSE])
+                 },
+                 6, 6
+               )$height,
+               safe_pdf_dims_from_items(
+                 function() {
+                   data <- as.data.frame(integrated_count())
+                   rownames(data[input$integrated_count_table_rows_selected, , drop = FALSE])
+                 },
+                 6, 6
+               )$width
+             ),
+             draw = function() {
+               data <- as.data.frame(require_plot_value(integrated_count(), "Integrated count data is not available."))
+               rows <- input$integrated_count_table_rows_selected
+               if (is.null(rows) || !length(rows)) {
+                 stop("Select genes from 'integrated count data' first.", call. = FALSE)
+               }
+               print(GOIboxplot(data = data[rows, , drop = FALSE]))
+             }
+           ),
+           venn_enrich = list(
+             title = "Exact PDF preview: Venn enrichment dot plot",
+             download_id = "download_venn_cluster_enrichment",
+             dims = venn_pdf_dims(6, 8),
+             draw = function() {
+               print(require_plot_value(venn_enrich_H(), "Venn enrichment dot plot is not available."))
+             }
+           ),
+           venn_cnet = list(
+             title = "Exact PDF preview: Venn enrichment cnet plot",
+             download_id = "download_venn_enrichment_cnet",
+             dims = venn_pdf_dims(6, 6),
+             draw = function() {
+               print(require_plot_value(venn_enrich2(), "Venn enrichment cnet plot is not available."))
+             }
+           ),
+           NULL)
+  }
+  norm_pdf_preview_request <- function(target) {
+    switch(target,
+           norm_pca = list(
+             title = "Exact PDF preview: Normalized count PCA / MDS / dendrogram",
+             download_id = "download_norm_PCA",
+             dims = norm_pdf_dims(3.5, 9),
+             draw = function() {
+               print(PCAplot(data = require_plot_value(d_norm_count_matrix_cutofff(), "Clustering data is not available."),
+                             legend = input$PCA_legend_norm))
+             }
+           ),
+           norm_umap = list(
+             title = "Exact PDF preview: Normalized count UMAP",
+             download_id = "download_norm_umap",
+             dims = norm_pdf_dims(3.5, 4.7),
+             draw = function() {
+               print(require_plot_ready(norm_umap_plot(), "UMAP plot is not available."))
+             }
+           ),
+           norm_goi_heat = list(
+             title = "Exact PDF preview: Normalized count GOI heatmap",
+             download_id = "download_norm_GOIheat",
+             dims = norm_pdf_dims(10, 7),
+             draw = function() {
+               print(require_plot_value(norm_GOIheat(), "GOI heatmap is not available."))
+             }
+           ),
+           norm_goi_box = list(
+             title = "Exact PDF preview: Normalized count GOI boxplot",
+             download_id = "download_norm_GOIbox",
+             dims = norm_pdf_dims(
+               safe_pdf_dims_from_items(function() rownames(norm_GOIcount()), 6, 6)$height,
+               safe_pdf_dims_from_items(function() rownames(norm_GOIcount()), 6, 6)$width
+             ),
+             draw = function() {
+               print(require_plot_value(norm_GOIbox(), "GOI boxplot is not available."))
+             }
+           ),
+           norm_corr = list(
+             title = "Exact PDF preview: Normalized count correlation plot",
+             download_id = "download_norm_corr",
+             dims = norm_pdf_dims(5, 5),
+             draw = function() {
+               if (input$corr_mode == "corr_mode2") {
+                 print(require_plot_value(norm_GOI_corrplot_pair(), "Correlation plot is not available."))
+               } else {
+                 print(require_plot_value(norm_GOI_corrplot(), "Correlation plot is not available."))
+               }
+             }
+           ),
+           norm_corr_selected = list(
+             title = "Exact PDF preview: Normalized count selected-gene correlation plot",
+             download_id = "download_norm_corr_selected",
+             dims = norm_pdf_dims(5, 5),
+             draw = function() {
+               plots <- require_plot_value(norm_GOI_corrplot_selected_for_download(), "Selected-gene correlation plot is not available.")
+               if (!length(plots)) {
+                 stop("Selected-gene correlation plot is not available.", call. = FALSE)
+               }
+               for (plot_obj in plots) {
+                 print(plot_obj)
+               }
+             }
+           ),
+           norm_kmeans_heat = list(
+             title = "Exact PDF preview: Normalized count k-means heatmap",
+             download_id = "download_norm_kmeans_heatmap",
+             dims = norm_pdf_dims(10, 7),
+             draw = function() {
+               ht <- if(is.null(norm_kmeans_selected_rows())) norm_kmeans() else norm_kmeans_GOI()
+               ht <- require_plot_value(ht, "k-means heatmap is not available.")
+               print(ht)
+             }
+           ),
+           norm_kmeans_box = list(
+             title = "Exact PDF preview: Normalized count k-means boxplots",
+             download_id = "download_norm_kmeans_boxplot",
+             dims = norm_pdf_dims(
+               safe_pdf_dims_from_items(
+                 function() {
+                   plot_obj <- norm_kmeans_box()
+                   if (is.null(plot_obj)) return(NULL)
+                   unique(plot_obj$data$cluster)
+                 },
+                 10, 7, height_offset = 2, width_offset = 2
+               )$height,
+               safe_pdf_dims_from_items(
+                 function() {
+                   plot_obj <- norm_kmeans_box()
+                   if (is.null(plot_obj)) return(NULL)
+                   unique(plot_obj$data$cluster)
+                 },
+                 10, 7, height_offset = 2, width_offset = 2
+               )$width
+             ),
+             draw = function() {
+               print(require_plot_value(norm_kmeans_box(), "k-means boxplots are not available."))
+             }
+           ),
+           norm_kmeans_goi_box = list(
+             title = "Exact PDF preview: Normalized count k-means selected GOI boxplot",
+             download_id = "download_norm_kmeans_box",
+             dims = norm_pdf_dims(
+               safe_pdf_dims_from_items(function() rownames(norm_kmeans_GOIbox()), 6, 6)$height,
+               safe_pdf_dims_from_items(function() rownames(norm_kmeans_GOIbox()), 6, 6)$width
+             ),
+             draw = function() {
+               print(GOIboxplot(data = require_plot_value(norm_kmeans_GOIbox(), "Selected k-means GOI boxplot is not available.")))
+             }
+           ),
+           NULL)
+  }
+  enrich_pdf_preview_request <- function(target) {
+    switch(target,
+           enrich_dot = list(
+             title = "Exact PDF preview: Enrichment viewer dot plot",
+             download_id = "download_enrichment",
+             dims = enrich_pdf_dims(5, 6.5),
+             draw = function() {
+               print(plot_grid(require_plot_value(enrich_H(), "Enrichment dot plot is not available.")))
+             }
+           ),
+           enrich_cnet = list(
+             title = "Exact PDF preview: Enrichment viewer cnet plot",
+             download_id = "download_enrichment_cnet",
+             dims = enrich_pdf_dims(6, 6),
+             draw = function() {
+               print(plot_grid(require_plot_value(enrich2(), "cnet plot is not available.")))
+             }
+           ),
+           enrich_motif = list(
+             title = "Exact PDF preview: Motif plot",
+             download_id = "download_motif_plot",
+             dims = enrich_pdf_dims(6, 6),
+             draw = function() {
+               print(require_plot_value(
+                 Motifplot(df2 = enrich_motif(), showCategory = input$enrich_showCategory,
+                           padj = input$promoter_padj, data = enrich_input(),
+                           group_order = input$enrich_input_choice),
+                 "Motif plot is not available."
+               ))
+             }
+           ),
+           NULL)
+  }
+  volcano_pdf_preview_request <- function(target) {
+    switch(target,
+           volcano_plot = list(
+             title = "Exact PDF preview: Volcano navi volcano plot",
+             download_id = "download_volcano_navi",
+             dims = volcano_pdf_dims(5, 5),
+             draw = function() {
+               print(require_plot_value(deg_volcano(), "Volcano plot is not available."))
+             }
+           ),
+           volcano_heat = list(
+             title = "Exact PDF preview: Volcano navi GOI heatmap",
+             download_id = "download_deg_heatmap",
+             dims = volcano_pdf_dims(10, 7),
+             draw = function() {
+               print(require_plot_value(DEG_GOIheat(), "GOI heatmap is not available."))
+             }
+           ),
+           volcano_box = list(
+             title = "Exact PDF preview: Volcano navi GOI boxplot",
+             download_id = "download_deg_GOIbox",
+             dims = volcano_pdf_dims(
+               safe_pdf_dims_from_items(function() rownames(deg_GOIcount()), 6, 6)$height,
+               safe_pdf_dims_from_items(function() rownames(deg_GOIcount()), 6, 6)$width
+             ),
+             draw = function() {
+               print(require_plot_value(deg_GOIbox(), "GOI boxplot is not available."))
+             }
+           ),
+           NULL)
+  }
+  observeEvent(input$preview_pair_pca, {
+    open_pair_pdf_preview("pair_pca")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_pair_ma, {
+    open_pair_pdf_preview("pair_ma")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_pair_volcano, {
+    open_pair_pdf_preview("pair_volcano")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_pair_goi_heat, {
+    open_pair_pdf_preview("pair_goi_heat")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_pair_goi_box, {
+    open_pair_pdf_preview("pair_goi_box")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_pair_enrichment, {
+    open_pair_pdf_preview("pair_enrich")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_pair_dtu_bar, {
+    open_pair_pdf_preview("pair_dtu_bar")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_pair_dtu_goi_box, {
+    open_pair_pdf_preview("pair_dtu_box")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_cond3_pca, {
+    open_shared_pdf_preview(cond3_pdf_preview_request, "cond3_pca", "cond3_pdf_height", "cond3_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_cond3_overview, {
+    open_shared_pdf_preview(cond3_pdf_preview_request, "cond3_overview", "cond3_pdf_height", "cond3_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_cond3_goi_scatter, {
+    open_shared_pdf_preview(cond3_pdf_preview_request, "cond3_goi_scatter", "cond3_pdf_height", "cond3_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_cond3_goi_heat, {
+    open_shared_pdf_preview(cond3_pdf_preview_request, "cond3_goi_heat", "cond3_pdf_height", "cond3_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_cond3_goi_box, {
+    open_shared_pdf_preview(cond3_pdf_preview_request, "cond3_goi_box", "cond3_pdf_height", "cond3_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_cond3_enrich, {
+    open_shared_pdf_preview(cond3_pdf_preview_request, "cond3_enrich", "cond3_pdf_height", "cond3_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_multi_pca, {
+    open_shared_pdf_preview(multi_pdf_preview_request, "multi_pca", "multi_pdf_height", "multi_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_multi_umap, {
+    open_shared_pdf_preview(multi_pdf_preview_request, "multi_umap", "multi_pdf_height", "multi_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_multi_div_box, {
+    open_shared_pdf_preview(multi_pdf_preview_request, "multi_div_box", "multi_pdf_height", "multi_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_multi_div_goi_box, {
+    open_shared_pdf_preview(multi_pdf_preview_request, "multi_div_goi_box", "multi_pdf_height", "multi_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_multi_div_enrich, {
+    open_shared_pdf_preview(multi_pdf_preview_request, "multi_div_enrich", "multi_pdf_height", "multi_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_multi_div_cnet, {
+    open_shared_pdf_preview(multi_pdf_preview_request, "multi_div_cnet", "multi_pdf_height", "multi_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_multi_kmeans_heat, {
+    open_shared_pdf_preview(multi_pdf_preview_request, "multi_kmeans_heat", "multi_pdf_height", "multi_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_multi_kmeans_box, {
+    open_shared_pdf_preview(multi_pdf_preview_request, "multi_kmeans_box", "multi_pdf_height", "multi_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_multi_kmeans_goi_box, {
+    open_shared_pdf_preview(multi_pdf_preview_request, "multi_kmeans_goi_box", "multi_pdf_height", "multi_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_multi_kmeans_enrich, {
+    open_shared_pdf_preview(multi_pdf_preview_request, "multi_kmeans_enrich", "multi_pdf_height", "multi_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_multi_kmeans_cnet, {
+    open_shared_pdf_preview(multi_pdf_preview_request, "multi_kmeans_cnet", "multi_pdf_height", "multi_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_multi_gsea, {
+    open_shared_pdf_preview(multi_pdf_preview_request, "multi_gsea", "multi_pdf_height", "multi_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_multi_ssgsea_heat, {
+    open_shared_pdf_preview(multi_pdf_preview_request, "multi_ssgsea_heat", "multi_pdf_height", "multi_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_multi_ssgsea_box, {
+    open_shared_pdf_preview(multi_pdf_preview_request, "multi_ssgsea_box", "multi_pdf_height", "multi_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_multi_ssgsea_contrib, {
+    open_shared_pdf_preview(multi_pdf_preview_request, "multi_ssgsea_contrib", "multi_pdf_height", "multi_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_multi_ssgsea_dorothea, {
+    open_shared_pdf_preview(multi_pdf_preview_request, "multi_ssgsea_dorothea", "multi_pdf_height", "multi_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_venn_diagram, {
+    open_shared_pdf_preview(venn_pdf_preview_request, "venn_diagram", "venn_pdf_height", "venn_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_venn_heat, {
+    open_shared_pdf_preview(venn_pdf_preview_request, "venn_heat", "venn_pdf_height", "venn_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_venn_box, {
+    open_shared_pdf_preview(venn_pdf_preview_request, "venn_box", "venn_pdf_height", "venn_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_venn_enrich, {
+    open_shared_pdf_preview(venn_pdf_preview_request, "venn_enrich", "venn_pdf_height", "venn_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_venn_cnet, {
+    open_shared_pdf_preview(venn_pdf_preview_request, "venn_cnet", "venn_pdf_height", "venn_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_norm_pca, {
+    open_shared_pdf_preview(norm_pdf_preview_request, "norm_pca", "norm_pdf_height", "norm_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_norm_umap, {
+    open_shared_pdf_preview(norm_pdf_preview_request, "norm_umap", "norm_pdf_height", "norm_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_norm_goi_heat, {
+    open_shared_pdf_preview(norm_pdf_preview_request, "norm_goi_heat", "norm_pdf_height", "norm_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_norm_goi_box, {
+    open_shared_pdf_preview(norm_pdf_preview_request, "norm_goi_box", "norm_pdf_height", "norm_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_norm_corr, {
+    open_shared_pdf_preview(norm_pdf_preview_request, "norm_corr", "norm_pdf_height", "norm_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_norm_corr_selected, {
+    open_shared_pdf_preview(norm_pdf_preview_request, "norm_corr_selected", "norm_pdf_height", "norm_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_norm_kmeans_heat, {
+    open_shared_pdf_preview(norm_pdf_preview_request, "norm_kmeans_heat", "norm_pdf_height", "norm_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_norm_kmeans_box, {
+    open_shared_pdf_preview(norm_pdf_preview_request, "norm_kmeans_box", "norm_pdf_height", "norm_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_norm_kmeans_goi_box, {
+    open_shared_pdf_preview(norm_pdf_preview_request, "norm_kmeans_goi_box", "norm_pdf_height", "norm_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_enrich_dot, {
+    open_shared_pdf_preview(enrich_pdf_preview_request, "enrich_dot", "enrich_pdf_height", "enrich_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_enrich_cnet, {
+    open_shared_pdf_preview(enrich_pdf_preview_request, "enrich_cnet", "enrich_pdf_height", "enrich_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_enrich_motif, {
+    open_shared_pdf_preview(enrich_pdf_preview_request, "enrich_motif", "enrich_pdf_height", "enrich_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_volcano_plot, {
+    open_shared_pdf_preview(volcano_pdf_preview_request, "volcano_plot", "volcano_pdf_height", "volcano_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_volcano_heat, {
+    open_shared_pdf_preview(volcano_pdf_preview_request, "volcano_heat", "volcano_pdf_height", "volcano_pdf_width")
+  }, ignoreInit = TRUE)
+  observeEvent(input$preview_volcano_box, {
+    open_shared_pdf_preview(volcano_pdf_preview_request, "volcano_box", "volcano_pdf_height", "volcano_pdf_width")
+  }, ignoreInit = TRUE)
+  session$onFlushed(function() {
+    preview_download_ids <- c(
+      "shared_pdf_preview_download",
+      "download_pair_PCA", "download_pair_MA", "download_pair_volcano", "download_pair_GOIheatmap",
+      "download_pair_GOIbox", "download_pair_enrichment", "download_DRIMSeq_barplot", "download_DRIMSeq_GOIboxplot",
+      "download_3cond_scatter1", "download_3cond_scatter", "download_3cond_PCA", "download_3cond_GOIheat",
+      "download_3cond_GOIbox", "download_cond3_enrichment",
+      "download_multi_PCA", "download_multi_umap", "download_multi_boxplot", "download_deg_pattern_boxplot",
+      "download_multi_cluster_enrichment", "download_multi_enrichment_cnet", "download_multi_kmeans_heatmap",
+      "download_multi_kmeans_boxplot", "download_deg_kmeans_boxplot", "download_multi_cluster_enrichment2",
+      "download_multi_enrichment_cnet2", "download_multi_enrichment", "download_multi_ssGSEA_GOIheat",
+      "download_multi_ssGSEA_GOIbox", "download_multi_ssGSEA_contribute", "download_multi_ssGSEA_dorothea",
+      "download_vennplot", "download_integrated_heatmap", "download_GOIbox_venn",
+      "download_venn_cluster_enrichment", "download_venn_enrichment_cnet",
+      "download_norm_PCA", "download_norm_umap", "download_norm_GOIheat", "download_norm_GOIbox",
+      "download_norm_corr", "download_norm_corr_selected", "download_norm_kmeans_heatmap",
+      "download_norm_kmeans_boxplot", "download_norm_kmeans_box",
+      "download_enrichment", "download_enrichment_cnet", "download_motif_plot",
+      "download_volcano_navi", "download_deg_heatmap", "download_deg_GOIbox"
+    )
+    invisible(lapply(preview_download_ids, function(id) {
+      try(outputOptions(output, id, suspendWhenHidden = FALSE), silent = TRUE)
+    }))
+  }, once = TRUE)
 
   observeEvent(input$Species,({
     if(sum(is.element(no_orgDb_plants,input$Species)) == 1){
@@ -1050,13 +2184,8 @@ shinyServer(function(input, output, session) {
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        if(input$pair_pdf_height == 0){
-          pdf_height <- 4
-        }else pdf_height <- input$pair_pdf_height
-        if(input$pair_pdf_width == 0){
-          pdf_width <- 7
-        }else pdf_width <- input$pair_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- pair_pdf_dims(4, 7)
+        pdf(file, height = dims$height, width = dims$width)
         print(ma_heatmap_plot())
         dev.off()
         incProgress(1)
@@ -1077,6 +2206,12 @@ shinyServer(function(input, output, session) {
     plugins = list("remove_button"),
     persist = FALSE
   )
+
+  # Batch rapid GOI clicks before triggering expensive plot redraws.
+  goi_selection_debounce_ms <- 800
+  pair_goi_selection <- debounce(reactive(normalize_goi_choices(input$GOI)), goi_selection_debounce_ms)
+  cond3_goi_selection <- debounce(reactive(normalize_goi_choices(input$GOI2)), goi_selection_debounce_ms)
+  norm_goi_selection <- debounce(reactive(normalize_goi_choices(input$GOI3)), goi_selection_debounce_ms)
 
   GOI_list <- reactive({
     data <- data_degcount()
@@ -1158,12 +2293,6 @@ shinyServer(function(input, output, session) {
       updateSelectInput(session, "GOI_color_pathway2","",GOI_color_pathway_list())
     }
   }))
-  output$GOIreset_pair <- renderUI({
-    actionButton("GOIreset_pair", "GOI reset")
-  })
-  
-  
-  
   output$volcano_x <- renderUI({
     if(!is.null(data_degcount())){
       data <- as.data.frame(data_degcount())
@@ -1264,8 +2393,8 @@ shinyServer(function(input, output, session) {
           label_data <- brush_info()$Row.names
         }
       }else{
-        if(!is.null(input$GOI)){
-          label_data <- input$GOI
+        if(length(pair_goi_selection()) != 0){
+          label_data <- pair_goi_selection()
         }else label_data <- NULL
       }
       data$padj[data$padj == 0] <- 10^(-300)
@@ -1435,13 +2564,8 @@ shinyServer(function(input, output, session) {
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        if(input$pair_pdf_height == 0){
-          pdf_height <- 5
-        }else pdf_height <- input$pair_pdf_height
-        if(input$pair_pdf_width == 0){
-          pdf_width <- 5
-        }else pdf_width <- input$pair_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- pair_pdf_dims(5, 5)
+        pdf(file, height = dims$height, width = dims$width)
         print(pair_volcano())
         dev.off()
         incProgress(1)
@@ -1479,7 +2603,7 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       if(!is.null(brush_info())){
-        if(!is.null(input$GOI) || dim(brush_info())[1] != 0){
+        if(length(pair_goi_selection()) != 0 || dim(brush_info())[1] != 0){
           withProgress(message = "Heatmap",{
             suppressWarnings(print(pair_GOIheatmap()))
             incProgress(1)
@@ -1494,13 +2618,8 @@ shinyServer(function(input, output, session) {
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        if(input$pair_pdf_height == 0){
-          pdf_height <- 10
-        }else pdf_height <- input$pair_pdf_height
-        if(input$pair_pdf_width == 0){
-          pdf_width <- 7
-        }else pdf_width <- input$pair_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- pair_pdf_dims(10, 7)
+        pdf(file, height = dims$height, width = dims$width)
         print(pair_GOIheatmap())
         dev.off()
         incProgress(1)
@@ -1530,7 +2649,7 @@ shinyServer(function(input, output, session) {
     if(dim(brush_info())[1] == 0){
       if(gene_type1() != "SYMBOL"){
         if(input$Species != "not selected"){
-          Unique_ID <- input$GOI
+          Unique_ID <- pair_goi_selection()
           label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
           data2 <- merge(data, label_data, by="Unique_ID")
           if(input$uniqueID_cut) {
@@ -1547,12 +2666,12 @@ shinyServer(function(input, output, session) {
           rownames(data2) <- data2$Unique_ID
           data2 <- data2[, - which(colnames(data2) == "Row.names")]
         }else{
-          Row.names <- input$GOI
+          Row.names <- pair_goi_selection()
           label_data <- as.data.frame(Row.names, row.names = Row.names)
           data2 <- merge(data, label_data, by="Row.names")
           rownames(data2) <- data2$Row.names}
       }else{
-        Row.names <- input$GOI
+        Row.names <- pair_goi_selection()
         label_data <- as.data.frame(Row.names, row.names = Row.names)
         data2 <- merge(data, label_data, by="Row.names")
         rownames(data2) <- data2$Row.names
@@ -1633,7 +2752,7 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       if(!is.null(brush_info())){
-        if(!is.null(input$GOI) || dim(brush_info())[1] != 0){
+        if(length(pair_goi_selection()) != 0 || dim(brush_info())[1] != 0){
           withProgress(message = "Boxplot",{
             suppressWarnings(print(pair_GOIbox()))
             incProgress(1)
@@ -1658,18 +2777,18 @@ shinyServer(function(input, output, session) {
         if(dim(brush_info())[1] == 0){
           if(gene_type1() != "SYMBOL"){
             if(input$Species != "not selected"){
-              Unique_ID <- input$GOI
+              Unique_ID <- pair_goi_selection()
               label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
               data2 <- merge(data, label_data, by="Unique_ID")
               rownames(data2) <- data2$Unique_ID
               data2 <- data2[, - which(colnames(data2) == "Row.names")]
             }else{
-              Row.names <- input$GOI
+              Row.names <- pair_goi_selection()
               label_data <- as.data.frame(Row.names, row.names = Row.names)
               data2 <- merge(data, label_data, by="Row.names")
               rownames(data2) <- data2$Row.names}
           }else{
-            Row.names <- input$GOI
+            Row.names <- pair_goi_selection()
             label_data <- as.data.frame(Row.names, row.names = Row.names)
             data2 <- merge(data, label_data, by="Row.names")
             rownames(data2) <- data2$Row.names
@@ -1695,13 +2814,9 @@ shinyServer(function(input, output, session) {
           }
         }
         rowlist <- rownames(data2)
-        if(input$pair_pdf_height == 0){
-          pdf_height <- pdf_h(rowlist)
-        }else pdf_height <- input$pair_pdf_height
-        if(input$pair_pdf_width == 0){
-          pdf_width <- pdf_w(rowlist)
-        }else pdf_width <- input$pair_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        defaults <- pdf_dims_from_items(rowlist, 6, 6)
+        dims <- pair_pdf_dims(defaults$height, defaults$width)
+        pdf(file, height = dims$height, width = dims$width)
         print(pair_GOIbox())
         dev.off()
         incProgress(1)
@@ -1826,13 +2941,9 @@ shinyServer(function(input, output, session) {
         if(input$Transcript_top == "Top20") rowlist <- 20
         if(input$Transcript_top == "Top40") rowlist <- 40
         if(input$Transcript_top == "manual") rowlist <- length(input$transcript_manual)
-        if(input$pair_pdf_height == 0){
-          pdf_height <- pdf_h(rowlist)*2
-        }else pdf_height <- input$pair_pdf_height*2
-        if(input$pair_pdf_width == 0){
-          pdf_width <- pdf_w(rowlist)*3
-        }else pdf_width <- input$pair_pdf_width*3
-        pdf(file, height = pdf_height, width = pdf_width)
+        defaults <- pdf_dims_from_items(rowlist, 6, 6, height_multiplier = 2, width_multiplier = 3)
+        dims <- pair_pdf_dims(defaults$height, defaults$width)
+        pdf(file, height = dims$height, width = dims$width)
         print(DETs_plot())
         dev.off()
         incProgress(1)
@@ -1858,13 +2969,9 @@ shinyServer(function(input, output, session) {
         gene <- DETs()[["res"]][input$transcript_barplot_table_rows_selected,]$SYMBOL
         rowlist <- deg_norm_count() %>% dplyr::filter(SYMBOL == gene)
         rowlist <- dim(rowlist)[1]
-        if(input$pair_pdf_height == 0){
-          pdf_height <- pdf_h(rowlist)*2
-        }else pdf_height <- input$pair_pdf_height*2
-        if(input$pair_pdf_width == 0){
-          pdf_width <- pdf_w(rowlist)*3
-        }else pdf_width <- input$pair_pdf_width*3
-        pdf(file, height = pdf_height, width = pdf_width)
+        defaults <- pdf_dims_from_items(rowlist, 6, 6, height_multiplier = 2, width_multiplier = 3)
+        dims <- pair_pdf_dims(defaults$height, defaults$width)
+        pdf(file, height = dims$height, width = dims$width)
         print(GOIboxplot(data = transcript_GOIbox())+ scale_fill_manual(values=c("gray", "#ff8082")))
         dev.off()
         incProgress(1)
@@ -2040,13 +3147,9 @@ shinyServer(function(input, output, session) {
         if(input$DTU_top == "Top20") rowlist <- 20
         if(input$DTU_top == "Top40") rowlist <- 40
         if(input$DTU_top == "manual") rowlist <- length(input$DTU_manual)
-        if(input$pair_pdf_height == 0){
-          pdf_height <- pdf_h(rowlist)*2
-        }else pdf_height <- input$pair_pdf_height*2
-        if(input$pair_pdf_width == 0){
-          pdf_width <- pdf_w(rowlist)*3
-        }else pdf_width <- input$pair_pdf_width*3
-        pdf(file, height = pdf_height, width = pdf_width)
+        defaults <- pdf_dims_from_items(rowlist, 6, 6, height_multiplier = 2, width_multiplier = 3)
+        dims <- pair_pdf_dims(defaults$height, defaults$width)
+        pdf(file, height = dims$height, width = dims$width)
         print(DTU_plot())
         dev.off()
         incProgress(1)
@@ -2064,13 +3167,9 @@ shinyServer(function(input, output, session) {
         gene <- DRIMSeq()[input$DRIMSeq_table_rows_selected,]$gene_id
         rowlist <- deg_norm_count() %>% dplyr::filter(SYMBOL == gene)
         rowlist <- dim(rowlist)[1]
-        if(input$pair_pdf_height == 0){
-          pdf_height <- pdf_h(rowlist)*2
-        }else pdf_height <- input$pair_pdf_height*2
-        if(input$pair_pdf_width == 0){
-          pdf_width <- pdf_w(rowlist)*3
-        }else pdf_width <- input$pair_pdf_width*3
-        pdf(file, height = pdf_height, width = pdf_width)
+        defaults <- pdf_dims_from_items(rowlist, 6, 6, height_multiplier = 2, width_multiplier = 3)
+        dims <- pair_pdf_dims(defaults$height, defaults$width)
+        pdf(file, height = dims$height, width = dims$width)
         print(GOIboxplot(data = DTU_GOIbox())+ scale_fill_manual(values=c("gray", "#ff8082")))
         dev.off()
         incProgress(1)
@@ -2154,13 +3253,8 @@ shinyServer(function(input, output, session) {
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        if(input$pair_pdf_height == 0){
-          pdf_height <- 3.5
-        }else pdf_height <- input$pair_pdf_height
-        if(input$pair_pdf_width == 0){
-          pdf_width <- 9
-        }else pdf_width <- input$pair_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- pair_pdf_dims(3.5, 9)
+        pdf(file, height = dims$height, width = dims$width)
         print(pair_pca_plot())
         dev.off()
         incProgress(1)
@@ -2232,7 +3326,7 @@ shinyServer(function(input, output, session) {
           print(pair_volcano())
           dev.off()
           if(!is.null(brush_info())){
-            if(!is.null(input$GOI) || dim(brush_info())[1] != 0){
+            if(length(pair_goi_selection()) != 0 || dim(brush_info())[1] != 0){
                 if(input$GOI_color_type == "default") {
                   boxplot <- "GOI_profiling/boxplot.pdf"
                   heat <- "GOI_profiling/heatmap.pdf"
@@ -2251,18 +3345,18 @@ shinyServer(function(input, output, session) {
               if(dim(brush_info())[1] == 0){
                 if(gene_type1() != "SYMBOL"){
                   if(input$Species != "not selected"){
-                    Unique_ID <- input$GOI
+                    Unique_ID <- pair_goi_selection()
                     label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
                     data2 <- merge(data, label_data, by="Unique_ID")
                     rownames(data2) <- data2$Unique_ID
                     data2 <- data2[, - which(colnames(data2) == "Row.names")]
                   }else{
-                    Row.names <- input$GOI
+                    Row.names <- pair_goi_selection()
                     label_data <- as.data.frame(Row.names, row.names = Row.names)
                     data2 <- merge(data, label_data, by="Row.names")
                     rownames(data2) <- data2$Row.names}
                 }else{
-                  Row.names <- input$GOI
+                  Row.names <- pair_goi_selection()
                   label_data <- as.data.frame(Row.names, row.names = Row.names)
                   data2 <- merge(data, label_data, by="Row.names")
                   rownames(data2) <- data2$Row.names
@@ -2615,13 +3709,8 @@ shinyServer(function(input, output, session) {
       withProgress(message = "Preparing download",{
         p1 <- pair_enrich1_H()
         p2 <- pair_enrich2()
-        if(input$pair_pdf_height == 0){
-          pdf_height <- 10
-        }else pdf_height <- input$pair_pdf_height
-        if(input$pair_pdf_width == 0){
-          pdf_width <- 12
-        }else pdf_width <- input$pair_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- pair_pdf_dims(10, 12)
+        pdf(file, height = dims$height, width = dims$width)
         print(plot_grid(p1, p2, nrow =2))
         dev.off()
         incProgress(1)
@@ -2629,12 +3718,23 @@ shinyServer(function(input, output, session) {
     }
   )
   
-  output$Gene_set <- renderUI({
-    if(input$Species != "Xenopus laevis" && input$Ortholog != "Arabidopsis thaliana" && input$Species != "Arabidopsis thaliana"){
-      selectInput('Gene_set', 'Gene Set', gene_set_list)
-    }else selectInput('Gene_set', 'Gene Set', c("KEGG", "GO biological process", 
-                                                "GO cellular component","GO molecular function"))
-  })
+  gene_set_choices_for_species <- function(species, ortholog) {
+    if(species != "Xenopus laevis" && ortholog != "Arabidopsis thaliana" && species != "Arabidopsis thaliana"){
+      gene_set_list
+    }else{
+      c("KEGG", "GO biological process", "GO cellular component", "GO molecular function")
+    }
+  }
+  update_gene_set_input <- function(input_id, species, ortholog, selected_value = NULL) {
+    choices <- gene_set_choices_for_species(species, ortholog)
+    if(is.null(selected_value) || !selected_value %in% choices){
+      selected_value <- choices[[1]]
+    }
+    updateSelectInput(session, input_id, choices = choices, selected = selected_value)
+  }
+  observeEvent(list(input$Species, input$Ortholog), {
+    update_gene_set_input("Gene_set", input$Species, input$Ortholog, isolate(input$Gene_set))
+  }, ignoreInit = FALSE)
   
   
   pair_enrich_table <- reactive({
@@ -4173,13 +5273,9 @@ shinyServer(function(input, output, session) {
       withProgress(message = "Preparing download",{
         data <- multi_GOIbox()
         rowlist <- rownames(data)
-        if(input$multi_pdf_height == 0){
-          pdf_height <- pdf_h(rowlist)
-        }else pdf_height <- input$multi_pdf_height
-        if(input$multi_pdf_width == 0){
-          pdf_width <- pdf_w(rowlist)
-        }else pdf_width <- input$multi_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        defaults <- pdf_dims_from_items(rowlist, 6, 6)
+        dims <- multi_pdf_dims(defaults$height, defaults$width)
+        pdf(file, height = dims$height, width = dims$width)
         print(GOIboxplot(data = data))
         dev.off()
         incProgress(1)
@@ -4204,13 +5300,9 @@ shinyServer(function(input, output, session) {
           clusters <- multi_pattern2()$df
           clusterNumber <- length(unique(clusters$cluster))
           print(clusterNumber)
-          if(input$multi_pdf_height == 0){
-            pdf_height <- pdf_h(clusterNumber)+2
-          }else pdf_height <- input$multi_pdf_height
-          if(input$multi_pdf_width == 0){
-            pdf_width <- pdf_w(clusterNumber)+2
-          }else pdf_width <- input$multi_pdf_width
-          pdf(file, height = pdf_height, width = pdf_width)
+          defaults <- pdf_dims_from_items(clusterNumber, 10, 7, height_offset = 2, width_offset = 2)
+          dims <- multi_pdf_dims(defaults$height, defaults$width)
+          pdf(file, height = dims$height, width = dims$width)
           print(multi_boxplot_reactive()+
                   theme(axis.text.x= element_text(size = 8),
                         axis.text.y= element_text(size = 8),
@@ -4226,6 +5318,9 @@ shinyServer(function(input, output, session) {
   updateCounter_kmeans_multi <- reactiveValues(i = 0)
   multi_kmeans_running <- reactiveVal(FALSE)
   multi_kmeans_status <- reactiveVal("")
+  multi_kmeans_order_initialized <- reactiveVal(FALSE)
+  multi_kmeans_order_version <- reactiveVal(0)
+  multi_kmeans_selected_rows <- reactiveVal(NULL)
   set_multi_kmeans_status <- function(message = NULL) {
     if (is.null(message) || !nzchar(message)) {
       multi_kmeans_status("")
@@ -4250,6 +5345,9 @@ shinyServer(function(input, output, session) {
     updateCounter_kmeans_multi$i <- 0
     multi_kmeans_running(FALSE)
     set_multi_kmeans_status(NULL)
+    multi_kmeans_order_initialized(FALSE)
+    multi_kmeans_order_version(0)
+    multi_kmeans_selected_rows(NULL)
     freezeReactiveValue(input, "kmeans_order_multi")
     updateSelectInput(session, "kmeans_order_multi",
                       choices = character(0), selected = character(0))
@@ -4515,13 +5613,22 @@ shinyServer(function(input, output, session) {
       })
     }
   })
+
+  observeEvent(input$kmeans_order_multi, {
+    if (!multi_kmeans_order_initialized()) {
+      multi_kmeans_order_initialized(TRUE)
+      return(invisible(NULL))
+    }
+    multi_kmeans_order_version(multi_kmeans_order_version() + 1)
+  }, ignoreInit = TRUE)
   
   multi_kmeans <- reactive({
     run <- multi_kmeans_run()
+    multi_kmeans_order_version()
     if(is.null(run) || updateCounter_kmeans_multi$i == 0){
       return(NULL)
     }else{
-      cluster_order <- as.character(input$kmeans_order_multi)
+      cluster_order <- isolate(as.character(input$kmeans_order_multi))
       if (!length(cluster_order)) {
         cluster_order <- as.character(pre_multi_kmeans_order())
       }
@@ -4543,12 +5650,13 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       data.z <- run$data.z
-      if(!is.null(input$multi_kmeans_count_table_rows_selected)){
+      selected_rows <- multi_kmeans_selected_rows()
+      if(!is.null(selected_rows)){
         clusters <- multi_kmeans_cluster()
         if (is.null(clusters)) {
           return(ht)
         }
-        data <- clusters[input$multi_kmeans_count_table_rows_selected, , drop = FALSE]
+        data <- clusters[selected_rows, , drop = FALSE]
         if (is.null(data) || nrow(data) == 0) {
           return(ht)
         }
@@ -4590,7 +5698,7 @@ shinyServer(function(input, output, session) {
           return(NULL)
         }else{
           out <- data.frame(matrix(rep(NA, 2), nrow=1))[numeric(0), ]
-          cluster_order <- as.character(input$kmeans_order_multi)
+          cluster_order <- isolate(as.character(input$kmeans_order_multi))
           if (!length(cluster_order)) {
             cluster_order <- as.character(pre_multi_kmeans_order())
           }
@@ -4622,7 +5730,7 @@ shinyServer(function(input, output, session) {
   
   output$multi_kmeans_heatmap <- renderPlot({
     if(!is.null(multi_deg_count())){
-      if(is.null(input$multi_kmeans_count_table_rows_selected)) ht <- multi_kmeans() else ht <- multi_kmeans_GOI()
+      if(is.null(multi_kmeans_selected_rows())) ht <- multi_kmeans() else ht <- multi_kmeans_GOI()
       if(is.null(ht)){
         if (isTRUE(multi_kmeans_running())) {
           multi_kmeans_running(FALSE)
@@ -4804,13 +5912,9 @@ shinyServer(function(input, output, session) {
         }else{
           clusters <- multi_kmeans_cluster()
           clusterNumber <- length(unique(clusters$Cluster))
-          if(input$multi_pdf_height == 0){
-            pdf_height <- pdf_h(clusterNumber)+2
-          }else pdf_height <- input$multi_pdf_height
-          if(input$multi_pdf_width == 0){
-            pdf_width <- pdf_w(clusterNumber)+2
-          }else pdf_width <- input$multi_pdf_width
-          pdf(file, height = pdf_height, width = pdf_width)
+          defaults <- pdf_dims_from_items(clusterNumber, 10, 7, height_offset = 2, width_offset = 2)
+          dims <- multi_pdf_dims(defaults$height, defaults$width)
+          pdf(file, height = dims$height, width = dims$width)
           print(multi_kmeans_box()+
                   theme(axis.text.x= element_text(size = 8),
                         axis.text.y= element_text(size = 8),
@@ -4839,14 +5943,9 @@ shinyServer(function(input, output, session) {
     },
     content = function(file){
       withProgress(message = "Preparing download",{
-        if(input$multi_pdf_height == 0){
-          pdf_height <- 10
-        }else pdf_height <- input$multi_pdf_height
-        if(input$multi_pdf_width == 0){
-          pdf_width <- 7
-        }else pdf_width <- input$multi_pdf_width
-        if(is.null(input$multi_kmeans_count_table_rows_selected)) ht <- multi_kmeans() else ht <- multi_kmeans_GOI()
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- multi_pdf_dims(10, 7)
+        if(is.null(multi_kmeans_selected_rows())) ht <- multi_kmeans() else ht <- multi_kmeans_GOI()
+        pdf(file, height = dims$height, width = dims$width)
         set.seed(123)
         draw(ht)
         dev.off()
@@ -4892,8 +5991,9 @@ shinyServer(function(input, output, session) {
   
   
   multi_kmeans_GOIbox <- reactive({
-    if(!is.null(input$multi_kmeans_count_table_rows_selected)){
-      data <- multi_kmeans_cluster()[input$multi_kmeans_count_table_rows_selected,]
+    selected_rows <- multi_kmeans_selected_rows()
+    if(!is.null(selected_rows)){
+      data <- multi_kmeans_cluster()[selected_rows,]
       data <- data[, - which(colnames(data) == "Cluster")]
       if(input$Species6 != "not selected"){
         if(gene_type6() != "SYMBOL"){
@@ -4906,7 +6006,7 @@ shinyServer(function(input, output, session) {
   })
   
   output$multi_kmeans_GOIboxplot <- renderPlot({
-    if(!is.null(input$multi_kmeans_count_table_rows_selected)){
+    if(!is.null(multi_kmeans_selected_rows())){
       GOIboxplot(data = multi_kmeans_GOIbox())
     }
   })
@@ -4920,13 +6020,9 @@ shinyServer(function(input, output, session) {
       withProgress(message = "Preparing download",{
         data <- multi_kmeans_GOIbox()
         rowlist <- rownames(data)
-        if(input$multi_pdf_height == 0){
-          pdf_height <- pdf_h(rowlist)
-        }else pdf_height <- input$multi_pdf_height
-        if(input$multi_pdf_width == 0){
-          pdf_width <- pdf_w(rowlist)
-        }else pdf_width <- input$multi_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        defaults <- pdf_dims_from_items(rowlist, 6, 6)
+        dims <- multi_pdf_dims(defaults$height, defaults$width)
+        pdf(file, height = dims$height, width = dims$width)
         print(GOIboxplot(data = data))
         dev.off()
         incProgress(1)
@@ -4934,10 +6030,17 @@ shinyServer(function(input, output, session) {
     }
   )
   
-  
-  observeEvent(input$multi_kmeans_count_table_rows_selected, ({
+  observeEvent(input$multi_kmeans_count_table_rows_selected, {
+    rows <- input$multi_kmeans_count_table_rows_selected
+    if (is.null(rows) || !length(rows)) {
+      if (!is.null(isolate(multi_kmeans_selected_rows()))) {
+        multi_kmeans_selected_rows(NULL)
+      }
+      return(invisible(NULL))
+    }
+    multi_kmeans_selected_rows(rows)
     updateCollapse(session,id =  "multi_collapse_panel2", open="multi_deg_kmeans_boxplot_panel")
-  }))
+  }, ignoreInit = TRUE)
   
   
   output$download_deg_kmeans_pattern_count = downloadHandler(
@@ -5214,13 +6317,8 @@ shinyServer(function(input, output, session) {
     content = function(file) {
       withProgress(message = "Preparing download",{
         p1 <- multi_enrich1_H()
-        if(input$multi_pdf_height == 0){
-          pdf_height <- 5
-        }else pdf_height <- input$multi_pdf_height
-        if(input$multi_pdf_width == 0){
-          pdf_width <- 7
-        }else pdf_width <-input$multi_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- multi_pdf_dims(5, 7)
+        pdf(file, height = dims$height, width = dims$width)
         print(p1)
         dev.off()
         incProgress(1)
@@ -5680,13 +6778,9 @@ shinyServer(function(input, output, session) {
       withProgress(message = "Preparing download",{
         data <- multi_ssGSEA_GOIcount()
         rowlist <- rownames(data)
-        if(input$multi_pdf_height == 0){
-          pdf_height <- pdf_h(rowlist)
-        }else pdf_height <- input$multi_pdf_height
-        if(input$multi_pdf_width == 0){
-          pdf_width <- pdf_w(rowlist)
-        }else pdf_width <- input$multi_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        defaults <- pdf_dims_from_items(rowlist, 6, 6)
+        dims <- multi_pdf_dims(defaults$height, defaults$width)
+        pdf(file, height = dims$height, width = dims$width)
         print(multi_ssGSEA_GOIbox())
         dev.off()
         incProgress(1)
@@ -5701,13 +6795,8 @@ shinyServer(function(input, output, session) {
       withProgress(message = "Preparing download",{
         data <- multi_ssGSEA_GOIcount()
         rowlist <- rownames(data)
-        if(input$multi_pdf_height == 0){
-          pdf_height <- 10
-        }else pdf_height <- input$multi_pdf_height
-        if(input$multi_pdf_width == 0){
-          pdf_width <- 7
-        }else pdf_width <- input$multi_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- multi_pdf_dims(10, 7)
+        pdf(file, height = dims$height, width = dims$width)
         print(multi_ssGSEA_GOIheat())
         dev.off()
         incProgress(1)
@@ -5853,13 +6942,9 @@ shinyServer(function(input, output, session) {
       withProgress(message = "Preparing download",{
         data <- multi_ssGSEA_contribute_cor_count()
         rowlist <- rownames(data)
-        if(input$multi_pdf_height == 0){
-          pdf_height <- pdf_h(rowlist)
-        }else pdf_height <- input$multi_pdf_height
-        if(input$multi_pdf_width == 0){
-          pdf_width <- pdf_w(rowlist)
-        }else pdf_width <- input$multi_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        defaults <- pdf_dims_from_items(rowlist, 6, 6)
+        dims <- multi_pdf_dims(defaults$height, defaults$width)
+        pdf(file, height = dims$height, width = dims$width)
         print(multi_ssGSEA_contribute_corplot())
         dev.off()
         incProgress(1)
@@ -5997,13 +7082,9 @@ shinyServer(function(input, output, session) {
       withProgress(message = "Preparing download",{
         data <- multi_ssGSEA_TF_cor_count()
         rowlist <- rownames(data)
-        if(input$multi_pdf_height == 0){
-          pdf_height <- pdf_h(rowlist)
-        }else pdf_height <- input$multi_pdf_height
-        if(input$multi_pdf_width == 0){
-          pdf_width <- pdf_w(rowlist)
-        }else pdf_width <- input$multi_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        defaults <- pdf_dims_from_items(rowlist, 6, 6)
+        dims <- multi_pdf_dims(defaults$height, defaults$width)
+        pdf(file, height = dims$height, width = dims$width)
         print(multi_ssGSEA_TF_corplot())
         dev.off()
         incProgress(1)
@@ -6031,19 +7112,10 @@ shinyServer(function(input, output, session) {
   })
   
   
-  output$Gene_set7 <- renderUI({
-    if(input$Species6 != "Xenopus laevis" && input$Ortholog6 != "Arabidopsis thaliana" && input$Species6 != "Arabidopsis thaliana"){
-      selectInput('Gene_set7', 'Gene Set', gene_set_list)
-    }else selectInput('Gene_set7', 'Gene Set', c("KEGG", "GO biological process", 
-                                                 "GO cellular component","GO molecular function"))
-  })
-  
-  output$Gene_set8 <- renderUI({
-    if(input$Species6 != "Xenopus laevis" && input$Ortholog6 != "Arabidopsis thaliana" && input$Species6 != "Arabidopsis thaliana"){
-      selectInput('Gene_set8', 'Gene Set', gene_set_list)
-    }else selectInput('Gene_set8', 'Gene Set', c("KEGG", "GO biological process", 
-                                                 "GO cellular component","GO molecular function"))
-  })
+  observeEvent(list(input$Species6, input$Ortholog6), {
+    update_gene_set_input("Gene_set7", input$Species6, input$Ortholog6, isolate(input$Gene_set7))
+    update_gene_set_input("Gene_set8", input$Species6, input$Ortholog6, isolate(input$Gene_set8))
+  }, ignoreInit = FALSE)
   
   output$multi_Spe <- renderText({
     if(input$Species6 == "not selected") print("Please select 'Species'")
@@ -6298,13 +7370,8 @@ shinyServer(function(input, output, session) {
     content = function(file) {
       withProgress(message = "Preparing download",{
         p1 <- multi_enrich_H()
-        if(input$multi_pdf_height == 0){
-          pdf_height <- 6
-        }else pdf_height <- input$multi_pdf_height
-        if(input$multi_pdf_width == 0){
-          pdf_width <- 8
-        }else pdf_width <- input$multi_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- multi_pdf_dims(6, 8)
+        pdf(file, height = dims$height, width = dims$width)
         print(p1)
         dev.off()
         incProgress(1)
@@ -6319,13 +7386,8 @@ shinyServer(function(input, output, session) {
     content = function(file) {
       withProgress(message = "Preparing download",{
         p1 <- multi_enrich_H2()
-        if(input$multi_pdf_height == 0){
-          pdf_height <- 6
-        }else pdf_height <- input$multi_pdf_height
-        if(input$multi_pdf_width == 0){
-          pdf_width <- 8
-        }else pdf_width <- input$multi_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- multi_pdf_dims(6, 8)
+        pdf(file, height = dims$height, width = dims$width)
         print(p1)
         dev.off()
         incProgress(1)
@@ -6340,13 +7402,8 @@ shinyServer(function(input, output, session) {
     content = function(file) {
       withProgress(message = "Preparing download",{
         p <- multi_enrich2()
-        if(input$multi_pdf_height == 0){
-          pdf_height <- 6
-        }else pdf_height <- input$multi_pdf_height
-        if(input$multi_pdf_width == 0){
-          pdf_width <- 6
-        }else pdf_width <- input$multi_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- multi_pdf_dims(6, 6)
+        pdf(file, height = dims$height, width = dims$width)
         print(p)
         dev.off()
         incProgress(1)
@@ -6474,12 +7531,12 @@ shinyServer(function(input, output, session) {
                           axis.text.y= element_text(size = 8),
                           title = element_text(size = 8),text = element_text(size = 8)))
             dev.off()
-            if(is.null(input$multi_kmeans_count_table_rows_selected)) ht <- multi_kmeans() else ht <- multi_kmeans_GOI()
+            if(is.null(multi_kmeans_selected_rows())) ht <- multi_kmeans() else ht <- multi_kmeans_GOI()
             pdf(kmeans_heat, height = 10, width = 7)
             set.seed(123)
             draw(ht)
             dev.off()
-            if(!is.null(input$multi_kmeans_count_table_rows_selected)){
+            if(!is.null(multi_kmeans_selected_rows())){
               box2 <- paste0("kmeans clustering_",as.character(input$selectFC2[1]),"_vs_",as.character(input$selectFC2[2]),"/GOI_boxplot.pdf")
               fs <- c(fs,box2)
               data <- multi_kmeans_GOIbox()
@@ -6566,13 +7623,8 @@ shinyServer(function(input, output, session) {
     content = function(file) {
       withProgress(message = "Preparing download",{
         p <- multi_enrich12()
-        if(input$multi_pdf_height == 0){
-          pdf_height <- 6
-        }else pdf_height <- input$multi_pdf_height
-        if(input$multi_pdf_width == 0){
-          pdf_width <- 6
-        }else pdf_width <- input$multi_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- multi_pdf_dims(6, 6)
+        pdf(file, height = dims$height, width = dims$width)
         print(p)
         dev.off()
         incProgress(1)
@@ -6638,13 +7690,8 @@ shinyServer(function(input, output, session) {
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        if(input$multi_pdf_height == 0){
-          pdf_height <- 3.5
-        }else pdf_height <- input$multi_pdf_height
-        if(input$multi_pdf_width == 0){
-          pdf_width <- 9
-        }else pdf_width <- input$multi_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- multi_pdf_dims(3.5, 9)
+        pdf(file, height = dims$height, width = dims$width)
         print(multi_pca_plot())
         dev.off()
         incProgress(1)
@@ -6724,12 +7771,7 @@ shinyServer(function(input, output, session) {
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        if(input$multi_pdf_height == 0){
-          pdf_height <- 3.5
-        }else pdf_height <- input$multi_pdf_height
-        if(input$multi_pdf_width == 0){
-          pdf_width <- 4.7
-        }else pdf_width <- input$multi_pdf_width
+        dims <- multi_pdf_dims(3.5, 4.7)
         plot_obj <- multi_umap_plot()
         if(inherits(plot_obj, "try-error")){
           stop(conditionMessage(attr(plot_obj, "condition")), call. = FALSE)
@@ -6737,7 +7779,7 @@ shinyServer(function(input, output, session) {
         if(is.null(plot_obj)){
           stop("umap: plot is not available", call. = FALSE)
         }
-        pdf(file, height = pdf_height, width = pdf_width)
+        pdf(file, height = dims$height, width = dims$width)
         print(plot_obj)
         dev.off()
         incProgress(1)
@@ -7317,13 +8359,8 @@ shinyServer(function(input, output, session) {
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        if(input$cond3_pdf_height == 0){
-          pdf_height <- 6
-        }else pdf_height <- input$cond3_pdf_height
-        if(input$cond3_pdf_width == 0){
-          pdf_width <- 10
-        }else pdf_width <- input$cond3_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- cond3_pdf_dims(6, 10)
+        pdf(file, height = dims$height, width = dims$width)
         print(cond3_scatter1_plot()) 
         print(cond3_scatter2_plot())
         print(cond3_scatter3_plot())
@@ -7389,18 +8426,13 @@ shinyServer(function(input, output, session) {
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        if(input$cond3_pdf_height == 0){
-          pdf_height <- 6
-        }else pdf_height <- input$cond3_pdf_height
-        if(input$cond3_pdf_width == 0){
-          pdf_width <- 10
-        }else pdf_width <- input$cond3_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- cond3_pdf_dims(6, 10)
+        pdf(file, height = dims$height, width = dims$width)
         print(cond3_scatter_plot(gene_type=gene_type2(),data = deg_norm_count2(), data4 = data_3degcount2_1(),
                                  result_Condm = deg_result2_condmean(), result_FDR = deg_result2(), 
                                  fc = input$fc2, fdr = input$fdr2, basemean = input$basemean2,
                                  y_axis = input$cond3_scatter_yrange,x_axis = input$cond3_scatter_xrange,heatmap = FALSE,id_cut=input$cond3_uniqueID_cut,
-                                 specific = cond3_specific_group2(), GOI = input$GOI2, Species = input$Species2,brush=brush_info_cond3(),
+                                 specific = cond3_specific_group2(), GOI = cond3_goi_selection(), Species = input$Species2,brush=brush_info_cond3(),
                                  GOI_color_type=input$cond3_GOI_color_type,cond3_pathway_color_gene=cond3_pathway_color_gene()))
         dev.off()
       })
@@ -7443,13 +8475,8 @@ shinyServer(function(input, output, session) {
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        if(input$cond3_pdf_height == 0){
-          pdf_height <- 3.5
-        }else pdf_height <- input$cond3_pdf_height
-        if(input$cond3_pdf_width == 0){
-          pdf_width <- 9
-        }else pdf_width <- input$cond3_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- cond3_pdf_dims(3.5, 9)
+        pdf(file, height = dims$height, width = dims$width)
         print(cond3_pca_plot())
         dev.off()
       })
@@ -7554,9 +8581,6 @@ shinyServer(function(input, output, session) {
       updateSelectInput(session, "cond3_GOI_color_pathway2","",cond3_GOI_color_pathway_list())
     }
   }))
-  output$GOIreset_cond3 <- renderUI({
-    actionButton("GOIreset_cond3", "GOI reset")
-  })
   observeEvent(input$GOIreset_cond3, {
     choices <- GOI_list2()
     if(is.null(choices)){
@@ -7652,7 +8676,7 @@ shinyServer(function(input, output, session) {
                          result_Condm = deg_result2_condmean(), result_FDR = deg_result2(), 
                          fc = input$fc2, fdr = input$fdr2, basemean = input$basemean2,
                          y_axis = input$cond3_scatter_yrange,x_axis = input$cond3_scatter_xrange,heatmap = FALSE,id_cut=input$cond3_uniqueID_cut,
-                         specific = cond3_specific_group2(), GOI = input$GOI2, Species = input$Species2,brush=brush_info_cond3(),
+                         specific = cond3_specific_group2(), GOI = cond3_goi_selection(), Species = input$Species2,brush=brush_info_cond3(),
                          GOI_color_type=input$cond3_GOI_color_type,cond3_pathway_color_gene=cond3_pathway_color_gene())
     }
   })
@@ -7755,7 +8779,7 @@ shinyServer(function(input, output, session) {
               brush <- brush %>% dplyr::filter(Row.names %in% rownames(cond3_pathway_color_gene()))
             }
             Unique_ID <- brush$Unique_ID 
-            }else Unique_ID <- input$GOI2
+            }else Unique_ID <- cond3_goi_selection()
         }
         label_data <- as.data.frame(Unique_ID, row.names = Unique_ID)
         data <- merge(count, label_data, by="Unique_ID")
@@ -7781,7 +8805,7 @@ shinyServer(function(input, output, session) {
               brush <- brush %>% dplyr::filter(Row.names %in% rownames(cond3_pathway_color_gene()))
             }
             Row.names <- brush$Row.names 
-          }else Row.names <- input$GOI2
+          }else Row.names <- cond3_goi_selection()
         }
         count$Row.names <- rownames(count)
         label_data <- as.data.frame(Row.names, row.names = Row.names)
@@ -7797,7 +8821,7 @@ shinyServer(function(input, output, session) {
             brush <- brush %>% dplyr::filter(Row.names %in% rownames(cond3_pathway_color_gene()))
           }
           Row.names <- brush$Row.names 
-        }else Row.names <- input$GOI2
+        }else Row.names <- cond3_goi_selection()
       }
       count$Row.names <- rownames(count)
       label_data <- as.data.frame(Row.names, row.names = Row.names)
@@ -7825,7 +8849,7 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       if(!is.null(brush_info_cond3())){
-        if(!is.null(input$GOI2) || dim(brush_info_cond3())[1] != 0){
+        if(length(cond3_goi_selection()) != 0 || dim(brush_info_cond3())[1] != 0){
           withProgress(message = "Boxplot",{
             suppressWarnings(print(cond3_GOIheat()))
             incProgress(1)
@@ -7851,7 +8875,7 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       if(!is.null(brush_info_cond3())){
-        if(!is.null(input$GOI2) || dim(brush_info_cond3())[1] != 0){
+        if(length(cond3_goi_selection()) != 0 || dim(brush_info_cond3())[1] != 0){
           withProgress(message = "Boxplot",{
             suppressWarnings(print(cond3_GOIbox()))
             incProgress(1)
@@ -7868,13 +8892,9 @@ shinyServer(function(input, output, session) {
       withProgress(message = "Preparing download",{
         data <- cond3_GOIcount()
         rowlist <- rownames(data)
-        if(input$cond3_pdf_height == 0){
-          pdf_height <- pdf_h(rowlist)
-        }else pdf_height <- input$cond3_pdf_height
-        if(input$cond3_pdf_width == 0){
-          pdf_width <- pdf_w(rowlist)
-        }else pdf_width <- input$cond3_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        defaults <- pdf_dims_from_items(rowlist, 6, 6)
+        dims <- cond3_pdf_dims(defaults$height, defaults$width)
+        pdf(file, height = dims$height, width = dims$width)
         print(cond3_GOIbox())
         dev.off()
         
@@ -7890,13 +8910,8 @@ shinyServer(function(input, output, session) {
       withProgress(message = "Preparing download",{
         data <- cond3_GOIcount()
         rowlist <- rownames(data)
-        if(input$cond3_pdf_height == 0){
-          pdf_height <- 10
-        }else pdf_height <- input$cond3_pdf_height
-        if(input$cond3_pdf_width == 0){
-          pdf_width <- 7
-        }else pdf_width <- input$cond3_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- cond3_pdf_dims(10, 7)
+        pdf(file, height = dims$height, width = dims$width)
         print(cond3_GOIheat())
         dev.off()
         incProgress(1)
@@ -8000,12 +9015,9 @@ shinyServer(function(input, output, session) {
     }
   })
   
-  output$Gene_set2 <- renderUI({
-    if(input$Species2 != "Xenopus laevis" && input$Ortholog2 !=  "Arabidopsis thaliana" && input$Species2 !=  "Arabidopsis thaliana"){
-      selectInput('Gene_set2', 'Gene Set', gene_set_list)
-    }else selectInput('Gene_set2', 'Gene Set', c("KEGG", "GO biological process", 
-                                                 "GO cellular component","GO molecular function"))
-  })
+  observeEvent(list(input$Species2, input$Ortholog2), {
+    update_gene_set_input("Gene_set2", input$Species2, input$Ortholog2, isolate(input$Gene_set2))
+  }, ignoreInit = FALSE)
   
   cond3_enrich_table1 <- reactive({
     if(input$Species2 != "Xenopus laevis" && input$Ortholog2 !=  "Arabidopsis thaliana" && input$Species2 !=  "Arabidopsis thaliana"){
@@ -8062,13 +9074,8 @@ shinyServer(function(input, output, session) {
         p1 <- keggEnrichment2_1()
         p2 <- keggEnrichment2_2()
         p3 <- keggEnrichment2_3()
-        if(input$cond3_pdf_height == 0){
-          pdf_height <- 12
-        }else pdf_height <- input$cond3_pdf_height
-        if(input$cond3_pdf_width == 0){
-          pdf_width <- 15
-        }else pdf_width <- input$cond3_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- cond3_pdf_dims(12, 15)
+        pdf(file, height = dims$height, width = dims$width)
         print(plot_grid(p1, p2, p3, nrow =3))
         dev.off()
         incProgress(1)
@@ -8126,11 +9133,11 @@ shinyServer(function(input, output, session) {
                                    result_Condm = deg_result2_condmean(), result_FDR = deg_result2(), 
                                    fc = input$fc2, fdr = input$fdr2, basemean = input$basemean2,
                                    y_axis = input$cond3_scatter_yrange,x_axis = input$cond3_scatter_xrange,heatmap = FALSE,id_cut=input$cond3_uniqueID_cut,
-                                   specific = cond3_specific_group2(), GOI = input$GOI2, Species = input$Species2,brush=brush_info_cond3(),
+                                   specific = cond3_specific_group2(), GOI = cond3_goi_selection(), Species = input$Species2,brush=brush_info_cond3(),
                                    GOI_color_type=input$cond3_GOI_color_type,cond3_pathway_color_gene=cond3_pathway_color_gene()))
           dev.off()
           if(!is.null(brush_info_cond3())){
-            if(!is.null(input$GOI2) || dim(brush_info_cond3())[1] != 0){
+            if(length(cond3_goi_selection()) != 0 || dim(brush_info_cond3())[1] != 0){
               if(input$cond3_GOI_color_type == "default") {
                 boxplot <- "GOI_profiling/boxplot.pdf"
                 heat <- "GOI_profiling/heatmap.pdf"
@@ -8612,13 +9619,8 @@ shinyServer(function(input, output, session) {
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        if(input$norm_pdf_height == 0){
-          pdf_height <- 3.5
-        }else pdf_height <- input$norm_pdf_height
-        if(input$norm_pdf_width == 0){
-          pdf_width <- 9
-        }else pdf_width <- input$norm_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- norm_pdf_dims(3.5, 9)
+        pdf(file, height = dims$height, width = dims$width)
         print(PCAplot(data = d_norm_count_matrix_cutofff(),legend = input$PCA_legend_norm))
         dev.off()
       })
@@ -8701,12 +9703,7 @@ shinyServer(function(input, output, session) {
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        if(input$norm_pdf_height == 0){
-          pdf_height <- 3.5
-        }else pdf_height <- input$norm_pdf_height
-        if(input$norm_pdf_width == 0){
-          pdf_width <- 4.7
-        }else pdf_width <- input$norm_pdf_width
+        dims <- norm_pdf_dims(3.5, 4.7)
         plot_obj <- norm_umap_plot()
         if(inherits(plot_obj, "try-error")){
           stop(conditionMessage(attr(plot_obj, "condition")), call. = FALSE)
@@ -8714,7 +9711,7 @@ shinyServer(function(input, output, session) {
         if(is.null(plot_obj)){
           stop("umap: plot is not available", call. = FALSE)
         }
-        pdf(file, height = pdf_height, width = pdf_width)
+        pdf(file, height = dims$height, width = dims$width)
         print(plot_obj)
         dev.off()
         incProgress(1)
@@ -8846,9 +9843,6 @@ shinyServer(function(input, output, session) {
                          selected = character(0),
                          options = goi_selectize_options, server = TRUE)
   })
-  output$GOIreset_norm <- renderUI({
-    actionButton("GOIreset_norm", "GOI reset")
-  })
   output$norm_uniqueID_cut <- renderUI({
     if(input$Species3 != "not selected" && !identical(gene_type3(), "SYMBOL")) 
       radioButtons("norm_uniqueID_cut","Short unique ID",c("ON"=TRUE,"OFF"=FALSE),selected = TRUE)
@@ -8858,7 +9852,11 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       if(input$GOI3_type == "ALL") return(GOI_list3())
-      if(input$GOI3_type == "custom") return(input$GOI3)
+      if(input$GOI3_type == "custom") {
+        selected <- norm_goi_selection()
+        if(length(selected) == 0) return(NULL)
+        return(selected)
+      }
     }
   })
   norm_GOIcount <- reactive({
@@ -8908,7 +9906,7 @@ shinyServer(function(input, output, session) {
     }else{
       data.z <- genefilter::genescale(data, axis=1, method="Z")
       data.z <- na.omit(data.z)
-      ht <- GOIheatmap(data.z, type = input$GOI3_type, GOI = input$GOI3)
+      ht <- GOIheatmap(data.z, type = input$GOI3_type, GOI = norm_goi_selection())
     }
     return(ht)
   })
@@ -9051,13 +10049,9 @@ shinyServer(function(input, output, session) {
       withProgress(message = "Preparing download",{
         data <- norm_GOIcount()
         rowlist <- rownames(data)
-        if(input$norm_pdf_height == 0){
-          pdf_height <- pdf_h(rowlist)
-        }else pdf_height <- input$norm_pdf_height
-        if(input$norm_pdf_width == 0){
-          pdf_width <- pdf_w(rowlist)
-        }else pdf_width <- input$norm_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        defaults <- pdf_dims_from_items(rowlist, 6, 6)
+        dims <- norm_pdf_dims(defaults$height, defaults$width)
+        pdf(file, height = dims$height, width = dims$width)
         print(norm_GOIbox())
         dev.off()
         incProgress(1)
@@ -9072,13 +10066,8 @@ shinyServer(function(input, output, session) {
       withProgress(message = "Preparing download",{
         data <- norm_GOIcount()
         rowlist <- rownames(data)
-        if(input$norm_pdf_height == 0){
-          pdf_height <- 10
-        }else pdf_height <- input$norm_pdf_height
-        if(input$norm_pdf_width == 0){
-          pdf_width <- 7
-        }else pdf_width <- input$norm_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- norm_pdf_dims(10, 7)
+        pdf(file, height = dims$height, width = dims$width)
         print(norm_GOIheat())
         dev.off()
         incProgress(1)
@@ -9091,6 +10080,55 @@ shinyServer(function(input, output, session) {
     key = NULL,
     value = NULL
   )
+
+  run_norm_corr_screen_exact <- function(data, bait, selected_method, progress_chunks = 40L) {
+    row_ids <- rownames(data)
+    bait_idx <- match(bait, row_ids)
+    if(is.na(bait_idx)){
+      return(NULL)
+    }
+    data_matrix <- as.matrix(data)
+    storage.mode(data_matrix) <- "double"
+    bait_values <- data_matrix[bait_idx, , drop = TRUE]
+    row_total <- nrow(data_matrix)
+    statistics <- numeric(row_total)
+    corr_scores <- numeric(row_total)
+    pvalues <- numeric(row_total)
+    progress_step <- max(1L, floor(row_total / progress_chunks))
+    last_progress <- 0
+
+    for(idx in seq_len(row_total)){
+      corr <- suppressWarnings(cor.test(
+        x = bait_values,
+        y = data_matrix[idx, , drop = TRUE],
+        method = "spearman"
+      ))
+      statistics[idx] <- unname(corr$statistic)
+      corr_scores[idx] <- unname(corr$estimate)
+      pvalues[idx] <- corr$p.value
+      if(idx %% progress_step == 0L || idx == row_total){
+        current_progress <- idx / row_total
+        incProgress(current_progress - last_progress)
+        last_progress <- current_progress
+      }
+    }
+
+    df2 <- data.frame(
+      prey = row_ids,
+      bait = rep.int(bait, row_total),
+      statistics = statistics,
+      corr_score = corr_scores,
+      pvalue = pvalues,
+      method = rep.int(selected_method, row_total),
+      stringsAsFactors = FALSE
+    )
+    df2$padj <- p.adjust(df2$pvalue, method = "BH")
+    df2 <- df2[stats::complete.cases(df2), , drop = FALSE]
+    df2 <- df2[order(-df2$corr_score, df2$padj), , drop = FALSE]
+    df2$rank <- seq_len(nrow(df2))
+    rownames(df2) <- df2$rank
+    df2
+  }
   
   observe({
     input$corr_start
@@ -9265,42 +10303,11 @@ shinyServer(function(input, output, session) {
         return(isolate(norm_corr_screen_cache$value))
       }
       withProgress(message = "Correlation analysis takes a few minutes",{
-          row_ids <- rownames(data)
-          bait <- input$GOI_x
-          bait_values <- as.numeric(data[bait, , drop = TRUE])
-          result_mat <- matrix(NA_real_, nrow = length(row_ids), ncol = 3)
-          progress_step <- max(1L, floor(length(row_ids) / 40L))
-          last_progress <- 0
-          for(idx in seq_along(row_ids)){
-            corr <- suppressWarnings(cor.test(
-              x = bait_values,
-              y = as.numeric(data[row_ids[idx], , drop = TRUE]),
-              method = "spearman"
-            ))
-            result_mat[idx, 1] <- unname(corr$statistic)
-            result_mat[idx, 2] <- unname(corr$estimate)
-            result_mat[idx, 3] <- corr$p.value
-            if(idx %% progress_step == 0L || idx == length(row_ids)){
-              current_progress <- idx / length(row_ids)
-              incProgress(current_progress - last_progress)
-              last_progress <- current_progress
-            }
-          }
-          df2 <- data.frame(
-            prey = row_ids,
-            bait = bait,
-            statistics = result_mat[, 1],
-            corr_score = result_mat[, 2],
-            pvalue = result_mat[, 3],
-            method = input$corr_statistics,
-            stringsAsFactors = FALSE
+          df2 <- run_norm_corr_screen_exact(
+            data = data,
+            bait = input$GOI_x,
+            selected_method = input$corr_statistics
           )
-          padj <- p.adjust(df2$pvalue,method="BH")
-          df2$padj <- padj
-          df2 <- na.omit(df2)
-          df2 <- df2%>% dplyr::arrange(-corr_score, padj) %>%
-            dplyr::mutate(rank = row_number())
-          rownames(df2) <- df2$rank
           if(!is.null(cache_key)){
             norm_corr_screen_cache$key <- cache_key
             norm_corr_screen_cache$value <- df2
@@ -9490,6 +10497,19 @@ shinyServer(function(input, output, session) {
       }
     }
   })
+  corr_pair_label <- reactive({
+    label <- corr_pair()
+    if (is.null(label) || !nzchar(label)) {
+      if (!is.null(input$GOI_x) && nzchar(input$GOI_x)) {
+        if (input$corr_mode == "corr_mode2" && !is.null(input$GOI_y) && nzchar(input$GOI_y)) {
+          return(paste0(input$GOI_x, "-", input$GOI_y))
+        }
+        return(paste0(input$GOI_x, "-screen"))
+      }
+      return("correlation")
+    }
+    label
+  })
 
   output$norm_corr_selected_list <- renderUI({
     if(input$corr_mode == "corr_mode1"){
@@ -9505,22 +10525,20 @@ shinyServer(function(input, output, session) {
   })
   output$download_norm_corr = downloadHandler(
     filename = function(){
-      paste0(download_norm_dir(), "correlation_plot_",corr_pair(),".pdf")
+      paste0(download_norm_dir(), "correlation_plot_", corr_pair_label(), ".pdf")
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        if(input$norm_pdf_height == 0){
-          pdf_height <- 5
-        }else pdf_height <- input$norm_pdf_height
-        if(input$norm_pdf_width == 0){
-          pdf_width <- 5
-        }else pdf_width <- input$norm_pdf_width
+        dims <- norm_pdf_dims(5, 5)
         if(input$corr_mode == "corr_mode2"){
           p <- norm_GOI_corrplot_pair()
         }else{
           p <- norm_GOI_corrplot()
         }
-        pdf(file, height = pdf_height, width = pdf_width)
+        if (is.null(p)) {
+          stop("Correlation plot is not available.", call. = FALSE)
+        }
+        pdf(file, height = dims$height, width = dims$width)
         print(p)
         dev.off()
         incProgress(1)
@@ -9536,13 +10554,8 @@ shinyServer(function(input, output, session) {
       GOI_y <- names(p)
       processNum <- length(GOI_y)
       withProgress(message = paste0("Download correlation plots of all selected genes (",length(GOI_y),")"),{
-        if(input$norm_pdf_height == 0){
-          pdf_height <- 5
-        }else pdf_height <- input$norm_pdf_height
-        if(input$norm_pdf_width == 0){
-          pdf_width <- 5
-        }else pdf_width <- input$norm_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- norm_pdf_dims(5, 5)
+        pdf(file, height = dims$height, width = dims$width)
         for(y in GOI_y){
           print(p[[y]]) 
           incProgress(1/processNum, message = paste0("Download ",y))
@@ -9554,7 +10567,7 @@ shinyServer(function(input, output, session) {
   )
   output$download_statisics_corrplot = downloadHandler(
     filename = function(){
-      paste0(download_norm_dir(), "correlation_",corr_pair(),".txt")
+      paste0(download_norm_dir(), "correlation_", corr_pair_label(), ".txt")
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
@@ -9572,6 +10585,9 @@ shinyServer(function(input, output, session) {
   updateCounter_kmeans <- reactiveValues(i = 0)
   norm_kmeans_running <- reactiveVal(FALSE)
   norm_kmeans_status <- reactiveVal("")
+  norm_kmeans_order_initialized <- reactiveVal(FALSE)
+  norm_kmeans_order_version <- reactiveVal(0)
+  norm_kmeans_selected_rows <- reactiveVal(NULL)
   set_norm_kmeans_status <- function(message = NULL) {
     if (is.null(message) || !nzchar(message)) {
       norm_kmeans_status("")
@@ -9596,6 +10612,9 @@ shinyServer(function(input, output, session) {
     updateCounter_kmeans$i <- 0
     norm_kmeans_running(FALSE)
     set_norm_kmeans_status(NULL)
+    norm_kmeans_order_initialized(FALSE)
+    norm_kmeans_order_version(0)
+    norm_kmeans_selected_rows(NULL)
     freezeReactiveValue(input, "kmeans_order")
     updateSelectInput(session, "kmeans_order",
                       choices = character(0), selected = character(0))
@@ -9888,23 +10907,31 @@ shinyServer(function(input, output, session) {
     run$order
   })
   
-  observeEvent(pre_norm_kmeans_order(), {
-    order <- as.character(pre_norm_kmeans_order())
-    selected <- intersect(isolate(input$kmeans_order), order)
-    if (!length(selected)) {
-      selected <- order
+  output$kmeans_order <- renderUI({
+    if(!is.null(d_norm_count_matrix_cutofff())){
+      order <- as.character(pre_norm_kmeans_order())
+      withProgress(message = "Draw heatmap",{
+        selectInput("kmeans_order", "Order of clusters on heatmap", order,
+                    selected = order, multiple = TRUE)
+      })
     }
-    freezeReactiveValue(input, "kmeans_order")
-    updateSelectInput(session, "kmeans_order",
-                      choices = order, selected = selected)
+  })
+
+  observeEvent(input$kmeans_order, {
+    if (!norm_kmeans_order_initialized()) {
+      norm_kmeans_order_initialized(TRUE)
+      return(invisible(NULL))
+    }
+    norm_kmeans_order_version(norm_kmeans_order_version() + 1)
   }, ignoreInit = TRUE)
   
   norm_kmeans <- reactive({
     run <- norm_kmeans_run()
+    norm_kmeans_order_version()
     if(is.null(run) || is.null(pre_norm_kmeans()) || updateCounter_kmeans$i == 0){
       return(NULL)
     }else{
-      cluster_order <- as.character(input$kmeans_order)
+      cluster_order <- isolate(as.character(input$kmeans_order))
       if (!length(cluster_order)) {
         cluster_order <- as.character(pre_norm_kmeans_order())
       }
@@ -9930,12 +10957,13 @@ shinyServer(function(input, output, session) {
        updateCounter_kmeans$i == 0){
       return(NULL)
     }else{
-      if(!is.null(input$norm_kmeans_count_table_rows_selected)){
+      selected_rows <- norm_kmeans_selected_rows()
+      if(!is.null(selected_rows)){
         clusters <- norm_kmeans_cluster()
         if(!norm_has_matrix_data(clusters)){
           return(ht)
         }
-        data <- clusters[input$norm_kmeans_count_table_rows_selected, , drop = FALSE]
+        data <- clusters[selected_rows, , drop = FALSE]
         if(!norm_has_matrix_data(data)){
           return(ht)
         }
@@ -9978,7 +11006,7 @@ shinyServer(function(input, output, session) {
           return(NULL)
         }else{
           out <- data.frame(matrix(rep(NA, 2), nrow=1))[numeric(0), ]
-          cluster_order <- as.character(input$kmeans_order)
+          cluster_order <- isolate(as.character(input$kmeans_order))
           if (!length(cluster_order)) {
             cluster_order <- as.character(pre_norm_kmeans_order())
           }
@@ -10020,17 +11048,14 @@ shinyServer(function(input, output, session) {
     return(count)
   })
   
-  observeEvent(norm_kmeans_cluster(), {
+  output$norm_select_file2 <- renderUI({
     clusters <- norm_kmeans_cluster()
-    choices <- if (is.null(clusters)) character(0) else unique(clusters$Cluster)
-    selected <- intersect(isolate(input$norm_select_kmean), choices)
-    if (!length(selected)) {
-      selected <- choices
+    if(is.null(clusters)){
+      return(NULL)
+    }else{
+      selectInput("norm_select_kmean", "cluster_list", choices = c(unique(clusters$Cluster)), multiple = TRUE)
     }
-    freezeReactiveValue(input, "norm_select_kmean")
-    updateSelectInput(session, "norm_select_kmean",
-                      choices = choices, selected = selected)
-  }, ignoreInit = TRUE)
+  })
   
   ###----
   norm_kmeans_box <- reactive({
@@ -10144,13 +11169,10 @@ shinyServer(function(input, output, session) {
         }
         cluster_values <- tryCatch(unique(plot_obj$data$cluster), error = function(e) integer())
         cluster_count <- length(cluster_values)
-        if(input$norm_pdf_height == 0){
-          pdf_height <- if (cluster_count > 0) pdf_h(seq_len(cluster_count)) + 2 else 10
-        }else pdf_height <- input$norm_pdf_height
-        if(input$norm_pdf_width == 0){
-          pdf_width <- if (cluster_count > 0) pdf_w(seq_len(cluster_count)) + 2 else 7
-        }else pdf_width <- input$norm_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        defaults <- pdf_dims_from_items(if (cluster_count > 0) cluster_count else NULL, 10, 7,
+                                        height_offset = 2, width_offset = 2)
+        dims <- norm_pdf_dims(defaults$height, defaults$width)
+        pdf(file, height = dims$height, width = dims$width)
         on.exit(dev.off(), add = TRUE)
         print(plot_obj)
         incProgress(1)
@@ -10186,7 +11208,7 @@ shinyServer(function(input, output, session) {
   })
   
   output$norm_kmeans_heatmap <- renderPlot({
-    if(is.null(input$norm_kmeans_count_table_rows_selected)) ht <- norm_kmeans() else ht <- norm_kmeans_GOI()
+    if(is.null(norm_kmeans_selected_rows())) ht <- norm_kmeans() else ht <- norm_kmeans_GOI()
     if(is.null(ht)){
       return(NULL)
     }else{
@@ -10212,12 +11234,13 @@ shinyServer(function(input, output, session) {
   
   
   norm_kmeans_GOIbox <- reactive({
-    if(!is.null(input$norm_kmeans_count_table_rows_selected)){
+    selected_rows <- norm_kmeans_selected_rows()
+    if(!is.null(selected_rows)){
       clusters <- norm_kmeans_cluster()
       if(!norm_has_matrix_data(clusters)){
         return(NULL)
       }
-      data <- clusters[input$norm_kmeans_count_table_rows_selected, , drop = FALSE]
+      data <- clusters[selected_rows, , drop = FALSE]
       if(!norm_has_matrix_data(data)){
         return(NULL)
       }
@@ -10237,7 +11260,7 @@ shinyServer(function(input, output, session) {
   })
   
   output$norm_kmeans_box <- renderPlot({
-    if(!is.null(input$norm_kmeans_count_table_rows_selected)){
+    if(!is.null(norm_kmeans_selected_rows())){
       data <- norm_kmeans_GOIbox()
       if(!norm_has_matrix_data(data)){
         return(NULL)
@@ -10254,13 +11277,9 @@ shinyServer(function(input, output, session) {
       withProgress(message = "Preparing download",{
         data <- norm_kmeans_GOIbox()
         rowlist <- rownames(data)
-        if(input$norm_pdf_height == 0){
-          pdf_height <- pdf_h(rowlist)
-        }else pdf_height <- input$norm_pdf_height
-        if(input$norm_pdf_width == 0){
-          pdf_width <- pdf_w(rowlist)
-        }else pdf_width <- input$norm_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        defaults <- pdf_dims_from_items(rowlist, 6, 6)
+        dims <- norm_pdf_dims(defaults$height, defaults$width)
+        pdf(file, height = dims$height, width = dims$width)
         print(GOIboxplot(data = data))
         dev.off()
         incProgress(1)
@@ -10268,10 +11287,17 @@ shinyServer(function(input, output, session) {
     }
   )
   
-  
-  observeEvent(input$norm_kmeans_count_table_rows_selected, ({
+  observeEvent(input$norm_kmeans_count_table_rows_selected, {
+    rows <- input$norm_kmeans_count_table_rows_selected
+    if (is.null(rows) || !length(rows)) {
+      if (!is.null(isolate(norm_kmeans_selected_rows()))) {
+        norm_kmeans_selected_rows(NULL)
+      }
+      return(invisible(NULL))
+    }
+    norm_kmeans_selected_rows(rows)
     updateCollapse(session,id =  "norm_kmeans_collapse_panel", open="kmeans_box_panel")
-  }))
+  }, ignoreInit = TRUE)
   observeEvent(norm_count_input(), ({
     updateCollapse(session,id =  "norm_input_collapse_panel", open="Norm_count_panel")
   }))
@@ -10298,14 +11324,9 @@ shinyServer(function(input, output, session) {
     },
     content = function(file){
       withProgress(message = "Preparing download",{
-        if(input$norm_pdf_height == 0){
-          pdf_height <- 10
-        }else pdf_height <- input$norm_pdf_height
-        if(input$norm_pdf_width == 0){
-          pdf_width <- 7
-        }else pdf_width <- input$norm_pdf_width
-        if(is.null(input$norm_kmeans_count_table_rows_selected)) ht <- norm_kmeans() else ht <- norm_kmeans_GOI()
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- norm_pdf_dims(10, 7)
+        if(is.null(norm_kmeans_selected_rows())) ht <- norm_kmeans() else ht <- norm_kmeans_GOI()
+        pdf(file, height = dims$height, width = dims$width)
         print(ht)
         dev.off()
         incProgress(1)
@@ -10433,13 +11454,8 @@ shinyServer(function(input, output, session) {
             names(gene_list)[i] <- gsub("_", " ", names(gene_list)[i])
             names(gene_list)[i] <- paste(strwrap(names(gene_list)[i], width = 15),collapse = "\n")
           }
-          if(input$venn_pdf_height == 0){
-            pdf_height <- 3
-          }else pdf_height <- input$venn_pdf_height
-          if(input$venn_pdf_width == 0){
-            pdf_width <- 3
-          }else pdf_width <- input$venn_pdf_width
-          pdf(file, height = pdf_height, width = pdf_width)
+          dims <- venn_pdf_dims(3, 3)
+          pdf(file, height = dims$height, width = dims$width)
           if(input$venn_type == "default" || is.null(input$eulerr_label)) print(venn::venn(gene_list, ilabels = TRUE, zcolor = "style", opacity = 0, ilcs = 1.5, sncs = 1.5)) else{
             if(input$eulerr_label =="ON") label=list(cex=0.8) else label=NULL
             print(plot(euler(gene_list, shape = "ellipse"), 
@@ -10659,13 +11675,8 @@ shinyServer(function(input, output, session) {
     },
     content = function(file){
       withProgress(message = "Preparing download",{
-        if(input$venn_pdf_height == 0){
-          pdf_height <- 8
-        }else pdf_height <- input$venn_pdf_height
-        if(input$venn_pdf_width == 0){
-          pdf_width <- 8
-        }else pdf_width <- input$venn_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- venn_pdf_dims(8, 8)
+        pdf(file, height = dims$height, width = dims$width)
         print(integrated_heatmap())
         dev.off()
         incProgress(1)
@@ -10681,13 +11692,9 @@ shinyServer(function(input, output, session) {
       withProgress(message = "Preparing download",{
         data <- as.data.frame(integrated_count())
         rowlist <- rownames(data[input$integrated_count_table_rows_selected,])
-        if(input$venn_pdf_height == 0){
-          pdf_height <- pdf_h(rowlist)
-        }else pdf_height <- input$venn_pdf_height
-        if(input$venn_pdf_width == 0){
-          pdf_width <- pdf_w(rowlist)
-        }else pdf_width <- input$venn_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        defaults <- pdf_dims_from_items(rowlist, 6, 6)
+        dims <- venn_pdf_dims(defaults$height, defaults$width)
+        pdf(file, height = dims$height, width = dims$width)
         print(GOIboxplot(data = data[input$integrated_count_table_rows_selected,]))
         dev.off()
         incProgress(1)
@@ -10724,12 +11731,9 @@ shinyServer(function(input, output, session) {
   
   venn_enrich_input1 <- debounce(pre_venn_enrich_input1,1000)
   
-  output$Gene_set9 <- renderUI({
-    if(input$Species7 != "Xenopus laevis" && input$Ortholog7 != "Arabidopsis thaliana" && input$Species7 != "Arabidopsis thaliana"){
-      selectInput('Gene_set9', 'Gene Set', gene_set_list)
-    }else selectInput('Gene_set9', 'Gene Set', c("KEGG", "GO biological process", 
-                                                 "GO cellular component","GO molecular function"))
-  })
+  observeEvent(list(input$Species7, input$Ortholog7), {
+    update_gene_set_input("Gene_set9", input$Species7, input$Ortholog7, isolate(input$Gene_set9))
+  }, ignoreInit = FALSE)
   
   output$venn_Spe <- renderText({
     if(input$Species7 == "not selected") print("Please select 'Species'")
@@ -10796,13 +11800,8 @@ shinyServer(function(input, output, session) {
     content = function(file) {
       withProgress(message = "Preparing download",{
         p1 <- multi_enrich_H()
-        if(input$venn_pdf_height == 0){
-          pdf_height <- 6
-        }else pdf_height <- input$venn_pdf_height
-        if(input$venn_pdf_width == 0){
-          pdf_width <- 8
-        }else pdf_width <- input$venn_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- venn_pdf_dims(6, 8)
+        pdf(file, height = dims$height, width = dims$width)
         dotplot_for_output(data = venn_enrich_viewer2(),
                            plot_genelist = venn_enrich_H(), Gene_set = input$Gene_set9, 
                            Species = input$Species7)
@@ -10871,13 +11870,8 @@ shinyServer(function(input, output, session) {
     content = function(file) {
       withProgress(message = "Preparing download",{
         p <- venn_enrich2()
-        if(input$venn_pdf_height == 0){
-          pdf_height <- 6
-        }else pdf_height <- input$venn_pdf_height
-        if(input$venn_pdf_width == 0){
-          pdf_width <- 6
-        }else pdf_width <- input$venn_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- venn_pdf_dims(6, 6)
+        pdf(file, height = dims$height, width = dims$width)
         print(p)
         dev.off()
         incProgress(1)
@@ -11165,13 +12159,8 @@ shinyServer(function(input, output, session) {
     content = function(file) {
       withProgress(message = "Preparing download",{
         p1 <- enrich_H()
-        if(input$enrich_pdf_height == 0){
-          pdf_height <- 5
-        }else pdf_height <- input$enrich_pdf_height
-        if(input$enrich_pdf_width == 0){
-          pdf_width <- 6.5
-        }else pdf_width <- input$enrich_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- enrich_pdf_dims(5, 6.5)
+        pdf(file, height = dims$height, width = dims$width)
         print(plot_grid(p1))
         dev.off()
         incProgress(1)
@@ -11185,13 +12174,8 @@ shinyServer(function(input, output, session) {
     content = function(file) {
       withProgress(message = "Preparing download",{
         p1 <- enrich2()
-        if(input$enrich_pdf_height == 0){
-          pdf_height <- 6
-        }else pdf_height <- input$enrich_pdf_height
-        if(input$enrich_pdf_width == 0){
-          pdf_width <- 6
-        }else pdf_width <- input$enrich_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- enrich_pdf_dims(6, 6)
+        pdf(file, height = dims$height, width = dims$width)
         print(plot_grid(p1))
         dev.off()
         incProgress(1)
@@ -11199,12 +12183,9 @@ shinyServer(function(input, output, session) {
     }
   )
   
-  output$Gene_set3 <- renderUI({
-    if(input$Species4 != "Xenopus laevis" && input$Ortholog4 != "Arabidopsis thaliana" && input$Species4 != "Arabidopsis thaliana"){
-      selectInput('Gene_set3', 'Gene Set', gene_set_list)
-    }else selectInput('Gene_set3', 'Gene Set', c("KEGG", "GO biological process", 
-                                                 "GO cellular component","GO molecular function"))
-  })
+  observeEvent(list(input$Species4, input$Ortholog4), {
+    update_gene_set_input("Gene_set3", input$Species4, input$Ortholog4, isolate(input$Gene_set3))
+  }, ignoreInit = FALSE)
   Custom_input <- reactive({
     tmp <- input$custom_input$datapath
     data <- read_gene_list(tmp)
@@ -11361,13 +12342,8 @@ shinyServer(function(input, output, session) {
     content = function(file) {
       withProgress(message = "Preparing download",{
         p1 <- Motifplot(df2 = enrich_motif(), showCategory = input$enrich_showCategory, padj = input$promoter_padj,data= enrich_input(), group_order=input$enrich_input_choice)
-        if(input$enrich_pdf_height == 0){
-          pdf_height <- 6
-        }else pdf_height <- input$enrich_pdf_height
-        if(input$enrich_pdf_width == 0){
-          pdf_width <- 6
-        }else pdf_width <- input$enrich_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- enrich_pdf_dims(6, 6)
+        pdf(file, height = dims$height, width = dims$width)
         print(p1)
         dev.off()
         incProgress(1)
@@ -11640,10 +12616,6 @@ shinyServer(function(input, output, session) {
                          selected = character(0),
                          options = goi_selectize_options, server = TRUE)
   })
-  output$GOIreset_deg <- renderUI({
-    actionButton("GOIreset_deg", "GOI reset")
-  })
-  
   DEG_uniqueID_base <- reactive({
     data <- DEG_uniqueID()
     if(is.null(data)){
@@ -11874,13 +12846,8 @@ shinyServer(function(input, output, session) {
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        if(input$volcano_pdf_height == 0){
-          pdf_height <- 5
-        }else pdf_height <- input$volcano_pdf_height
-        if(input$volcano_pdf_width == 0){
-          pdf_width <- 5
-        }else pdf_width <- input$volcano_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- volcano_pdf_dims(5, 5)
+        pdf(file, height = dims$height, width = dims$width)
         print(deg_volcano())
         dev.off()
         incProgress(1)
@@ -12035,13 +13002,9 @@ shinyServer(function(input, output, session) {
       withProgress(message = "Preparing download",{
         data <- deg_GOIcount()
         rowlist <- rownames(data)
-        if(input$volcano_pdf_height == 0){
-          pdf_height <- pdf_h(rowlist)
-        }else pdf_height <- input$volcano_pdf_height
-        if(input$volcano_pdf_width == 0){
-          pdf_width <- pdf_w(rowlist)
-        }else pdf_width <- input$volcano_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        defaults <- pdf_dims_from_items(rowlist, 6, 6)
+        dims <- volcano_pdf_dims(defaults$height, defaults$width)
+        pdf(file, height = dims$height, width = dims$width)
         print(deg_GOIbox())
         dev.off()
         incProgress(1)
@@ -12056,13 +13019,8 @@ shinyServer(function(input, output, session) {
       withProgress(message = "Preparing download",{
         data <- deg_GOIcount()
         rowlist <- rownames(data)
-        if(input$volcano_pdf_height == 0){
-          pdf_height <- 10
-        }else pdf_height <- input$volcano_pdf_height
-        if(input$volcano_pdf_width == 0){
-          pdf_width <- 7
-        }else pdf_width <- input$volcano_pdf_width
-        pdf(file, height = pdf_height, width = pdf_width)
+        dims <- volcano_pdf_dims(10, 7)
+        pdf(file, height = dims$height, width = dims$width)
         print(DEG_GOIheat())
         dev.off()
         incProgress(1)
@@ -12097,7 +13055,7 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }else{
       withProgress(message = "Prepare gene sets",{
-        msigdbr_list <- msigdbr(species = input$msigdbr_Species) %>%
+        msigdbr_list <- msigdbr::msigdbr(species = input$msigdbr_Species) %>%
           as.data.frame()
         msigdbr_list$gs_name <- gsub("_"," ",msigdbr_list$gs_name)
         return(msigdbr_list)

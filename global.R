@@ -10,21 +10,7 @@ library(shiny)
 library(shinyBS, verbose = FALSE)
 library('shinyjs', verbose = FALSE)
 library(DT)
-library(org.Hs.eg.db)
-library(org.Mm.eg.db)
-library(org.Rn.eg.db)
-library(org.Dm.eg.db)
-library(org.Ce.eg.db)
-library(org.Xl.eg.db)
 library(AnnotationDbi)
-library(org.Bt.eg.db)
-library(org.Cf.eg.db)
-library(org.Dr.eg.db)
-library(org.Gg.eg.db)
-library(org.Mmu.eg.db)
-library(org.Pt.eg.db)
-library(org.Sc.sgd.db)
-library(org.At.tair.db)
 library(dplyr)
 library(ggplot2)
 library(stringr)
@@ -42,17 +28,11 @@ library(DESeq2)
 library(EBSeq)
 library(ggnewscale)
 library(edgeR)
-library(qvalue)
 library(DEGreport)
-library(msigdbr)
 library(ComplexHeatmap)
-library(plotly,verbose=FALSE)
-library(umap)
 library(biomaRt)
 library(limma)
 library(colorspace)
-library(pdftools)
-library(magick)
 library(clue)
 library(ggrastr) ##devtools::install_github('VPetukhov/ggrastr')
 library(statmod)
@@ -60,6 +40,44 @@ library(DRIMSeq)
 library(stageR)
 library(ggtranscript) ##devtools::install_github("dzhang32/ggtranscript")
 library(eulerr)
+orgdb_package_names <- c(
+  "org.Hs.eg.db",
+  "org.Mm.eg.db",
+  "org.Rn.eg.db",
+  "org.Dm.eg.db",
+  "org.Ce.eg.db",
+  "org.Xl.eg.db",
+  "org.Bt.eg.db",
+  "org.Cf.eg.db",
+  "org.Dr.eg.db",
+  "org.Gg.eg.db",
+  "org.Mmu.eg.db",
+  "org.Pt.eg.db",
+  "org.Sc.sgd.db",
+  "org.At.tair.db"
+)
+
+load_orgdb_package <- function(package_name) {
+  if (!requireNamespace(package_name, quietly = TRUE)) {
+    stop("Package not installed: ", package_name)
+  }
+  getExportedValue(package_name, package_name)
+}
+
+register_lazy_orgdb_packages <- function(env) {
+  for (package_name in orgdb_package_names) {
+    local({
+      pkg <- package_name
+      delayedAssign(
+        pkg,
+        load_orgdb_package(pkg),
+        assign.env = env
+      )
+    })
+  }
+}
+
+register_lazy_orgdb_packages(environment())
 bioc_repos <- tryCatch(
   suppressWarnings(BiocManager::repositories()),
   error = function(e) getOption("repos")
@@ -1973,10 +1991,20 @@ keggEnrichment1_xenopus <- function(data3, data4, Species, Gene_set, org, org_co
 
 build_cnetplot <- function(cnet, foldChange = NULL, showCategory = NULL,
                            cex_label_gene = 0.7, cex_label_category = 0.75,
-                           cex_category = 0.75) {
-  args_core <- list(x = cnet)
-  if (!is.null(showCategory)) args_core$showCategory <- showCategory
-  if (!is.null(foldChange)) args_core$foldChange <- foldChange
+                           cex_category = 0.75, color_edge = "category") {
+  args_base <- list(x = cnet)
+  if (!is.null(showCategory)) args_base$showCategory <- showCategory
+  if (!is.null(foldChange)) args_base$foldChange <- foldChange
+  args_core <- args_base
+  if (!is.null(color_edge)) args_core$color_edge <- color_edge
+  args_base_label <- c(
+    args_base,
+    list(
+      cex_label_gene = cex_label_gene,
+      cex_label_category = cex_label_category,
+      cex_category = cex_category
+    )
+  )
   args_label <- c(
     args_core,
     list(
@@ -1989,14 +2017,20 @@ build_cnetplot <- function(cnet, foldChange = NULL, showCategory = NULL,
   candidates <- list(
     list(pkg = "enrichplot", args = args_core),
     list(pkg = "clusterProfiler", args = args_core),
-    list(pkg = "enrichplot", args = c(args_core, list(colorEdge = TRUE))),
-    list(pkg = "enrichplot", args = c(args_core, list(color.params = list(edge = TRUE)))),
-    list(pkg = "clusterProfiler", args = c(args_core, list(colorEdge = TRUE))),
+    list(pkg = "enrichplot", args = c(args_base, list(color.params = list(edge = color_edge)))),
+    list(pkg = "clusterProfiler", args = c(args_base, list(color.params = list(edge = color_edge)))),
+    list(pkg = "enrichplot", args = c(args_base, list(colorEdge = TRUE))),
+    list(pkg = "clusterProfiler", args = c(args_base, list(colorEdge = TRUE))),
+    list(pkg = "enrichplot", args = args_base),
+    list(pkg = "clusterProfiler", args = args_base),
     list(pkg = "enrichplot", args = args_label),
     list(pkg = "clusterProfiler", args = args_label),
-    list(pkg = "enrichplot", args = c(args_label, list(colorEdge = TRUE))),
-    list(pkg = "enrichplot", args = c(args_label, list(color.params = list(edge = TRUE)))),
-    list(pkg = "clusterProfiler", args = c(args_label, list(colorEdge = TRUE)))
+    list(pkg = "enrichplot", args = c(args_base_label, list(color.params = list(edge = color_edge)))),
+    list(pkg = "clusterProfiler", args = c(args_base_label, list(color.params = list(edge = color_edge)))),
+    list(pkg = "enrichplot", args = c(args_base_label, list(colorEdge = TRUE))),
+    list(pkg = "clusterProfiler", args = c(args_base_label, list(colorEdge = TRUE))),
+    list(pkg = "enrichplot", args = args_base_label),
+    list(pkg = "clusterProfiler", args = args_base_label)
   )
 
   for (candidate in candidates) {
@@ -2057,7 +2091,7 @@ keggEnrichment2 <- function(data3, data4,cnet_list2){
                                    cex_label_gene = 0.7,
                                    cex_label_category = 0.75,
                                    cex_category = 0.75)
-          c <- as_cnet_grob(c_plot, remove_all_legend = TRUE)
+          c <- as_cnet_grob(c_plot, remove_all_legend = FALSE)
           cnet_list[[name]] = c
         }
         cnet1 <- cnet_df
@@ -2852,7 +2886,7 @@ cnet_global <- function(data, group, enrich_gene_list, showCategory=5){
                                     cex_label_gene = 0.7,
                                     cex_label_category = 0.75,
                                     cex_category = 0.75)
-          p2 <- as_cnet_grob(p2_plot, remove_all_legend = TRUE)
+          p2 <- as_cnet_grob(p2_plot, remove_all_legend = FALSE)
         }
         p <- plot_grid(p2)
         return(p)
@@ -3261,14 +3295,13 @@ corr_plot_pair <- function(data,corr_color,GOI_x,GOI_y,logscale=TRUE){
 }
 
 
-library(GSVA)
 ssGSEA <- function(norm_count, gene_set,org,gene_type,Species,Ortholog){
   set.seed(12345)
   genesbyGeneSet <- split(gene_set$GeneID,gene_set$gs_name)
   if(length(grep("SYMBOL", colnames(norm_count))) != 0) norm_count <- norm_count[, - which(colnames(norm_count) == "SYMBOL")]
   
-  ssgseaPar <- ssgseaParam(as.matrix(norm_count),genesbyGeneSet)
-  ssgsea.score <- gsva(ssgseaPar)
+  ssgseaPar <- GSVA::ssgseaParam(as.matrix(norm_count),genesbyGeneSet)
+  ssgsea.score <- GSVA::gsva(ssgseaPar)
   return(ssgsea.score)
 }
 
