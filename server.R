@@ -950,19 +950,6 @@ shinyServer(function(input, output, session) {
                print(plot_grid(require_plot_value(enrich2(), "cnet plot is not available.")))
              }
            ),
-           enrich_motif = list(
-             title = "Exact PDF preview: Motif plot",
-             download_id = "download_motif_plot",
-             dims = enrich_pdf_dims(6, 6),
-             draw = function() {
-               print(require_plot_value(
-                 Motifplot(df2 = enrich_motif(), showCategory = input$enrich_showCategory,
-                           padj = input$promoter_padj, data = enrich_input(),
-                           group_order = input$enrich_input_choice),
-                 "Motif plot is not available."
-               ))
-             }
-           ),
            NULL)
   }
   volcano_pdf_preview_request <- function(target) {
@@ -1134,9 +1121,6 @@ shinyServer(function(input, output, session) {
   observeEvent(input$preview_enrich_cnet, {
     open_shared_pdf_preview(enrich_pdf_preview_request, "enrich_cnet", "enrich_pdf_height", "enrich_pdf_width")
   }, ignoreInit = TRUE)
-  observeEvent(input$preview_enrich_motif, {
-    open_shared_pdf_preview(enrich_pdf_preview_request, "enrich_motif", "enrich_pdf_height", "enrich_pdf_width")
-  }, ignoreInit = TRUE)
   observeEvent(input$preview_volcano_plot, {
     open_shared_pdf_preview(volcano_pdf_preview_request, "volcano_plot", "volcano_pdf_height", "volcano_pdf_width")
   }, ignoreInit = TRUE)
@@ -1163,7 +1147,7 @@ shinyServer(function(input, output, session) {
       "download_norm_PCA", "download_norm_umap", "download_norm_GOIheat", "download_norm_GOIbox",
       "download_norm_corr", "download_norm_corr_selected", "download_norm_kmeans_heatmap",
       "download_norm_kmeans_boxplot", "download_norm_kmeans_box",
-      "download_enrichment", "download_enrichment_cnet", "download_motif_plot",
+      "download_enrichment", "download_enrichment_cnet",
       "download_volcano_navi", "download_deg_heatmap", "download_deg_GOIbox"
     )
     invisible(lapply(preview_download_ids, function(id) {
@@ -3506,9 +3490,8 @@ shinyServer(function(input, output, session) {
     if(!is.null(input$Gene_set) && input$Species != "not selected" &&
        !is.null(data) && !is.null(data_degcount2())){
       data <- na.omit(data)
-      geneList <- data$log2FoldChange
-      names(geneList) = as.character(data$ENTREZID)
-      geneList <- sort(geneList, decreasing = TRUE)
+      geneList <- prepare_ranked_gene_list(data)
+      if(is.null(geneList)) return(NULL)
       withProgress(message = "GSEA",{
         if(input$Species != "Xenopus laevis" && input$Ortholog != "Arabidopsis thaliana" && input$Species != "Arabidopsis thaliana"){
           H_t2g <- Hallmark_set()
@@ -3657,8 +3640,11 @@ shinyServer(function(input, output, session) {
             color <- c("blue","white")
             limits <- c(NA,0)
           }
-          geneList <- genes$log2FoldChange
-          names(geneList) = as.character(genes$ENTREZID)
+          geneList <- prepare_ranked_gene_list(genes)
+          if(is.null(geneList)) {
+            p[[name]] <- NULL
+            next
+          }
           p2_plot <- build_cnetplot(cnet1, foldChange = geneList,
                                     cex_label_gene = 0.7,
                                     cex_label_category = 0.75,
@@ -6127,9 +6113,8 @@ shinyServer(function(input, output, session) {
     if(!nrow(data) || !"ENTREZID" %in% colnames(data)){
       return(NULL)
     }
-    geneList <- data$log2FoldChange
-    names(geneList) <- as.character(data$ENTREZID)
-    geneList <- sort(geneList, decreasing = TRUE)
+    geneList <- prepare_ranked_gene_list(data)
+    if(is.null(geneList)) return(NULL)
     list(data = data, geneList = geneList)
   })
 
@@ -6816,123 +6801,267 @@ shinyServer(function(input, output, session) {
     updateSelectizeInput(session, "selectssGSEA_contribute_pathway",
                          choices = choices, selected = selected, server = TRUE)
   }, ignoreNULL = FALSE)
-  multi_ssGSEA_df_selected_id <- reactive({
-    data <- multi_ssGSEA_limma_dp()
-    if(!is.null(data) && !is.null(input$selectssGSEA_contribute_pathway)){
-      score <- multi_enrichment_1_ssGSEA() %>% 
-        as.data.frame() %>%
-        dplyr::filter(row.names(.) == input$selectssGSEA_contribute_pathway)
-      return(score)
+  multi_ssGSEA_selected_gene_set <- reactive({
+    pathway_id <- input$selectssGSEA_contribute_pathway
+    geneset <- multi_Hallmark_set_ssGSEA()
+    if(is.null(pathway_id) || identical(pathway_id, "") || is.null(geneset) || !"GeneID" %in% colnames(geneset)){
+      return(NULL)
     }
+    selected <- geneset %>% dplyr::filter(gs_name == pathway_id)
+    gene_ids <- unique(selected$GeneID[!is.na(selected$GeneID) & selected$GeneID != ""])
+    if(!length(gene_ids)){
+      return(NULL)
+    }
+    gene_ids
+  })
+  multi_ssGSEA_selected_count_raw <- reactive({
+    count <- multi_deg_norm_count()
+    genes <- multi_ssGSEA_selected_gene_set()
+    if(is.null(count) || is.null(genes)){
+      return(NULL)
+    }
+    keep <- intersect(genes, rownames(count))
+    if(!length(keep)){
+      return(NULL)
+    }
+    count[keep, , drop = FALSE]
   })
   multi_norm_count_for_ssGSEA_selected_id <- reactive({
-    count <- multi_deg_norm_count()
-    if(length(grep("SYMBOL", colnames(count))) != 0) count <- count[, - which(colnames(count) == "SYMBOL")]
-    dp <- multi_ssGSEA_df_selected_id()
-    if(!is.null(data) && !is.null(dp)){
-      geneset <- multi_Hallmark_set_ssGSEA() %>% dplyr::filter(gs_name == input$selectssGSEA_contribute_pathway)
-      rownames(geneset) <- geneset$GeneID
-      count2 <- merge(geneset, count, by = 0)
-      rownames(count2) <- count2$GeneID
-      if(input$Gene_set_ssGSEA == "DoRothEA regulon (activator)" || 
-        input$Gene_set_ssGSEA == "DoRothEA regulon (repressor)") {
-        num <- -1
-        }else if(input$Gene_set_ssGSEA =="Custom gene set"){
-          num <- dim(geneset)[2]-5
-          }else num <- 0
-      count2 <- count2[,-1:-(6+num)]
-      print(head(geneset))
-      return(count2)
+    count <- multi_ssGSEA_selected_count_raw()
+    if(is.null(count)){
+      return(NULL)
     }
+    if("SYMBOL" %in% colnames(count)){
+      count <- count[, colnames(count) != "SYMBOL", drop = FALSE]
+    }
+    count
   })
-  
+  multi_ssGSEA_contribute_display_labels <- reactive({
+    count <- multi_ssGSEA_selected_count_raw()
+    if(is.null(count) || !"SYMBOL" %in% colnames(count)){
+      return(NULL)
+    }
+    symbol <- as.character(count$SYMBOL)
+    display <- ifelse(is.na(symbol) | symbol == "", rownames(count), paste0(rownames(count), "-", symbol))
+    stats::setNames(display, rownames(count))
+  })
+  multi_ssGSEA_full_selected_score <- reactive({
+    score <- multi_enrichment_1_ssGSEA()
+    pathway_id <- input$selectssGSEA_contribute_pathway
+    if(is.null(score) || is.null(pathway_id) || identical(pathway_id, "") || !pathway_id %in% rownames(score)){
+      return(NULL)
+    }
+    score[pathway_id, , drop = FALSE]
+  })
+  multi_ssGSEA_leave_one_out_scores <- reactive({
+    count <- multi_norm_count_for_ssGSEA_selected_id()
+    if(is.null(count) || nrow(count) < 2){
+      return(NULL)
+    }
+    genes <- rownames(count)
+    leave_one_out_sets <- stats::setNames(
+      lapply(genes, function(gene_id) setdiff(genes, gene_id)),
+      genes
+    )
+    leave_one_out_sets <- leave_one_out_sets[
+      vapply(leave_one_out_sets, length, integer(1)) > 0
+    ]
+    if(!length(leave_one_out_sets)){
+      return(NULL)
+    }
+    withProgress(message = "ssGSEA contribution", value = 0, {
+      incProgress(0.2, detail = "Calculating leave-one-gene-out scores")
+      ssgsea_param <- GSVA::ssgseaParam(as.matrix(count), leave_one_out_sets)
+      leave_one_out_score <- GSVA::gsva(ssgsea_param)
+      incProgress(1)
+      leave_one_out_score
+    })
+  })
   multi_ssGSEA_contribute_cor <- reactive({
     count <- multi_norm_count_for_ssGSEA_selected_id()
-    if(length(grep("SYMBOL", colnames(count))) != 0) norm_count <- count[, - which(colnames(count) == "SYMBOL")] else norm_count <- count
-    score <- multi_ssGSEA_df_selected_id()
-    print("score")
-    print(head(as.numeric(score)))
-    print(head(norm_count))
-    print(dim(score))
-    print(dim(norm_count))
-    if(!is.null(norm_count)){
-      df2 <- data.frame(matrix(rep(NA, 4), nrow=1))[numeric(0), ]
-      for(i in rownames(norm_count)){
-        corr<-suppressWarnings(try(cor.test(x=as.numeric(score[1,]),y=as.numeric(norm_count[i,]),method="spearman")))
-        if(!inherits(corr, "try-error")){
-          if(length(grep("SYMBOL", colnames(count))) != 0){
-            symbol <- count %>% dplyr::filter(row.names(.) == i)
-            df <- data.frame(Gene = i, statistics=corr$statistic,corr_score = corr$estimate,
-                             pvalue = corr$p.value, UniqueID = paste0(i,"-",symbol$SYMBOL))
-          }else{
-        df <- data.frame(Gene = i, statistics=corr$statistic,corr_score = corr$estimate,
-                         pvalue = corr$p.value)
-          }
-        df2 <- rbind(df2,df)
-        }
-      }
-      print(head(df2))
-      label <- c("Gene","statistics","corr_score","pvalue")
-      if(length(grep("SYMBOL", colnames(count))) != 0) label <- c(label,"Unique_ID")
-      colnames(df2) <- label
-      df2 <- na.omit(df2)
-      df2 <- df2%>% dplyr::arrange(-corr_score, pvalue) %>%
-        dplyr::mutate(rank = row_number())
-      rownames(df2) <- df2$rank
-      
-      df2$ssGSEAscore_vs_Expression <- "NS"
-      df2$ssGSEAscore_vs_Expression[df2$pvalue < 0.05 & df2$corr_score > 0] <- "positive_correlation"
-      df2$ssGSEAscore_vs_Expression[df2$pvalue < 0.05 & df2$corr_score < 0] <- "negative_correlation"
-      df2 <- df2 %>% dplyr::select(Gene,ssGSEAscore_vs_Expression,everything())
-      df2 <- df2%>% dplyr::arrange(-corr_score, pvalue)
-      return(df2)
+    full_score <- multi_ssGSEA_full_selected_score()
+    leave_one_out_score <- multi_ssGSEA_leave_one_out_scores()
+    if(is.null(count) || is.null(full_score) || !nrow(count)){
+      return(NULL)
     }
+    genes <- rownames(count)
+    gene_total <- length(genes)
+    if(!gene_total){
+      return(NULL)
+    }
+    label_map <- multi_ssGSEA_contribute_display_labels()
+    result_list <- vector("list", gene_total)
+    result_index <- 0L
+    for(i in genes){
+      corr_full <- suppressWarnings(try(
+        cor.test(
+          x = as.numeric(full_score[1, , drop = TRUE]),
+          y = as.numeric(count[i, , drop = TRUE]),
+          method = "spearman"
+        ),
+        silent = TRUE
+      ))
+      corr_excluding <- NULL
+      if(!is.null(leave_one_out_score) && i %in% rownames(leave_one_out_score)){
+        corr_excluding <- suppressWarnings(try(
+          cor.test(
+            x = as.numeric(leave_one_out_score[i, , drop = TRUE]),
+            y = as.numeric(count[i, , drop = TRUE]),
+            method = "spearman"
+          ),
+          silent = TRUE
+        ))
+      }
+      if(!inherits(corr_full, "try-error")){
+        result_index <- result_index + 1L
+        df <- data.frame(
+          Gene = i,
+          genes_in_selected_pathway = gene_total,
+          genes_used_in_excluding_query_score = max(gene_total - 1L, 0L),
+          statistics_full = unname(corr_full$statistic),
+          corr_score_full = unname(corr_full$estimate),
+          pvalue_full = corr_full$p.value,
+          statistics_excluding_query = if(!is.null(corr_excluding) && !inherits(corr_excluding, "try-error")) unname(corr_excluding$statistic) else NA_real_,
+          corr_score_excluding_query = if(!is.null(corr_excluding) && !inherits(corr_excluding, "try-error")) unname(corr_excluding$estimate) else NA_real_,
+          pvalue_excluding_query = if(!is.null(corr_excluding) && !inherits(corr_excluding, "try-error")) corr_excluding$p.value else NA_real_
+        )
+        if(!is.null(label_map)){
+          df$Unique_ID <- unname(label_map[i])
+        }
+        result_list[[result_index]] <- df
+      }
+    }
+    if(result_index == 0L){
+      return(NULL)
+    }
+    df2 <- dplyr::bind_rows(result_list[seq_len(result_index)])
+    df2 <- df2 %>% dplyr::filter(!is.na(corr_score_full), !is.na(pvalue_full))
+    if(!nrow(df2)){
+      return(NULL)
+    }
+    df2$ssGSEAscore_vs_Expression_full <- "NS"
+    df2$ssGSEAscore_vs_Expression_full[df2$pvalue_full < 0.05 & df2$corr_score_full > 0] <- "positive_correlation"
+    df2$ssGSEAscore_vs_Expression_full[df2$pvalue_full < 0.05 & df2$corr_score_full < 0] <- "negative_correlation"
+    df2$ssGSEAscore_vs_Expression_excluding_query <- "NS"
+    df2$ssGSEAscore_vs_Expression_excluding_query[is.na(df2$pvalue_excluding_query) | is.na(df2$corr_score_excluding_query)] <- "Not_available"
+    df2$ssGSEAscore_vs_Expression_excluding_query[df2$pvalue_excluding_query < 0.05 & df2$corr_score_excluding_query > 0] <- "positive_correlation"
+    df2$ssGSEAscore_vs_Expression_excluding_query[df2$pvalue_excluding_query < 0.05 & df2$corr_score_excluding_query < 0] <- "negative_correlation"
+    df2 <- df2 %>%
+      dplyr::mutate(
+        sort_excluding = dplyr::if_else(is.na(corr_score_excluding_query), -Inf, corr_score_excluding_query),
+        sort_excluding_p = dplyr::if_else(is.na(pvalue_excluding_query), Inf, pvalue_excluding_query)
+      ) %>%
+      dplyr::arrange(dplyr::desc(ssGSEAscore_vs_Expression_excluding_query == "positive_correlation"),
+                     dplyr::desc(sort_excluding),
+                     sort_excluding_p,
+                     dplyr::desc(corr_score_full),
+                     pvalue_full) %>%
+      dplyr::mutate(rank = row_number())
+    rownames(df2) <- df2$rank
+    ordered_cols <- c(
+      "Gene", "Unique_ID",
+      "ssGSEAscore_vs_Expression_excluding_query",
+      "corr_score_excluding_query", "pvalue_excluding_query",
+      "ssGSEAscore_vs_Expression_full",
+      "corr_score_full", "pvalue_full",
+      "statistics_excluding_query", "statistics_full",
+      "genes_in_selected_pathway", "genes_used_in_excluding_query_score"
+    )
+    df2[, intersect(ordered_cols, colnames(df2)), drop = FALSE]
+  })
+  multi_ssGSEA_contribute_note <- reactive({
+    count <- multi_norm_count_for_ssGSEA_selected_id()
+    if(is.null(count)){
+      return(list(
+        text = "No plot is shown because none of the genes in the selected pathway were found in the normalized count matrix.",
+        type = "error"
+      ))
+    }
+    gene_total <- nrow(count)
+    cor_data <- multi_ssGSEA_contribute_cor()
+    notes <- character(0)
+    note_type <- "error"
+    status_col <- "ssGSEAscore_vs_Expression_full"
+    positive_n <- 0L
+    if(!is.null(cor_data) && status_col %in% colnames(cor_data)){
+      positive_n <- sum(cor_data[[status_col]] == "positive_correlation", na.rm = TRUE)
+    }
+    if(positive_n == 0L){
+      notes <- c(notes, "No plot is shown because no genes met the positive-correlation threshold (Spearman correlation > 0 with p < 0.05) when the original full ssGSEA score was used.")
+    }
+    if(!length(notes)){
+      return(NULL)
+    }
+    list(text = paste(notes, collapse = "<br><br>"), type = note_type)
+  })
+  output$multi_ssGSEA_contribute_note <- renderUI({
+    note <- multi_ssGSEA_contribute_note()
+    if(is.null(note)){
+      return(NULL)
+    }
+    color <- if(identical(note$type, "error")) "#a94442" else "#8a6d3b"
+    background <- if(identical(note$type, "error")) "#f2dede" else "#fcf8e3"
+    border <- if(identical(note$type, "error")) "#ebccd1" else "#faebcc"
+    tags$div(
+      style = paste(
+        "margin:8px 0 12px 0;",
+        "padding:10px 12px;",
+        "border:1px solid", border, ";",
+        "border-radius:4px;",
+        "background:", background, ";",
+        "color:", color, ";"
+      ),
+      HTML(note$text)
+    )
   })
   multi_ssGSEA_contribute_cor_count <- reactive({
-    if(!is.null(multi_ssGSEA_contribute_cor())){
-      norm_count <- multi_norm_count_for_ssGSEA_selected_id()
-      print("norm_count")
-      print(head(norm_count))
-      data <- multi_ssGSEA_contribute_cor() %>% 
-        dplyr::filter(ssGSEAscore_vs_Expression == "positive_correlation")
-      rownames(data) <- data$Gene
-      print("data")
-      print(head(data))
-      count <- merge(data, norm_count, by=0)
-      rownames(count) <- count$Gene
-      print("count")
-      print(head(count))
-      if(length(grep("SYMBOL", colnames(count))) != 0) rownames(count) <- count$Unique_ID
-      count <- count[,-1:-7]
-      print("count")
-      print(head(count))
-      if(length(grep("SYMBOL", colnames(count))) != 0){
-        count <- count[,-1]
-      count <- count[, - which(colnames(count) == "SYMBOL")]
-      }
-      print(head(count))
-      return(count)
+    cor_data <- multi_ssGSEA_contribute_cor()
+    norm_count <- multi_norm_count_for_ssGSEA_selected_id()
+    if(is.null(cor_data) || is.null(norm_count)){
+      return(NULL)
     }
+    status_col <- "ssGSEAscore_vs_Expression_full"
+    data <- cor_data[cor_data[[status_col]] == "positive_correlation", , drop = FALSE]
+    if(!nrow(data)){
+      return(NULL)
+    }
+    rownames(data) <- data$Gene
+    count <- merge(data, as.data.frame(norm_count), by = 0)
+    rownames(count) <- count$Gene
+    label_map <- multi_ssGSEA_contribute_display_labels()
+    if(!is.null(label_map)){
+      display <- unname(label_map[rownames(count)])
+      display[is.na(display)] <- rownames(count)[is.na(display)]
+      rownames(count) <- display
+    }
+    drop_cols <- intersect(
+      c("Row.names", "Gene", "Unique_ID",
+        "ssGSEAscore_vs_Expression_excluding_query", "corr_score_excluding_query", "pvalue_excluding_query", "statistics_excluding_query",
+        "ssGSEAscore_vs_Expression_full", "corr_score_full", "pvalue_full", "statistics_full",
+        "genes_in_selected_pathway", "genes_used_in_excluding_query_score", "rank"),
+      colnames(count)
+    )
+    count[, setdiff(colnames(count), drop_cols), drop = FALSE]
   })
   multi_ssGSEA_contribute_corplot <- reactive({
-    if(!is.null(multi_ssGSEA_contribute_cor_count())){
-      data <- multi_ssGSEA_contribute_cor_count()
-      rownames(data) <- gsub("-","- ", rownames(data))
-      for(i in 1:length(rownames(data))){
-        rownames(data)[i] <- paste(strwrap(rownames(data)[i], width = 10),collapse = "\n")
-      }
-      print(head(data))
-      p <- GOIboxplot(data = data)
-      return(p)
+    data <- multi_ssGSEA_contribute_cor_count()
+    if(is.null(data)){
+      return(NULL)
     }
+    rownames(data) <- gsub("-","- ", rownames(data))
+    for(i in seq_along(rownames(data))){
+      rownames(data)[i] <- paste(strwrap(rownames(data)[i], width = 10),collapse = "\n")
+    }
+    GOIboxplot(data = data)
   })
   output$multi_ssGSEA_contribute <- renderPlot({
-    if(!is.null(multi_ssGSEA_contribute_corplot()))
-      multi_ssGSEA_contribute_corplot()
+    plot_obj <- multi_ssGSEA_contribute_corplot()
+    if(!is.null(plot_obj)){
+      plot_obj
+    }
   })
   output$multi_ssGSEA_contribute_table <-DT::renderDataTable({
-    if(!is.null(multi_ssGSEA_contribute_corplot()))
-      multi_ssGSEA_contribute_cor()
+    multi_ssGSEA_contribute_cor()
   })
   output$download_multi_ssGSEA_contribute = downloadHandler(
     filename = function(){
@@ -6941,11 +7070,13 @@ shinyServer(function(input, output, session) {
     content = function(file) {
       withProgress(message = "Preparing download",{
         data <- multi_ssGSEA_contribute_cor_count()
+        plot_obj <- multi_ssGSEA_contribute_corplot()
+        if(is.null(data) || is.null(plot_obj)) stop("ssGSEA contribution plot is not available.", call. = FALSE)
         rowlist <- rownames(data)
         defaults <- pdf_dims_from_items(rowlist, 6, 6)
         dims <- multi_pdf_dims(defaults$height, defaults$width)
         pdf(file, height = dims$height, width = dims$width)
-        print(multi_ssGSEA_contribute_corplot())
+        print(plot_obj)
         dev.off()
         incProgress(1)
       })
@@ -6957,7 +7088,9 @@ shinyServer(function(input, output, session) {
     },
     content = function(file) {
       withProgress(message = "Preparing download",{
-        write.table(multi_ssGSEA_contribute_cor(),file, row.names = F, col.names=TRUE, sep = "\t", quote = F)
+        data <- multi_ssGSEA_contribute_cor()
+        if(is.null(data)) stop("ssGSEA contribution table is not available.", call. = FALSE)
+        write.table(data,file, row.names = F, col.names=TRUE, sep = "\t", quote = F)
         incProgress(1)
       })
     }
@@ -7423,6 +7556,45 @@ shinyServer(function(input, output, session) {
         multi_analysis_requested(TRUE)
         fs <- c()
         setwd(tempdir())
+        summary_safe_name <- function(x) {
+          x <- as.character(x)
+          x[is.na(x) | x == ""] <- "not_selected"
+          gsub("[^A-Za-z0-9_.-]+", "_", x)
+        }
+        summary_get <- function(expr) {
+          tryCatch(expr, error = function(e) NULL)
+        }
+        summary_add_table <- function(path, data, row.names = TRUE, col.names = NA) {
+          if(is.null(data)) return(FALSE)
+          ok <- tryCatch({
+            write.table(data, path, row.names = row.names, col.names = col.names, sep = "\t", quote = FALSE)
+            TRUE
+          }, error = function(e) FALSE)
+          if(ok) fs <<- c(fs, path)
+          ok
+        }
+        summary_add_pdf <- function(path, height, width, plot_expr) {
+          ok <- FALSE
+          pdf(path, height = height, width = width)
+          tryCatch({
+            force(plot_expr)
+            ok <- TRUE
+          }, error = function(e) NULL, finally = {
+            dev.off()
+          })
+          if(ok){
+            fs <<- c(fs, path)
+          }else if(file.exists(path)){
+            unlink(path)
+          }
+          ok
+        }
+        report_ssGSEA_score <- NULL
+        report_ssGSEA_limma <- NULL
+        report_ssGSEA_limma_dp <- NULL
+        report_ssGSEA_GOIbox_statistic <- NULL
+        report_ssGSEA_contribute_cor <- NULL
+        report_ssGSEA_TF_cor <- NULL
         print(fs)
         dir.create("DEG_result/",showWarnings = FALSE)
         dir.create("Clustering/",showWarnings = FALSE)
@@ -7593,23 +7765,103 @@ shinyServer(function(input, output, session) {
               dev.off()
             }}}
         print("GSEA")
+        if(!is.null(input$Gene_set_ssGSEA) && input$Gene_set_ssGSEA != "" && input$Species6 != "not selected"){
+          report_ssGSEA_score <- summary_get(multi_enrichment_1_ssGSEA())
+          if(!is.null(report_ssGSEA_score)){
+            dir.create("ssGSEA/", showWarnings = FALSE)
+            ssGSEA_set <- summary_safe_name(input$Gene_set_ssGSEA)
+            summary_add_table(paste0("ssGSEA/", ssGSEA_set, "_ssGSEA_score.txt"),
+                              report_ssGSEA_score, row.names = TRUE, col.names = NA)
+            report_ssGSEA_limma <- summary_get(multi_ssGSEA_limma())
+            summary_add_table(paste0("ssGSEA/", ssGSEA_set, "_ssGSEA_differential_analysis_all_result.txt"),
+                              report_ssGSEA_limma, row.names = TRUE, col.names = NA)
+            report_ssGSEA_limma_dp <- summary_get(multi_ssGSEA_limma_dp())
+            summary_add_table(paste0("ssGSEA/", ssGSEA_set, "_ssGSEA_differential_pathways.txt"),
+                              report_ssGSEA_limma_dp, row.names = TRUE, col.names = NA)
+            
+            if(!is.null(summary_get(GOI_multi_ssGSEA_INPUT()))){
+              ssGSEA_heat <- summary_get(multi_ssGSEA_GOIheat())
+              if(!is.null(ssGSEA_heat)){
+                summary_add_pdf("ssGSEA/GOIheatmap.pdf", 10, 7, print(ssGSEA_heat))
+              }
+              ssGSEA_box <- summary_get(multi_ssGSEA_GOIbox())
+              ssGSEA_count <- summary_get(multi_ssGSEA_GOIcount())
+              if(!is.null(ssGSEA_box) && !is.null(ssGSEA_count)){
+                rowlist <- rownames(ssGSEA_count)
+                if(length(rowlist)){
+                  summary_add_pdf("ssGSEA/ssGSEA_boxplot.pdf", pdf_h(rowlist), pdf_w(rowlist), print(ssGSEA_box))
+                }
+              }
+              report_ssGSEA_GOIbox_statistic <- summary_get(multi_ssGSEA_GOIbox_statistic())
+              summary_add_table(paste0("ssGSEA/GOIboxplot_", summary_safe_name(input$statistics_multi_ssGSEA), ".txt"),
+                                report_ssGSEA_GOIbox_statistic, row.names = FALSE, col.names = TRUE)
+            }
+            
+            if(!is.null(input$selectssGSEA_contribute_pathway) && input$selectssGSEA_contribute_pathway != ""){
+              contribute_name <- summary_safe_name(input$selectssGSEA_contribute_pathway)
+              report_ssGSEA_contribute_cor <- summary_get(multi_ssGSEA_contribute_cor())
+              summary_add_table(paste0("ssGSEA/ssGSEAcontributed_", contribute_name, ".txt"),
+                                report_ssGSEA_contribute_cor, row.names = FALSE, col.names = TRUE)
+              ssGSEA_contribute_plot <- summary_get(multi_ssGSEA_contribute_corplot())
+              ssGSEA_contribute_count <- summary_get(multi_ssGSEA_contribute_cor_count())
+              if(!is.null(ssGSEA_contribute_plot) && !is.null(ssGSEA_contribute_count)){
+                rowlist <- rownames(ssGSEA_contribute_count)
+                if(length(rowlist)){
+                  summary_add_pdf(paste0("ssGSEA/ssGSEAcontributed_", contribute_name, ".pdf"),
+                                  pdf_h(rowlist), pdf_w(rowlist), print(ssGSEA_contribute_plot))
+                }
+              }
+            }
+            
+            if(input$Gene_set_ssGSEA == "DoRothEA regulon (activator)" ||
+               input$Gene_set_ssGSEA == "DoRothEA regulon (repressor)"){
+              report_ssGSEA_TF_cor <- summary_get(multi_ssGSEA_TF_cor())
+              summary_add_table("ssGSEA/ssGSEAscore_vsExpression_level.txt",
+                                report_ssGSEA_TF_cor, row.names = FALSE, col.names = TRUE)
+              ssGSEA_tf_plot <- summary_get(multi_ssGSEA_TF_corplot())
+              ssGSEA_tf_count <- summary_get(multi_ssGSEA_TF_cor_count())
+              if(!is.null(ssGSEA_tf_plot) && !is.null(ssGSEA_tf_count)){
+                rowlist <- rownames(ssGSEA_tf_count)
+                if(length(rowlist)){
+                  summary_add_pdf("ssGSEA/ssGSEAscore_vsExpression_level.pdf",
+                                  pdf_h(rowlist), pdf_w(rowlist), print(ssGSEA_tf_plot))
+                }
+              }
+            }
+          }
+        }
+        print("ssGSEA")
         report <- paste0(format(Sys.time(), "%Y%m%d_"),"MultiDEG_report",".docx")
         fs <- c(fs,report)
-        rmarkdown::render("multi_report.Rmd", output_format = "word_document", output_file = report,
-                          params = list(raw_count = multi_d_row_count_matrix(),
-                                        multi_norm_count_matrix = multi_norm_count_matrix(),
-                                        input = input,
-                                        multi_metadata = multi_metadata(),
-                                        multi_umap_plot = multi_umap_plot(),
-                                        multi_boxplot_reactive = multi_boxplot_reactive(),
-                                        multi_enrich_div_table = multi_enrich_div_table(),
-                                        multi_kmeans_box = multi_kmeans_box(),
-                                        multi_enrich_k_table = multi_enrich_k_table(),
-                                        multi_GSEA_table = multi_GSEA_table(),
-                                        multi_pattern1 = multi_pattern1(),
-                                        multi_deg_count1 = multi_deg_count1()), 
-                          envir = new.env(parent = globalenv()),intermediates_dir = tempdir(),encoding="utf-8"
-        )
+        copy_to_temp_if_exists("Rmd/multi_report.Rmd")
+        report_params <- list(raw_count = multi_d_row_count_matrix(),
+                              multi_norm_count_matrix = summary_get(multi_norm_count_matrix()),
+                              input = input,
+                              multi_metadata = summary_get(multi_metadata()),
+                              multi_umap_plot = summary_get(multi_umap_plot()),
+                              multi_boxplot_reactive = summary_get(multi_boxplot_reactive()),
+                              multi_enrich_div_table = summary_get(multi_enrich_div_table()),
+                              multi_kmeans_box = summary_get(multi_kmeans_box()),
+                              multi_enrich_k_table = summary_get(multi_enrich_k_table()),
+                              multi_GSEA_table = summary_get(multi_GSEA_table()),
+                              multi_ssGSEA_score = report_ssGSEA_score,
+                              multi_ssGSEA_limma = report_ssGSEA_limma,
+                              multi_ssGSEA_limma_dp = report_ssGSEA_limma_dp,
+                              multi_ssGSEA_GOIbox_statistic = report_ssGSEA_GOIbox_statistic,
+                              multi_ssGSEA_contribute_cor = report_ssGSEA_contribute_cor,
+                              multi_ssGSEA_TF_cor = report_ssGSEA_TF_cor,
+                              multi_pattern1 = summary_get(multi_pattern1()),
+                              multi_deg_count1 = summary_get(multi_deg_count1()))
+        tryCatch({
+          rmarkdown::render("multi_report.Rmd", output_format = "word_document", output_file = report,
+                            params = report_params,
+                            envir = new.env(parent = globalenv()),intermediates_dir = tempdir(),encoding="utf-8"
+          )
+        }, error = function(e) {
+          message("MultiDEG report render error class: ", paste(class(e), collapse = ", "))
+          message("MultiDEG report render error message: ", conditionMessage(e))
+          stop(e)
+        })
         zip(zipfile=fname, files=fs)
       })
     },
@@ -12226,142 +12478,6 @@ shinyServer(function(input, output, session) {
   observeEvent(input$goButton4,({
     updateSelectInput(session,inputId = "Species4","Species",species_list, selected = "Mus musculus")
   }))
-  
-  #motif----------------
-  output$motif_Spe <- renderText({
-    if(input$Species4 == "not selected") {
-      print("Please select 'Species'")
-    }else{
-      if(input$Species4 != "Homo sapiens" && input$Species4 != "Mus musculus"){
-        print("'Homo sapiens' or 'Mus musculus'")
-      }
-    }
-  })
-  output$promoter_upstream <- renderUI({
-    numericInput("promoter_upstream", "upstream", min   = 0, max   = Inf, value = 400)
-  })
-  output$promoter_downstream <- renderUI({
-    numericInput("promoter_downstream", "downstream", min   = 0, max   = Inf, value = 100)
-  })
-  output$promoter_padj <- renderUI({
-    numericInput("promoter_padj", "pvalue", min   = 0, max   = 0.05, value = 0.05)
-  })
-  
-  promoter <- reactive({
-    if(input$motifButton > 0){
-      x <- getTargetSeq(Species = input$Species4, upstream = input$promoter_upstream,
-                        downstream = input$promoter_downstream)
-      return(x)
-    }
-  })
-  updateCounter <- reactiveValues(i = 0)
-  
-  observe({
-    input$motifButton
-    isolate({
-      updateCounter$i <- updateCounter$i + 1
-    })
-  })
-  
-  
-  #Restart
-  defaultvalues <- observeEvent(enrich_motif(), {
-    isolate(updateCounter$i == 0)
-    updateCounter$i <- 0
-  }) 
-  enrich_motif <- reactive({
-    if(updateCounter$i > 0 && input$motifButton > 0){
-      return(MotifAnalysis(data= enrich_input(), org=org4(),Species = input$Species4, x = promoter()))
-    }
-  })
-  output$motif_plot <- renderPlot({
-    if(input$motifButton > 0 && !is.null(enrich_motif())){
-      Motifplot(df2 = enrich_motif(), showCategory = input$enrich_showCategory, padj = input$promoter_padj,data= enrich_input(), group_order=input$enrich_input_choice)
-    }
-  })
-  motif_table <- reactive({
-    if(input$motifButton > 0 && !is.null(enrich_motif())){
-      df2 <- enrich_motif()
-      df <- data.frame(matrix(rep(NA, 11), nrow=1))[numeric(0), ]
-      for(name in names(df2)){
-        res <- df2[[name]]
-        res <- dplyr::filter(res, X1 > -log10(input$promoter_padj))
-        res <- res %>% dplyr::arrange(-X1.1)
-        df <- rbind(df, res)
-      }
-      colnames(df) <- c("motif.id", "motif.name","motif.percentGC", "negLog10P", "negLog10Padj", "log2enr",
-                        "pearsonResid", "expForegroundWgtWithHits", "sumForegroundWgtWithHits", "sumBackgroundWgtWithHits",
-                        "Group")
-      df$Group <- gsub("\n"," ",df$Group)
-      df$padj <- 10^(-df$negLog10Padj)
-      return(df)
-    }
-  })
-  output$motif_warning <- renderText({
-    if(input$motifButton > 0 && updateCounter$i > 0){
-      if(length(motif_table()$motif.id) == 0){
-        print("Cannot detect any motifs.")
-      }
-    }else{
-      return(NULL)
-    }
-  })
-  output$motif_result <- DT::renderDT({
-    if(input$motifButton > 0 && !is.null(enrich_motif())){
-      motif_table()
-    }
-  })
-  
-  promoter_motif_region <- reactive({
-    target_motif <- motif_table()[input$motif_result_rows_selected,]
-    if(input$motifButton > 0 && !is.null(input$motif_result_rows_selected)){
-      res <- MotifRegion(data= enrich_input(), target_motif = target_motif,Species = input$Species4, x = promoter())  
-      return(res)
-    }
-  })
-  
-  output$promoter_motif_region_table <- renderDataTable({
-    target_motif <- motif_table()[input$motif_result_rows_selected,]
-    if(input$motifButton > 0 && !is.null(input$motif_result_rows_selected)){
-      promoter_motif_region()
-    }
-  })
-  
-  output$download_motif_table = downloadHandler(
-    filename = function() {
-      paste(input$enrich_data_file, 
-            paste("Motif_upstream",input$promoter_upstream,"_downstream",input$promoter_downstream,"_table.txt",sep = ""), sep ="-")
-    },
-    content = function(file){write.table(motif_table(), file, row.names = F, sep = "\t", quote = F)}
-  )
-  output$download_motif_plot = downloadHandler(
-    filename = function() {
-      paste(input$enrich_data_file, 
-            paste("Motif_upstream",input$promoter_upstream,"_downstream",input$promoter_downstream,".pdf",sep = ""), sep ="-")
-    },
-    content = function(file) {
-      withProgress(message = "Preparing download",{
-        p1 <- Motifplot(df2 = enrich_motif(), showCategory = input$enrich_showCategory, padj = input$promoter_padj,data= enrich_input(), group_order=input$enrich_input_choice)
-        dims <- enrich_pdf_dims(6, 6)
-        pdf(file, height = dims$height, width = dims$width)
-        print(p1)
-        dev.off()
-        incProgress(1)
-      })
-    }
-  )
-  
-  output$download_promoter_motif_region = downloadHandler(
-    filename = function() {
-      paste(input$enrich_data_file, 
-            paste("Motif_upstream",input$promoter_upstream,"_downstream",input$promoter_downstream,"_promoter_region.txt",sep = ""), sep ="-")
-    },
-    content = function(file){write.table(promoter_motif_region(), file, row.names = F, sep = "\t", quote = F)}
-  )
-  observeEvent(motif_table()[input$motif_result_rows_selected,], ({
-    updateCollapse(session,id =  "Promoter_motif_collapse_panel", open="Promoter_motif_region_panel")
-  }))
-  
   
   #volcano navi------------------------------------------------------
   org5 <- reactive({

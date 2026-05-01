@@ -82,11 +82,13 @@ shinyUI(
                           tags$li(HTML("Function for paired-sample analysis in pair-wise DEG.")),
                           tags$li(HTML("Enrichment analysis using the custom gene set.")),
                         ),
-                        h4("Current version (v1.1.7-beta)"),
+                        h4("Current version v1.1.7-beta (2026/5/1)"),
                         tags$ul(
                           tags$li("Added boxplots to compare gene expression by group in k-means clustering of Normalized count analysis."),
                           tags$li("Improved app performance with lighter and more optimized processing."),
-                          tags$li("Fixed bugs in the Venn diagram workflow.")
+                          tags$li("Fixed bugs in the Venn diagram workflow."),
+                          tags$li("Added popup PDF preview for plot downloads across all modules."),
+                          tags$li("Removed promoter motif analysis from the web version. Motif analysis is available only in the Docker version.")
                         ),
                         "See the details from 'More -> Change log'",
                         h4("Publication"),
@@ -157,7 +159,10 @@ shinyUI(
                                "identifies similar samples and gene expression patterns by clustering methods",
                                img(src="Normalized.png", width = 550,height = 325),hr(),
                                h4(strong("Enrichment viewer")),
-                               "determines and visualizes biological functions and promoter motifs of gene sets of interest",
+                               "determines and visualizes biological functions of gene sets of interest",
+                               br(),
+                               tags$small("Promoter motif analysis is available only in the Docker version and has been removed from the web version."),
+                               br(),
                                img(src="enrichment_viewer.png", width = 550,height = 250)
                         )
                  )
@@ -184,7 +189,7 @@ shinyUI(
                                               multiple = FALSE,
                                               width = "80%"),
                                     bsPopover("icon1", "Count matrix format (txt, csv, or xlsx):", 
-                                              content=paste(strong("The replication number"), "is represented by", strong("the underline"),".<br>", strong("Do not use it for anything else"),".<br><br>",
+                                              content=paste("Replicate numbers should be indicated by", strong("an underscore"), "(for example,", strong("sample_1, sample_2, and sample_3"), ").<br>", strong("Please do not use underscores for any other purpose in sample names."), "<br><br>",
                                                             img(src="input_format1.png", width = 400,height = 250)), 
                                               placement = "right",options = list(container = "body")),
                    ),
@@ -204,8 +209,8 @@ shinyUI(
                                               multiple = FALSE,
                                               width = "80%"),
                                     bsPopover("icon2", "Metadata format (txt, csv, or xlsx):", 
-                                              content=paste("The first column is", strong("the sample name"), "used in the raw count data.<br>", 
-                                                            "The second column is", strong("the corresponding sample name"), "that matches the sample name in the first column.<br><br>",
+                                              content=paste("The first column should contain", strong("the sample names"), "used in the raw count matrix.<br>", 
+                                                            "The second column should contain", strong("the corresponding annotation"), "for each sample to be used in downstream analyses.<br><br>",
                                                             img(src="input_format2.png", width = 400,height = 400)),
                                               placement = "right",options = list(container = "body")),
                    ),
@@ -220,8 +225,8 @@ shinyUI(
                                               multiple = TRUE,
                                               width = "80%"),
                                     bsPopover("icon3", "Count matrix format (txt, csv, or xlsx):", 
-                                              content=paste(strong("The replication number"), "is represented by", strong("the underline"),".<br>", strong("Do not use it for anything else"),".<br>",
-                                                            "There is no limitation to the number of uploaded files.<br><br>",
+                                              content=paste("Replicate numbers should be indicated by", strong("an underscore"), "(for example,", strong("sample_1, sample_2, and sample_3"), ").<br>", strong("Please do not use underscores for any other purpose in sample names."), "<br>",
+                                                            "There is no limit to the number of files that may be uploaded.<br><br>",
                                                             img(src="input_format1.png", width = 400,height = 250)), 
                                               placement = "right",options = list(container = "body")),
                    ),
@@ -282,8 +287,9 @@ shinyUI(
                                                                    options = list(template = popoverTempate))
                                                             ),
                                                             orgDb_list, selected = "Mus musculus"),
-                                             bsPopover("Ortholog_pair", "Ortholog for the pathway analysis of non-model organisms", 
-                                                       content=paste(img(src="non-model organism.png", width = 500,height = 800)), 
+                                             bsPopover("Ortholog_pair", "Ortholog selection for pathway analysis of non-model organisms", 
+                                                       content=paste("Select the ortholog species to be used for pathway analysis of non-model organisms.<br><br>",
+                                                                     img(src="non-model organism.png", width = 500,height = 800)), 
                                                        placement = "right",options = list(container = "body"))
                                              ),
                      )
@@ -314,9 +320,9 @@ shinyUI(
                              accept = c("txt", "csv", "xlsx"),
                              multiple = TRUE,
                              width = "80%"),
-                   bsPopover("icon4", "Option: Normalized count file (txt, csv, or xlsx):", 
-                             content=paste0("You can use a normalized count data (e.g. TPM count) for basemean cutoff and boxplot.<br>",
-                                            strong("The column names of the normalized count data must match those of the uploaded raw count data.")), 
+                   bsPopover("icon4", "Optional normalized count matrix (txt, csv, or xlsx):", 
+                             content=paste0("An optional normalized count matrix (e.g., TPM values) may be used for the baseMean cutoff and boxplots.<br>",
+                                            strong("Column names must exactly match those in the uploaded raw count matrix.")), 
                              placement = "right",options = list(container = "body"))
                    ),
                    actionButton("goButton", "example data (mouse)"),
@@ -504,62 +510,6 @@ shinyUI(
                                          )
                               )
                      ),
-                     tabPanel("DTU analysis", value = "pair_dtu_tab",
-                              fluidRow(
-                                column(4, textOutput("pair_DTU"),
-                                       tags$head(tags$style("#pair_DTU{color: red;
-                                 font-size: 20px;
-            font-style: bold;
-            }")))),
-                              fluidRow(
-                                column(8, 
-                                       radioButtons('DTU_Method','Method:',
-                                                    c('DRIMSeq' ="DRIMSeq"
-                                                    ),selected = "DRIMSeq"),
-                                       htmlOutput("DTU_top"),
-                                       conditionalPanel(
-                                         condition = "input.DTU_top=='manual'",
-                                         selectizeInput(
-                                           "DTU_manual",
-                                           "GOI for transcripts",
-                                           choices = NULL,
-                                           multiple = TRUE,
-                                           options = list(
-                                             delimiter = " ",
-                                             create = TRUE,
-                                             plugins = list("remove_button"),
-                                             persist = FALSE
-                                           )
-                                         )
-                                       ),
-                                       conditionalPanel(
-                                         condition = "input.DTU_top=='manual'",
-                                         actionButton("GOIreset_DTU_manual", "GOI reset")
-                                       ))
-                              ),
-                              actionButton("preview_pair_dtu_bar", "Download barplot"),
-                              div(
-                                plotOutput("DRIMSeq_barplot", height = "100%"),
-                                style = "height: calc(100vh  - 100px)"
-                              ),
-                              downloadButton("download_DRIMSeq_table", "Download table"),
-                              DTOutput('DRIMSeq_table'),
-                              actionButton("preview_pair_dtu_goi_box", "Download boxplot"),
-                              plotOutput("DRIMSeq_GOIboxplot"),
-                              fileInput("GTF_file",
-                                        strong(
-                                          span("Select an annotation file (.gtf)"),
-                                          span(icon("info-circle"), id = "icon_gtf", 
-                                               options = list(template = popoverTempate))
-                                        ),
-                                        accept = c("gtf"),
-                                        multiple = FALSE,
-                                        width = "80%"),
-                              bsPopover("icon_gtf", "gtf format (gtf):", 
-                                        content=paste("If you want to show the structure of transcript variants, please upload an appropriate gtf file that you used for mapping."), 
-                                        placement = "right",options = list(container = "body")),
-                              plotOutput("transcript_structure")
-                     ),
                    )
                  ) # main panel
                ) #sidebarLayout
@@ -587,7 +537,7 @@ shinyUI(
                                               multiple = FALSE,
                                               width = "80%"),
                                     bsPopover("icon5", "Count matrix format (txt, csv, or xlsx):", 
-                                              content=paste(strong("The replication number"), "is represented by", strong("the underline"),".<br>", strong("Do not use it for anything else"),".<br><br>",
+                                              content=paste("Replicate numbers should be indicated by", strong("an underscore"), "(for example,", strong("sample_1, sample_2, and sample_3"), ").<br>", strong("Please do not use underscores for any other purpose in sample names."), "<br><br>",
                                                             img(src="input_format1.png", width = 400,height = 250)), 
                                               placement = "right",options = list(container = "body")),
                    ),
@@ -607,8 +557,8 @@ shinyUI(
                                               multiple = FALSE,
                                               width = "80%"),
                                     bsPopover("icon6", "Metadata format (txt, csv, or xlsx):", 
-                                              content=paste("The first column is", strong("the sample name"), "used in the raw count data.<br>", 
-                                                            "The second column is", strong("the corresponding sample name"), "that matches the sample name in the first column.<br><br>",
+                                              content=paste("The first column should contain", strong("the sample names"), "used in the raw count matrix.<br>", 
+                                                            "The second column should contain", strong("the corresponding annotation"), "for each sample to be used in downstream analyses.<br><br>",
                                                             img(src="input_format2.png", width = 400,height = 400)),
                                               placement = "right",options = list(container = "body")),
                    ),
@@ -623,9 +573,9 @@ shinyUI(
                                               multiple = FALSE,
                                               width = "80%"),
                                     bsPopover("icon_recode", "Recode.Rdata:", 
-                                              content=paste("Using this mode, you can save time to EBSeq analysis.<br>",
-                                                            "The recode.Rdata file from the previous analysis using '3 conditions DEG' is needed.<br>", 
-                                                            "You can obtain a recode.Rdata file by clicking 'Download summary' buttom after the analysis with 3 conditions DEG"
+                                              content=paste("This mode can reduce the runtime of EBSeq analysis.<br>",
+                                                            "A Recode.Rdata file generated in a previous", strong("'3 conditions DEG'"), "analysis is required.<br>", 
+                                                            "You can obtain this file by clicking", strong("'Download summary'"), "after completing the 3 conditions DEG analysis."
                                                             ), 
                                               placement = "right",options = list(container = "body")),
                    ),
@@ -652,8 +602,9 @@ shinyUI(
                                         span(icon("info-circle"), id = "Ortholog_cond3", 
                                              options = list(template = popoverTempate))
                                       ), orgDb_list, selected = "Mus musculus"),
-                                      bsPopover("Ortholog_cond3", "Ortholog for the pathway analysis of non-model organisms", 
-                                                content=paste(img(src="non-model organism.png", width = 500,height = 800)), 
+                                      bsPopover("Ortholog_cond3", "Ortholog selection for pathway analysis of non-model organisms", 
+                                                content=paste("Select the ortholog species to be used for pathway analysis of non-model organisms.<br><br>",
+                                                              img(src="non-model organism.png", width = 500,height = 800)), 
                                                 placement = "right",options = list(container = "body"))
                                       ),
                                       column(12, selectInput("Biomart_archive2", "Biomart host", ensembl_archive)))
@@ -673,9 +624,9 @@ shinyUI(
                              accept = c("txt", "csv", "xlsx"),
                              multiple = FALSE,
                              width = "80%"),
-                   bsPopover("icon7", "Option: Normalized count file (txt, csv, or xlsx):", 
-                             content=paste0("You can use a normalized count data (e.g. TPM count) for basemean cutoff and boxplot.<br>",
-                                            strong("The column names of the normalized count data must match those of the uploaded raw count data.")), 
+                   bsPopover("icon7", "Optional normalized count matrix (txt, csv, or xlsx):", 
+                             content=paste0("An optional normalized count matrix (e.g., TPM values) may be used for the baseMean cutoff and boxplots.<br>",
+                                            strong("Column names must exactly match those in the uploaded raw count matrix.")), 
                              placement = "right",options = list(container = "body")),
                    actionButton("goButton2", "example data (mouse)"),
                    tags$head(tags$style("#goButton{color: black;
@@ -886,7 +837,7 @@ shinyUI(
                                               multiple = FALSE,
                                               width = "80%"),
                                     bsPopover("icon8", "Count matrix format (txt, csv, or xlsx):", 
-                                              content=paste(strong("The replication number"), "is represented by", strong("the underline"),".<br>", strong("Do not use it for anything else"),".<br><br>",
+                                              content=paste("Replicate numbers should be indicated by", strong("an underscore"), "(for example,", strong("sample_1, sample_2, and sample_3"), ").<br>", strong("Please do not use underscores for any other purpose in sample names."), "<br><br>",
                                                             img(src="input_format1.png", width = 400,height = 250)), 
                                               placement = "right",options = list(container = "body")),
                    ),
@@ -906,8 +857,8 @@ shinyUI(
                                               multiple = FALSE,
                                               width = "80%"),
                                     bsPopover("icon9", "Metadata format (txt, csv, or xlsx):", 
-                                              content=paste("The first column is", strong("the sample name"), "used in the raw count data.<br>", 
-                                                            "The second column is", strong("the corresponding sample name"), "that matches the sample name in the first column.<br><br>",
+                                              content=paste("The first column should contain", strong("the sample names"), "used in the raw count matrix.<br>", 
+                                                            "The second column should contain", strong("the corresponding annotation"), "for each sample to be used in downstream analyses.<br><br>",
                                                             img(src="input_format_multi.png", width = 400,height = 400)),
                                               placement = "right",options = list(container = "body")),
                    ),
@@ -923,8 +874,8 @@ shinyUI(
                                 ),
                                 c('DESeq2 for raw count'="DESeq2",'limma for normalized count'="limma"),selected = "DESeq2"),
                    bsPopover("icon_multi_DEG", "DEG analysis method:", 
-                             content=paste("DESeq2 is for ", strong("RNA-seq raw count data"), ".<br>", 
-                                           "Limma is for normalized count data, such as ", strong("CPM (RPM)")," and ", strong("proteomics data"), " (normalized protein abandunce).<br><br>"),
+                             content=paste("DESeq2 should be used for", strong("RNA-seq raw count data"), ".<br>", 
+                                           "limma should be used for normalized abundance matrices, such as", strong("CPM (RPM)"), "values and", strong("proteomics data"), "(normalized protein abundance).<br><br>"), 
                              placement = "right",options = list(container = "body")),
                    conditionalPanel(condition="input.DEG_method_multi=='limma'",
                                     fluidRow(
@@ -968,8 +919,9 @@ shinyUI(
                                                span(icon("info-circle"), id = "Ortholog_multi", 
                                                     options = list(template = popoverTempate))
                                              ), orgDb_list, selected = "Mus musculus"),
-                                             bsPopover("Ortholog_multi", "Ortholog for the pathway analysis of non-model organisms", 
-                                                       content=paste(img(src="non-model organism.png", width = 500,height = 800)), 
+                                             bsPopover("Ortholog_multi", "Ortholog selection for pathway analysis of non-model organisms", 
+                                                       content=paste("Select the ortholog species to be used for pathway analysis of non-model organisms.<br><br>",
+                                                                     img(src="non-model organism.png", width = 500,height = 800)), 
                                                        placement = "right",options = list(container = "body"))),
                                              column(12, selectInput("Biomart_archive6", "Biomart host", ensembl_archive)))
                             ),
@@ -989,8 +941,9 @@ shinyUI(
                              accept = c("txt", "csv", "xlsx"),
                              multiple = TRUE,
                              width = "80%"),
-                   bsPopover("icon10", "Option: Normalized count file (txt, csv, or xlsx):", 
-                             content="You can use a normalized count data (e.g. TPM count) for basemean cutoff and boxplot.", 
+                   bsPopover("icon10", "Optional normalized count matrix (txt, csv, or xlsx):", 
+                             content=paste0("An optional normalized count matrix (e.g., TPM values) may be used for the baseMean cutoff and boxplots.<br>",
+                                            strong("Column names must exactly match those in the uploaded raw count matrix.")), 
                              placement = "right",options = list(container = "body"))
                    ),
                    actionButton("goButton6", "example data (mouse)"),
@@ -1133,7 +1086,7 @@ shinyUI(
                               bsCollapsePanel(title= p(span("Boxplot"),span(icon("info-circle"), id = "icon_multi_boxplot", 
                                                                                  options = list(template = popoverTempate))),
                                               bsPopover("icon_multi_boxplot", "Boxplot of GOI:", 
-                                                        content=paste("Please select genes in", strong("DEG_pattern_normalized_count_data"),".<br><br>",
+                                                        content=paste("To generate the boxplot, first select genes in", strong("DEG_pattern_normalized_count_data"), ".<br><br>",
                                                                       img(src="multi_GOIboxplot.png", width = 450,height = 640)), 
                                                         placement = "right",options = list(container = "body")),
                                               value="multi_deg_pattern_boxplot_panel",
@@ -1230,7 +1183,7 @@ shinyUI(
                               bsCollapsePanel(title= p(span("Boxplot"),span(icon("info-circle"), id = "icon_multi_boxplot2", 
                                                                             options = list(template = popoverTempate))),
                                               bsPopover("icon_multi_boxplot2", "Boxplot of GOI:", 
-                                                        content=paste("Please select genes in", strong("cluster_normalized_count_data"),".<br><br>",
+                                                        content=paste("To generate the boxplot, first select genes in", strong("cluster_normalized_count_data"), ".<br><br>",
                                                                       img(src="multi_GOIboxplot2.png", width = 450,height = 640)), 
                                                         placement = "right",options = list(container = "body")),
                                               value="multi_deg_kmeans_boxplot_panel",
@@ -1355,10 +1308,12 @@ shinyUI(
                                 plotOutput("multi_ssGSEA_GOIboxplot", height = "100%"),
                                 style = "height: calc(100vh  - 100px)"
                               ),
-                              column(4, downloadButton("download_multi_ssGSEA_statisics", "Download table")),
+                              fluidRow(
+                                column(4, downloadButton("download_multi_ssGSEA_statisics", "Download table"))
+                              ),
                               dataTableOutput("statistical_table_multi_ssGSEA"),
                               bsCollapse(id="input_collapse_multi_ssGSEA_dorothea",multiple = TRUE,
-                                         bsCollapsePanel(title="Highly contributed genes:",
+                                         bsCollapsePanel(title = "Correlation between ssGSEA score and expression of pathway genes",
                                                          value="ssGSEA_contribute_panel",
                                                          selectizeInput("selectssGSEA_contribute_pathway", "Select pathway of interest",
                                                                         choices = NULL, multiple = FALSE,
@@ -1366,6 +1321,7 @@ shinyUI(
                                                          fluidRow(
                                                            column(4, actionButton("preview_multi_ssgsea_contrib", "Download"))
                                                          ),
+                                                         htmlOutput("multi_ssGSEA_contribute_note"),
                                                          div(
                                                            plotOutput("multi_ssGSEA_contribute", height = "100%"),
                                                            style = "height: calc(100vh  - 100px)"
@@ -1373,7 +1329,7 @@ shinyUI(
                                                          downloadButton("download_multi_ssGSEA_contribute_table", "Download"),
                                                          dataTableOutput('multi_ssGSEA_contribute_table')
                                          ),
-                                         bsCollapsePanel(title="Correlation between ssGSEA score and expression level of TFs:",
+                                         bsCollapsePanel(title = "Correlation between ssGSEA score and TF expression",
                                                          value="ssGSEA_dorothea_panel",
                                                          fluidRow(
                                                            column(4, actionButton("preview_multi_ssgsea_dorothea", "Download"))
@@ -1404,9 +1360,9 @@ shinyUI(
                      accept = c("txt", "csv", "xlsx")
                    ),
                    bsPopover("icon_venn", "Gene list files (txt, csv, or xlsx):", 
-                             content= paste("The first column is", strong("gene name"), ".<br>", 
-                             "The second and subsequent columns do not affect the analysis.<br>", 
-                             "The maximum number of uploads is",strong("7 files"), ".<br><br>", 
+                             content= paste("The first column should contain", strong("gene identifiers"), ".<br>", 
+                             "All additional columns are ignored.<br>", 
+                             "You may upload up to",strong("7 files"), "simultaneously.<br><br>", 
                              img(src="venn_input.png", width = 400,height = 300)),
                              placement = "right",options = list(container = "body")),
                    radioButtons('Level_venn','Level:',
@@ -1425,7 +1381,7 @@ shinyUI(
                      accept = c("txt", "csv", "xlsx")
                    ),
                    bsPopover("icon_venn2", "Count matrix format (txt, csv, or xlsx):", 
-                             content=paste(strong("The replication number"), "is represented by", strong("the underline"),".<br>", strong("Do not use it for anything else"),".<br><br>",
+                             content=paste("Replicate numbers should be indicated by", strong("an underscore"), "(for example,", strong("sample_1, sample_2, and sample_3"), ").<br>", strong("Please do not use underscores for any other purpose in sample names."), "<br><br>",
                                            img(src="input_format1.png", width = 400,height = 250)), 
                              placement = "right",options = list(container = "body")),
                    fluidRow(
@@ -1443,8 +1399,9 @@ shinyUI(
                        span(icon("info-circle"), id = "Ortholog_venn", 
                             options = list(template = popoverTempate))
                      ), orgDb_list, selected = "Mus musculus"),
-                     bsPopover("Ortholog_venn", "Ortholog for the pathway analysis of non-model organisms", 
-                               content=paste(img(src="non-model organism.png", width = 500,height = 800)), 
+                     bsPopover("Ortholog_venn", "Ortholog selection for pathway analysis of non-model organisms", 
+                               content=paste("Select the ortholog species to be used for pathway analysis of non-model organisms.<br><br>",
+                                             img(src="non-model organism.png", width = 500,height = 800)), 
                                placement = "right",options = list(container = "body"))),
                      column(12, selectInput("Biomart_archive7", "Biomart host", ensembl_archive)))
                    ),
@@ -1457,8 +1414,8 @@ shinyUI(
                             options = list(template = popoverTempate))
                      ),
                      multiple = FALSE,choices = c("TRUE", "FALSE"), selected = "TRUE"))),
-                   bsPopover("icon_venn3", "Option: Pre-zscoring:", 
-                             content=paste("If True, each count data is z-scored before integrating multiple count data.<br><br>",
+                   bsPopover("icon_venn3", "Optional pre-z-scoring:", 
+                             content=paste("If set to TRUE, each count matrix is z-scored before multiple count matrices are integrated.<br><br>",
                                            img(src="pre-zscoring.png", width = 450,height = 200)), 
                              placement = "right",options = list(container = "body")),
                    actionButton("goButton_venn", "example data"),
@@ -1510,7 +1467,7 @@ shinyUI(
                                          bsCollapsePanel(title= p(span("Boxplot"),span(icon("info-circle"), id = "icon_venn_boxplot", 
                                                 options = list(template = popoverTempate))),
                                                 bsPopover("icon_venn_boxplot", "Boxplot of GOI:", 
-                                                          content=paste("Please select genes in", strong("integrated normalized count table"),".<br><br>",
+                                                          content=paste("To generate the boxplot, first select genes in", strong("integrated normalized count table"), ".<br><br>",
                                                                         img(src="venn_boxplot.png", width = 450,height = 640)), 
                                                           placement = "right",options = list(container = "body")),
                                                          value="integrated_count_box_panel",
@@ -1569,7 +1526,7 @@ shinyUI(
                                               multiple = FALSE,
                                               width = "80%"),
                                     bsPopover("icon11", "Count matrix format (txt, csv, or xlsx):", 
-                                              content=paste(strong("The replication number"), "is represented by", strong("the underline"),".<br>", strong("Do not use it for anything else"),".<br><br>",
+                                              content=paste("Replicate numbers should be indicated by", strong("an underscore"), "(for example,", strong("sample_1, sample_2, and sample_3"), ").<br>", strong("Please do not use underscores for any other purpose in sample names."), "<br><br>",
                                                             img(src="input_format1.png", width = 400,height = 250)), 
                                               placement = "right",options = list(container = "body")),
                    ),
@@ -1589,8 +1546,8 @@ shinyUI(
                                               multiple = FALSE,
                                               width = "80%"),
                                     bsPopover("icon12", "Metadata format (txt, csv, or xlsx):", 
-                                              content=paste("The first column is", strong("the sample name"), "used in the raw count data.<br>", 
-                                                            "The second column is", strong("the corresponding sample name"), "that matches the sample name in the first column.<br><br>",
+                                              content=paste("The first column should contain", strong("the sample names"), "used in the raw count matrix.<br>", 
+                                                            "The second column should contain", strong("the corresponding annotation"), "for each sample to be used in downstream analyses.<br><br>",
                                                             img(src="input_format2.png", width = 400,height = 400)), 
                                               placement = "right",options = list(container = "body")),
                    ),
@@ -1613,8 +1570,9 @@ shinyUI(
                        span(icon("info-circle"), id = "Ortholog_norm", 
                             options = list(template = popoverTempate))
                      ), orgDb_list, selected = "Mus musculus"),
-                     bsPopover("Ortholog_norm", "Ortholog for the pathway analysis of non-model organisms", 
-                               content=paste(img(src="non-model organism.png", width = 500,height = 800)), 
+                     bsPopover("Ortholog_norm", "Ortholog selection for pathway analysis of non-model organisms", 
+                               content=paste("Select the ortholog species to be used for pathway analysis of non-model organisms.<br><br>",
+                                             img(src="non-model organism.png", width = 500,height = 800)), 
                                placement = "right",options = list(container = "body"))),
                      column(12, selectInput("Biomart_archive3", "Biomart host", ensembl_archive)))
                      ),
@@ -1866,7 +1824,7 @@ shinyUI(
                               bsCollapsePanel(title= p(span("Boxplot"),span(icon("info-circle"), id = "icon_norm_kmeans_boxplot", 
                                                                             options = list(template = popoverTempate))),
                                               bsPopover("icon_norm_kmeans_boxplot", "Boxplot of GOI:", 
-                                                        content=paste("Please select genes in", strong("k-means clustering result"),".<br><br>",
+                                                        content=paste("To generate the boxplot, first select genes in", strong("the k-means clustering result"), ".<br><br>",
                                                                       img(src="norm_GOIboxplot.png", width = 450,height = 640)), 
                                                         placement = "right",options = list(container = "body")),
                                               value="kmeans_box_panel",
@@ -1902,13 +1860,13 @@ shinyUI(
                              multiple = FALSE,
                              width = "80%"),
                    bsPopover("icon13", "Gene list format (txt, csv, or xlsx): ", 
-                             content=paste(strong("Single file upload:"),
-                                           "<br>First column must be", strong("gene name"), "(Gene symbol or ENSEMBL ID).<br>", "Second column must be", strong("group or cluster name"),".<br>",
-                                           "You can use result files of venn diagram analysis and k-means clustering as input.<br><br>",
-                                           strong("Multiple files upload:"),
-                                           "<br>The first column is", strong("gene name"), ".<br>", 
-                                           "The second and subsequent columns do not affect the analysis.<br>", 
-                                           "File names are used as", strong("group names"),".<br><br>",
+                             content=paste(strong("Single-file upload:"), 
+                                           "<br>The first column should contain", strong("gene identifiers"), "(gene symbols or ENSEMBL IDs).<br>", "The second column should contain", strong("the group or cluster name"), ".<br>",
+                                           "Result files from Venn diagram analysis and k-means clustering can be used directly as input.<br><br>",
+                                           strong("Multiple-file upload:"), 
+                                           "<br>The first column should contain", strong("gene identifiers"), ".<br>", 
+                                           "All additional columns are ignored.<br>", 
+                                           "File names are used as", strong("group names"), ".<br><br>",
                                            img(src="input_format_enrich.png", width = 400,height = 250)), 
                              placement = "right",options = list(container = "body")),
                    radioButtons('Level_enrich','Level:',
@@ -1930,8 +1888,9 @@ shinyUI(
                        span(icon("info-circle"), id = "Ortholog_enrich", 
                             options = list(template = popoverTempate))
                      ), orgDb_list, selected = "Mus musculus"),
-                     bsPopover("Ortholog_enrich", "Ortholog for the pathway analysis of non-model organisms", 
-                               content=paste(img(src="non-model organism.png", width = 500,height = 800)), 
+                     bsPopover("Ortholog_enrich", "Ortholog selection for pathway analysis of non-model organisms", 
+                               content=paste("Select the ortholog species to be used for pathway analysis of non-model organisms.<br><br>",
+                                             img(src="non-model organism.png", width = 500,height = 800)), 
                                placement = "right",options = list(container = "body"))),
                      column(12, selectInput("Biomart_archive4", "Biomart host", ensembl_archive)))
                      ),
@@ -1979,57 +1938,6 @@ shinyUI(
                                 column(4, downloadButton("download_enrichment_table", "Download enrichment result"))
                               ),
                               dataTableOutput('enrichment_result')
-                     ),
-                     tabPanel("Promoter motif analysis",
-                              fluidRow(
-                                column(4, textOutput("motif_Spe"),
-                                       tags$head(tags$style("#motif_Spe{color: red;
-                                 font-size: 20px;
-            font-style: bold;
-            }"))),
-                                column(3, actionButton("preview_enrich_motif", "Download motif plot"))
-                              ),
-                              fluidRow(
-                                column(4, htmlOutput("promoter_upstream")),
-                                column(4, htmlOutput("promoter_downstream")),
-                                column(4, htmlOutput("promoter_padj"))
-                                       ),
-                              fluidRow(
-                                column(4, actionButton("motifButton", "Start"),
-                                       tags$head(tags$style("#motifButton{color: red;
-                                 font-size: 20px;
-                                 font-style: bold;
-                                 }"),
-                                                 tags$style("
-          body {
-            padding: 0 !important;
-          }"
-                                                 ))
-                                )
-                              ),
-                              textOutput("motif_warning"),
-                              tags$head(tags$style("#motif_warning{color: red;
-                                 font-size: 20px;
-            font-style: bold;
-            }")),
-                              plotOutput("motif_plot"),
-                              bsCollapse(id="Promoter_motif_collapse_panel",open="motif_result_table",multiple = TRUE,
-                                         bsCollapsePanel(title="Motif table:",
-                                                         value="motif_result_table",
-                                                         downloadButton("download_motif_table", "Download motif enrichment result"),
-                                                         DTOutput('motif_result')
-                                         ),
-                                         bsCollapsePanel(title= p(span("Motif region"),span(icon("info-circle"), id = "icon_promoter_motif_region", 
-                                                                                            options = list(template = popoverTempate))),
-                                                         bsPopover("icon_promoter_motif_region", "Motif region:", 
-                                                                   content=paste("Please select genes in", strong("k-means clustering result"),".<br><br>",
-                                                                                 img(src="enrich_motif.png", width = 450,height = 600)), 
-                                                                   placement = "right",options = list(container = "body")),
-                                                         value="Promoter_motif_region_panel",
-                                                         downloadButton("download_promoter_motif_region", "Download motif region"),
-                                                         dataTableOutput("promoter_motif_region_table")
-                                         )
-                              )
                      )
                    )
                  )
@@ -2051,9 +1959,9 @@ shinyUI(
                                         multiple = FALSE,
                                         width = "80%"),
                               bsPopover("icon14", "File format (txt, csv, or xlsx): ", 
-                                        content=paste("First column must be gene name (Gene symbol or ENSEMBL ID).<br>", 
-                                                      "The file must contain", strong("log2FoldChange"), "and", strong("padj"), "columns.<br>",
-                                                      "You can use a pair-wise DEG result file as input.<br><br>", 
+                                        content=paste("The first column should contain gene identifiers (gene symbols or ENSEMBL IDs).<br>", 
+                                                      "The file must contain columns named", strong("log2FoldChange"), "and", strong("padj"), ".<br>",
+                                                      "A pair-wise DEG result file can be used directly as input.<br><br>", 
                                                       img(src="input_format_volcano.png", width = 480,height = 230)), 
                                         placement = "right",options = list(container = "body")),
                               radioButtons('Level_volcano','Level:',
@@ -2084,8 +1992,9 @@ shinyUI(
                                                    span(icon("info-circle"), id = "Ortholog_volcano", 
                                                         options = list(template = popoverTempate))
                                                  ), orgDb_list, selected = "Mus musculus"),
-                                                 bsPopover("Ortholog_volcano", "Ortholog for the pathway analysis of non-model organisms", 
-                                                           content=paste(img(src="non-model organism.png", width = 500,height = 800)), 
+                                                 bsPopover("Ortholog_volcano", "Ortholog selection for pathway analysis of non-model organisms", 
+                                                           content=paste("Select the ortholog species to be used for pathway analysis of non-model organisms.<br><br>",
+                                                                         img(src="non-model organism.png", width = 500,height = 800)), 
                                                            placement = "right",options = list(container = "body"))),
                                 column(12, selectInput("Biomart_archive5", "Biomart host", ensembl_archive)))
                               ),
@@ -2181,8 +2090,8 @@ shinyUI(
                                         multiple = FALSE,
                                         width = "80%"),
                               bsPopover("icon_venn", "Gene list files (txt, csv, or xlsx):", 
-                                        content= paste("The first column is", strong("gene name"), ".<br>", 
-                                                       "The second and subsequent columns do not affect the analysis.<br>", 
+                                        content= paste("The first column should contain", strong("gene identifiers"), ".<br>", 
+                                                       "All additional columns are ignored.<br>", 
                                                        img(src="venn_input.png", width = 400,height = 300)),
                                         placement = "right",options = list(container = "body")),
                               fluidRow(
@@ -2200,8 +2109,9 @@ shinyUI(
                                                    span(icon("info-circle"), id = "Ortholog_enrich", 
                                                         options = list(template = popoverTempate))
                                                  ), orgDb_list, selected = "Mus musculus"),
-                                                 bsPopover("Ortholog_enrich", "Ortholog for the pathway analysis of non-model organisms", 
-                                                           content=paste(img(src="non-model organism.png", width = 500,height = 800)), 
+                                                 bsPopover("Ortholog_enrich", "Ortholog selection for pathway analysis of non-model organisms", 
+                                                           content=paste("Select the ortholog species to be used for pathway analysis of non-model organisms.<br><br>",
+                                                                         img(src="non-model organism.png", width = 500,height = 800)), 
                                                            placement = "right",options = list(container = "body"))),
                                                  column(12, selectInput("Biomart_archive_ens", "Biomart host", ensembl_archive)))
                               ),
